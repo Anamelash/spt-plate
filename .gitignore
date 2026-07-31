@@ -1,0 +1,21 @@
+# Build output
+bin/
+obj/
+*.user
+.vs/
+.idea/
+
+# Credentials - never commit
+auth.json
+
+# Unity generated / machine-local
+unity/Library/
+unity/Logs/
+unity/UserSettings/
+unity/Temp/
+unity/obj/
+unity/BundleOutput/
+unity/build.log
+
+# Release packages
+dist/

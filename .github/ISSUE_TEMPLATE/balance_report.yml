@@ -1,0 +1,82 @@
+name: Balance / realism report
+description: A round, armor piece or wound behaved in a way that does not match reality.
+labels: ["balance"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        PLATE computes damage and penetration from physics, so "this feels weak"
+        is only actionable with the numbers behind the hit. The event journal
+        records all of them — mass, impact velocity, channel length, armor
+        decision — so please include the lines for the hit you are reporting.
+
+        Reports arguing from real-world data are the most useful kind of issue
+        this project can get. If you have a source, bring it.
+
+  - type: textarea
+    id: observed
+    attributes:
+      label: What happened
+      description: The outcome in game, as specifically as you can put it.
+      placeholder: |
+        .366 TKM FMJ at 15 m into an unarmored thorax took four hits to drop
+        a scav.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and why
+      description: |
+        What the physically plausible outcome would be. Cite a source if you have
+        one — ballistic gelatin test data, protection standard, terminal ballistics
+        literature, published prototype specs.
+    validations:
+      required: true
+
+  - type: input
+    id: cartridge
+    attributes:
+      label: Cartridge and weapon
+      placeholder: "7.62x39 BP, AKM"
+    validations:
+      required: true
+
+  - type: input
+    id: armor
+    attributes:
+      label: Armor on the target
+      description: Item name, protection class and material, or "none".
+      placeholder: "6B13 assault, class 4, armored steel"
+    validations:
+      required: true
+
+  - type: input
+    id: distance
+    attributes:
+      label: Distance and body part
+      placeholder: "~15 m, thorax"
+    validations:
+      required: true
+
+  - type: textarea
+    id: log-lines
+    attributes:
+      label: Event journal lines
+      description: |
+        From `BepInEx/plugins/PLATE/events.log` — the lines for this hit. They
+        carry the impact energy, the wound channel, the armor decision and the
+        exit velocity, which is what makes the report checkable.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Non-default settings
+      description: |
+        Anything you changed in the F12 menu or in the config files — especially
+        the damage scale, since it multiplies every result.
+      placeholder: "Damage scale 1.0, everything else default"

@@ -1,0 +1,107 @@
+name: Bug report
+description: Something crashes, throws, or behaves in a way the mod clearly did not intend.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, please check that the client plugin and the server mod are
+        **both** installed and of the same version — most reported "nothing happens"
+        cases are one half missing.
+
+        If the behaviour is more "this feels wrong" than "this is broken"
+        (a round is too weak, armor stops too much), use the **Balance / realism**
+        template instead — it asks for the numbers needed to judge that.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you observed, and what you expected instead.
+      placeholder: |
+        Shot a scav in the chest with 7.62x39 BP at ~30 m. No damage was applied
+        and no bleeding appeared; the hit registered in the overlay.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: What you did, in order. Say if it happens every time or occasionally.
+      placeholder: |
+        1. Start a raid on Customs as PMC
+        2. Shoot any scav wearing a 6B23-1 in the chest
+        3. Happens roughly every third hit
+    validations:
+      required: true
+
+  - type: input
+    id: plate-version
+    attributes:
+      label: PLATE version
+      placeholder: "0.9.0"
+    validations:
+      required: true
+
+  - type: input
+    id: spt-version
+    attributes:
+      label: SPT version
+      placeholder: "4.0.13"
+    validations:
+      required: true
+
+  - type: input
+    id: eft-version
+    attributes:
+      label: EFT client version
+      placeholder: "0.16.9.40087"
+    validations:
+      required: true
+
+  - type: textarea
+    id: events-log
+    attributes:
+      label: Event journal
+      description: |
+        Attach `BepInEx/plugins/PLATE/events.log` (drag the file into this field).
+        It records every hit with its full physical breakdown and is usually the
+        difference between a fixable report and a guess. If the file is large,
+        the lines around the moment it happened are enough.
+    validations:
+      required: true
+
+  - type: textarea
+    id: client-log
+    attributes:
+      label: Client log
+      description: |
+        Attach `BepInEx/LogOutput.log`, or paste any lines containing `[PLATE]`.
+        A FAIL in the patch-target self-test at startup usually means an SPT
+        update moved something and explains most sudden breakage.
+
+  - type: textarea
+    id: other-mods
+    attributes:
+      label: Other mods installed
+      description: |
+        List them, or say "none". Mods that touch ballistics, armor or the medical
+        system conflict with PLATE by definition; ammo and armor packs with
+        unrealistic stats will produce unpredictable results.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: Both the client plugin and the server mod are installed, same version.
+          required: true
+        - label: I am not running another ballistics, armor or medical overhaul.
+          required: false
+        - label: This happened in co-op (Fika). Co-op is untested — say so here.
+          required: false

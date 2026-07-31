@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Changes versus vanilla
+    url: https://github.com/Anamelash/spt-plate/blob/main/CHANGELOG.md
+    about: What PLATE does differently and the published work each model rests on. Worth a read before reporting behaviour as a bug.
+  - name: Installation and troubleshooting
+    url: https://github.com/Anamelash/spt-plate/blob/main/README.md
+    about: Requirements, install paths, where the logs and config files live.

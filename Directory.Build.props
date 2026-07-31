@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <PlateVersion>0.9.0</PlateVersion>
+    <Version>$(PlateVersion)</Version>
+    <LangVersion>latest</LangVersion>
+    <Deterministic>true</Deterministic>
+    <!-- Path to the game installation - used for client references and deployment -->
+    <SptGameDir>D:\Games\SPT</SptGameDir>
+  </PropertyGroup>
+</Project>

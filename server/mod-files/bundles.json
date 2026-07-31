@@ -1,0 +1,8 @@
+{
+    "manifest": [
+        {
+            "key": "plate/blood_bag.bundle",
+            "dependencyKeys": []
+        }
+    ]
+}

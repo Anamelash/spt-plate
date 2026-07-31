@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest a mechanic, a setting, or a change in how something is modelled.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        PLATE tries to reproduce physical and medical reality rather than to add
+        game mechanics for their own sake. Suggestions that describe a real
+        phenomenon the mod currently ignores are the ones most likely to land.
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like to see
+      description: The mechanic or change, and the situation where it would matter.
+    validations:
+      required: true
+
+  - type: textarea
+    id: grounding
+    attributes:
+      label: Physical or medical grounding
+      description: |
+        What real behaviour is being modelled, and where it is documented. Not
+        required for quality-of-life requests (settings, UI, logging), but for
+        anything touching ballistics, armor or trauma it is what makes the
+        request implementable.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Current workaround
+      description: |
+        Whether an existing setting gets part of the way there. Fine-tuning
+        constants live in the config files next to the mod, not only in the F12 menu.
