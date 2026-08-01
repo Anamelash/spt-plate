@@ -48,7 +48,7 @@ public class ReferenceBookTests
     {
         foreach (var (caliber, b) in Shipped().Barrels)
         {
-            Assert.True(b.RefMm > 50 && b.RefMm < 900,
+            Assert.True(b.RefMm > 50 && b.RefMm <= 1000,
                 $"{caliber}: reference barrel {b.RefMm} mm is not a barrel length");
 
             var c = b.C > 0 ? b.C : BarrelModel.EstimateC(b.CaseMm3, b.BoreMm);
@@ -87,6 +87,39 @@ public class ReferenceBookTests
         {
             Assert.True(barrels.ContainsKey(caliber), $"{caliber} is missing from the reference book");
             Assert.Equal(c, barrels[caliber].C);
+        }
+    }
+
+    /// <summary>
+    /// Weapon packs bring real cartridges the base game does not have. An install
+    /// without them just skips the entry, so carrying them costs nothing and their
+    /// absence would silently leave those weapons on whatever numbers the pack chose.
+    /// </summary>
+    [Fact]
+    public void Cartridges_added_by_weapon_packs_are_covered()
+    {
+        var barrels = Shipped().Barrels;
+        string[] fromPacks =
+        [
+            "Caliber102x22",   // .40 S&W
+            "Caliber11x33R",   // .44 Magnum
+            "Caliber792x33",   // 7.92x33 Kurz
+            "Caliber792x57",   // 7.92x57 Mauser
+            "Caliber65x52",    // 6.5x52 Carcano
+            "Caliber762x63",   // .30-06
+            "Caliber762x67B",  // .300 Win Mag
+            "Caliber6ARC",     // 6mm ARC
+            "Caliber86x63",    // .338 Norma
+            "Caliber93x64",    // 9.3x64 Brenneke
+            "Caliber1036x77",  // .408 CheyTac
+            "Caliber127x99",   // .50 BMG
+            "Caliber127x108",  // 12.7x108
+            "Caliber17.8×89",  // .700 Nitro Express - multiplication sign, not an x
+        ];
+
+        foreach (var caliber in fromPacks)
+        {
+            Assert.True(barrels.ContainsKey(caliber), $"{caliber} dropped out of the reference book");
         }
     }
 
