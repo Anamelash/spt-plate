@@ -18,6 +18,7 @@ public class PlateServerMod(
     DatabaseServer databaseServer,
     ModHelper modHelper,
     Services.AmmoNormalizer ammoNormalizer,
+    Services.BarrelNormalizer barrelNormalizer,
     Services.GrenadePhysics grenadePhysics,
     Services.BloodGlobals bloodGlobals,
     Services.TransfusionItem transfusionItem,
@@ -34,6 +35,11 @@ public class PlateServerMod(
         if (config.Modules.AmmoNormalizer)
         {
             ammoNormalizer.Run(config, modPath); // ammo normalization (incl. mod-added rounds)
+        }
+
+        if (config.Modules.BarrelNormalizer)
+        {
+            barrelNormalizer.Run(config, modPath); // muzzle velocity from barrel length
         }
 
         if (config.Modules.GrenadePhysics)
@@ -58,6 +64,7 @@ public class PlateServerMod(
         var applied = new[]
             {
                 ammoNormalizer.Summary,
+                barrelNormalizer.Summary,
                 grenadePhysics.Summary,
                 bloodGlobals.Summary,
                 transfusionItem.Summary,
@@ -140,6 +147,10 @@ public class PlateServerMod(
           "Modules": {
             // Ammo normalization (including mod-added rounds)
             "AmmoNormalizer": true,
+            // Muzzle velocity recomputed from barrel length (Le Duc, calibrated against
+            // published barrel-length ladders). Weapon packs and live-values backports
+            // ship modifiers that are not physical, and they feed straight into damage.
+            "BarrelNormalizer": true,
             // Grenade fragments/blast brought to prototype specs (ammo-reference.jsonc)
             "GrenadePhysics": true,
             // Globals tweaks for the blood system: bleedings no longer damage HP
@@ -148,6 +159,20 @@ public class PlateServerMod(
             "BloodGlobals": true,
             // GOST armor classes (helmets >=4 -> 3). Low priority, disabled.
             "GostArmor": false
+          },
+
+          // ===== Barrels: v = v_inf*L/(L+C), Le Duc =====
+          // Reference barrels and C per caliber live in ammo-reference.jsonc; these are
+          // the guard rails. Anything the model cannot handle is left alone and listed
+          // in plate-barrel-report.md.
+          "BarrelNormalizer": {
+            // Range of name-derived lengths treated as a barrel, mm
+            "MinLengthMm": 100,
+            "MaxLengthMm": 900,
+            // The model does not produce modifiers past this; one means bad input
+            "MaxPercent": 45,
+            // Muzzle devices and suppressors: a brake shifts velocity by a hair
+            "DeviceClampPercent": 2
           },
 
           "AmmoNormalizer": {
