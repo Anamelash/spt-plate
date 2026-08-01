@@ -203,6 +203,14 @@ broken — results in combination with PLATE. Mods that overhaul the same system
 
 ## Release history
 
+### 0.9.5
+
+- Damage scale is now set separately for you, PMC bots and Savage-side NPCs.
+  An existing setting carries over into all three.
+- New bleed rate multiplier (0-10), also per side: scales every bleed, external
+  and internal. 0 makes bleeding cosmetic for that side.
+- The event journal header lists the settings that differ from their defaults.
+
 ### 0.9.4
 
 - Surgical kits (CMS, Surv12) now close the bleedings on the limb they repair.
