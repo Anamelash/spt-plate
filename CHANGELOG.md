@@ -7,6 +7,9 @@ exhaustive list of what behaves differently from vanilla and the reasoning
 behind it. Each section ends with the published work the model rests on, and the
 sources are collected under [References](#references) at the end.
 
+The derivations themselves — formulas, constants and calibration anchors — are in
+[docs/MODEL.md](docs/MODEL.md).
+
 ## Damage: computed at the moment of impact, not taken from a table
 
 **Vanilla:** every round carries a fixed damage number; damage falls off

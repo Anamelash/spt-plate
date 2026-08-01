@@ -6,23 +6,30 @@ A physics-driven overhaul of terminal ballistics, armor and trauma for SPT 4.0
 - **Penetration** — armor as a physical barrier: specific-energy thresholds
   anchored to real protection standards, material behavior (ceramic, steel,
   UHMWPE, aramid, titanium), hit angle, wear and local damage.
+  ([how it works](docs/MODEL.md#armor))
 - **Lethality** — damage computed at the moment of impact from projectile
   physics and the actual path through the body; distance, barrel length,
   grazes, bones and vital zones all matter.
+  ([how it works](docs/MODEL.md#wound-channel))
 - **Armor interaction** — a penetrating bullet pays with energy, mass and
   shape; a blocked one delivers behind-armor blunt trauma.
+  ([how it works](docs/MODEL.md#behind-armor-blunt-trauma))
 - **Trauma** — blood volume as a separate resource: bleedings drain blood, not
   limb HP; blood-loss stages bring debuffs up to collapse and death; blood
   persists between raids, transfusions restore it.
+  ([how it works](docs/MODEL.md#blood-and-trauma))
 
 Every model is anchored to published work rather than to hand-tuned game feel:
 wound ballistics and ordnance-gelatin data for the wound channel, the Blunt
 Criterion literature for behind-armor trauma, GOST protection classes for armor
 thresholds, and the ATLS classification of hemorrhagic shock for the blood
-system.
+system. The derivations, the formulas and the
+[calibration anchors](docs/MODEL.md#calibration) are written up in
+**[docs/MODEL.md](docs/MODEL.md)**, along with
+[what is deliberately not modelled](docs/MODEL.md#what-is-deliberately-not-modelled)
+and the [sources](docs/MODEL.md#sources).
 
-See [CHANGELOG.md](CHANGELOG.md) for the full list of changes vs vanilla and the
-sources behind each model.
+See [CHANGELOG.md](CHANGELOG.md) for the list of changes vs vanilla.
 
 ## Requirements
 
