@@ -12,10 +12,13 @@ namespace PLATE.Client
     {
         public const string Guid = "com.anamelash.plate";
         public const string Name = "P.L.A.T.E.";
-        public const string Version = "0.9.0";
+        public const string Version = "0.9.1";
 
         internal static ManualLogSource Log;
         internal static Harmony HarmonyInstance;
+
+        /// <summary>Patches that could not be applied; reported once after startup.</summary>
+        internal static int PatchFailures;
 
         private void Awake()
         {
@@ -77,7 +80,18 @@ namespace PLATE.Client
                 Log.LogInfo("[PLATE] Overlay enabled");
             }
 
-            Log.LogInfo($"{Name} {Version} loaded");
+            // a patch that fails to apply leaves a feature silently dead, which reads as
+            // a broken mod rather than a broken hook — say it once, loudly, at the end
+            if (PatchFailures > 0)
+            {
+                Log.LogError(
+                    $"[PLATE] {PatchFailures} patch(es) FAILED to apply — parts of the mod are " +
+                    "inactive. Search this log for '[PLATE]' errors above and report them with " +
+                    "the mod version and your SPT/EFT versions.");
+            }
+
+            Log.LogInfo($"{Name} {Version} loaded" +
+                        (PatchFailures > 0 ? $" WITH {PatchFailures} FAILED PATCH(ES)" : ""));
         }
 
         private void RunPatchTargetsSelfTest()

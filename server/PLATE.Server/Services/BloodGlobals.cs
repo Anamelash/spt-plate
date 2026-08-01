@@ -14,6 +14,9 @@ namespace PLATE.Server.Services;
 [Injectable]
 public class BloodGlobals(DatabaseServer databaseServer, ISptLogger<BloodGlobals> logger)
 {
+    /// <summary>One-line result for the startup summary; null if the module did not run.</summary>
+    public string? Summary { get; private set; }
+
     public void Apply(PlateServerConfig cfg)
     {
         var effects = databaseServer.GetTables().Globals?.Configuration?.Health?.Effects;
@@ -56,9 +59,10 @@ public class BloodGlobals(DatabaseServer databaseServer, ISptLogger<BloodGlobals
             effects.BreakPart.BulletHitProbability.B = 0;
         }
 
-        logger.Success($"[PLATE] BloodGlobals applied: bleedHpDamage=" +
-                       $"{(cfg.Wounds.DisableBleedingHpDamage ? "off" : "vanilla")}, " +
-                       $"freshWoundTime={cfg.Wounds.FreshWoundWorkingTime}s, " +
-                       $"vanillaBulletFractures={(cfg.Wounds.DisableVanillaBulletFractures ? "off" : "on")}");
+        Summary = "blood globals";
+        logger.Debug($"[PLATE] BloodGlobals applied: bleedHpDamage=" +
+                     $"{(cfg.Wounds.DisableBleedingHpDamage ? "off" : "vanilla")}, " +
+                     $"freshWoundTime={cfg.Wounds.FreshWoundWorkingTime}s, " +
+                     $"vanillaBulletFractures={(cfg.Wounds.DisableVanillaBulletFractures ? "off" : "on")}");
     }
 }

@@ -76,8 +76,8 @@ public class BloodPersistence(SaveServer saveServer, ISptLogger<BloodPersistence
                 UpdatedUtc = DateTime.UtcNow,
             };
             WriteRecord(health, rec);
-            logger.Info($"[PLATE] Blood saved for {sessionId}: {rec.Cur:0}/{rec.Max:0} ml" +
-                        (died ? " (died -> reset)" : ""));
+            logger.Debug($"[PLATE] Blood saved for {sessionId}: {rec.Cur:0}/{rec.Max:0} ml" +
+                         (died ? " (died -> reset)" : ""));
             return JsonSerializer.Serialize(rec);
         }
         catch (Exception ex)
@@ -108,7 +108,7 @@ public class BloodPersistence(SaveServer saveServer, ISptLogger<BloodPersistence
             item.Upd.MedKit ??= new() { HpResource = defaultUses };
             var left = Math.Max(0, (item.Upd.MedKit.HpResource ?? defaultUses) - 1);
             item.Upd.MedKit.HpResource = left;
-            logger.Info($"[PLATE] Transfusion use consumed: {itemId} -> {left} left");
+            logger.Debug($"[PLATE] Transfusion use consumed: {itemId} -> {left} left");
             return $"{{\"ok\":true,\"left\":{left}}}";
         }
         catch (Exception ex)

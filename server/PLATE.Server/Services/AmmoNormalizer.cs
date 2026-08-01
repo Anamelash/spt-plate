@@ -23,6 +23,9 @@ public class AmmoNormalizer(
     ReferenceBook referenceBook,
     ISptLogger<AmmoNormalizer> logger)
 {
+    /// <summary>One-line result for the startup summary; null if the module did not run.</summary>
+    public string? Summary { get; private set; }
+
     private class Rec
     {
         public required TemplateItem Item;
@@ -253,10 +256,11 @@ public class AmmoNormalizer(
             }
         }
 
-        logger.Success($"[PLATE] AmmoNormalizer: {recs.Count} ammo ({bullets.Count} bullets, " +
-                       $"{recs.Count - bullets.Count} buckshot), reference hits: {refApplied}, " +
-                       $"field fills: {fills}, PDM computed: {pdmFills}, " +
-                       $"rescaled: {rescaled} bullets + {buckshotRescaled} buckshot");
+        Summary = $"{recs.Count} ammo ({bullets.Count} bullets, {recs.Count - bullets.Count} buckshot)";
+        logger.Debug($"[PLATE] AmmoNormalizer: {recs.Count} ammo ({bullets.Count} bullets, " +
+                     $"{recs.Count - bullets.Count} buckshot), reference hits: {refApplied}, " +
+                     $"field fills: {fills}, PDM computed: {pdmFills}, " +
+                     $"rescaled: {rescaled} bullets + {buckshotRescaled} buckshot");
 
         // Machine data is always kept in memory — served to the client via /plate/ammo-data
         PlateAmmoData.Json = BuildMachineData(

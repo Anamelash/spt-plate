@@ -196,6 +196,26 @@ broken — results in combination with PLATE. Mods that overhaul the same system
 (ballistics/armor/medical overhauls) are incompatible by definition. Co-op
 (Fika) is untested.
 
+## Release history
+
+### 0.9.1
+
+- **Fixed: the blood transfusion kit did nothing in raid.** The hook that lets the
+  player apply an item never attached, because it targeted an abstract method that
+  has no body to patch. Drinking a blood bag restored no volume and consumed no
+  charge — for everyone, on every platform. It now hooks the concrete health
+  controllers instead, found by walking the type tree rather than by name.
+- Failed patches are no longer quiet. Any hook that does not attach is counted and
+  reported as an error at startup, and the load line says how many failed. The
+  previous startup self-check only verified that patch targets *existed*, which is
+  why the above shipped.
+- Server startup logs a single summary line instead of a dozen; per-module detail
+  moved behind debug logging. Warnings and errors are unchanged and still verbose.
+
+### 0.9.0
+
+- First public release.
+
 ## References
 
 The models are built on published, publicly available work rather than on

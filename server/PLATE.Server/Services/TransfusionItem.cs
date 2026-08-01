@@ -25,6 +25,9 @@ public class TransfusionItem(
     /// <summary>Stable item tpl (b100d = "blood"). Must not change — the client matches by it.</summary>
     public const string Tpl = "b100d0000000000000000001";
 
+    /// <summary>One-line result for the startup summary; null if the module did not run.</summary>
+    public string? Summary { get; private set; }
+
     private const string AssortId = "b100d0000000000000000002";
     private const string TherapistId = "54cb57776803fa99248b456e";
     private const string RoublesTpl = "5449016a4bdc2d6f028b456f";
@@ -196,9 +199,10 @@ public class TransfusionItem(
         AddTherapistAssort(tables, cfg);
         AddMedstationCraft(tables);
 
-        logger.Success($"[PLATE] Transfusion item registered ({cfg.Blood.TransfusionUses} uses, " +
-                       $"{cfg.Blood.TransfusionPriceRub:0} rub at Therapist LL1, " +
-                       $"model={(hasCustomModel ? "custom bundle" : "vanilla bloodset")})");
+        Summary = $"transfusion item ({(hasCustomModel ? "custom model" : "vanilla model")})";
+        logger.Debug($"[PLATE] Transfusion item registered ({cfg.Blood.TransfusionUses} uses, " +
+                     $"{cfg.Blood.TransfusionPriceRub:0} rub at Therapist LL1, " +
+                     $"model={(hasCustomModel ? "custom bundle" : "vanilla bloodset")})");
     }
 
     /// <summary>Medstation recipe: 1 saline + 1 bloodset -> 1 blood bag (60 s).</summary>
@@ -256,7 +260,7 @@ public class TransfusionItem(
             ],
         });
 
-        logger.Success("[PLATE] Medstation craft added: saline + bloodset -> blood bag (60s)");
+        logger.Debug("[PLATE] Medstation craft added: saline + bloodset -> blood bag (60s)");
     }
 
     private void AddTherapistAssort(

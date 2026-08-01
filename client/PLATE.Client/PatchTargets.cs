@@ -104,27 +104,63 @@ namespace PLATE.Client
 
         /// <summary>Item application by the LOCAL player (all UI paths: inventory,
         /// hotbar, dragging onto the health bar). DoMedEffect is called only by observed
-        /// controllers (bots) — the local player needs these hooks: the in-raid
-        /// overloads (inherited from the generic base) + the declared-only override out of raid.</summary>
+        /// controllers (bots), so the local player needs these hooks.
+        ///
+        /// ApplyItem is declared abstract on the generic base the health controllers
+        /// derive from, and ActiveHealthController itself is abstract too: neither has
+        /// a body, so neither can be patched. The bodies live in the concrete
+        /// subclasses (in-raid own/observed controllers, out-of-raid controller), and
+        /// those are what gets patched here — found by walking the type tree rather
+        /// than by hardcoding remapped class names.</summary>
         public static List<MethodBase> Health_ApplyItemOverloads
         {
             get
             {
                 var list = new List<MethodBase>();
-                if (ActiveHealthController != null)
+                foreach (var type in ConcreteHealthControllers())
                 {
-                    list.AddRange(ActiveHealthController.GetMethods(AccessTools.all)
-                        .Where(m => m.Name == "ApplyItem"));
-                }
-
-                if (OutOfRaidHealthController != null)
-                {
-                    list.AddRange(OutOfRaidHealthController
+                    list.AddRange(type
                         .GetMethods(AccessTools.all | BindingFlags.DeclaredOnly)
-                        .Where(m => m.Name == "ApplyItem"));
+                        .Where(m => m.Name == "ApplyItem" && !m.IsAbstract)
+                        .Cast<MethodBase>());
                 }
 
                 return list.Distinct().ToList();
+            }
+        }
+
+        /// <summary>
+        /// Every instantiable health controller: the subclasses of the abstract in-raid
+        /// controller plus the out-of-raid one. Scanned once — the results are cached by
+        /// the callers via the resolved target list.
+        /// </summary>
+        private static IEnumerable<Type> ConcreteHealthControllers()
+        {
+            var baseType = ActiveHealthController;
+            if (baseType != null)
+            {
+                Type[] types;
+                try
+                {
+                    types = baseType.Assembly.GetTypes();
+                }
+                catch (ReflectionTypeLoadException ex)
+                {
+                    types = ex.Types.Where(t => t != null).ToArray();
+                }
+
+                foreach (var t in types)
+                {
+                    if (t != null && !t.IsAbstract && baseType.IsAssignableFrom(t))
+                    {
+                        yield return t;
+                    }
+                }
+            }
+
+            if (OutOfRaidHealthController != null && !OutOfRaidHealthController.IsAbstract)
+            {
+                yield return OutOfRaidHealthController;
             }
         }
 

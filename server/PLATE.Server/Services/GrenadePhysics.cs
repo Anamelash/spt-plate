@@ -27,6 +27,9 @@ public class GrenadePhysics(
     /// <summary>Fragment steel density, g/cm³ (for the equivalent sphere diameter).</summary>
     private const double SteelDensity = 7.85;
 
+    /// <summary>One-line result for the startup summary; null if the module did not run.</summary>
+    public string? Summary { get; private set; }
+
     public void Apply(PlateServerConfig cfg, string modPath)
     {
         var tables = databaseServer.GetTables();
@@ -129,8 +132,8 @@ public class GrenadePhysics(
                     Math.Cbrt(gr.TntG / reference.BlastAnchor.TntG));
                 if (Math.Abs((oldStrength ?? 0) - grenade.Properties.Strength.Value) > 0.5)
                 {
-                    logger.Info($"[PLATE] {gr.Prototype}: Strength {oldStrength:0} -> " +
-                                $"{grenade.Properties.Strength:0} (explosive {gr.TntG} g)");
+                    logger.Debug($"[PLATE] {gr.Prototype}: Strength {oldStrength:0} -> " +
+                                 $"{grenade.Properties.Strength:0} (explosive {gr.TntG} g)");
                 }
             }
 
@@ -139,9 +142,10 @@ public class GrenadePhysics(
 
         PublishAmmoData(largeShares, cfg);
 
-        logger.Success($"[PLATE] GrenadePhysics: {done}/{reference.Grenades.Count} grenades brought to prototype specs " +
-                       $"(fragments: mass/velocity/damage from energy; blast: " +
-                       $"{(cfg.Grenades.BlastFromTnt ? "from explosive mass" : "vanilla")})");
+        Summary = $"{done}/{reference.Grenades.Count} grenades";
+        logger.Debug($"[PLATE] GrenadePhysics: {done}/{reference.Grenades.Count} grenades brought to prototype specs " +
+                     $"(fragments: mass/velocity/damage from energy; blast: " +
+                     $"{(cfg.Grenades.BlastFromTnt ? "from explosive mass" : "vanilla")})");
     }
 
     /// <summary>

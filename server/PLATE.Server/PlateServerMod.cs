@@ -31,15 +31,6 @@ public class PlateServerMod(
         var config = LoadOrCreateConfig(modPath);
         Routes.PlateConfigHolder.Config = config; // for request handlers (blood-get/set)
 
-        var tables = databaseServer.GetTables();
-        var ammoCount = tables.Templates?.Items?.Values
-            .Count(i => i.Properties?.Caliber is not null) ?? 0;
-
-        var version = new PlateModMetadata().Version;
-        logger.Success($"[PLATE] Server {version} loaded. DB: {ammoCount} ammo templates visible " +
-                       $"(modules: ammoNorm={config.Modules.AmmoNormalizer}, " +
-                       $"bloodGlobals={config.Modules.BloodGlobals}, gost={config.Modules.GostArmor})");
-
         if (config.Modules.AmmoNormalizer)
         {
             ammoNormalizer.Run(config, modPath); // ammo normalization (incl. mod-added rounds)
@@ -62,6 +53,23 @@ public class PlateServerMod(
 
         // TODO: GostArmor.Apply(tables, ...)
 
+        // One line on success; anything that went wrong has already logged itself as a
+        // warning or an error with the full detail. Per-module specifics are Debug.
+        var applied = new[]
+            {
+                ammoNormalizer.Summary,
+                grenadePhysics.Summary,
+                bloodGlobals.Summary,
+                transfusionItem.Summary,
+            }
+            .Where(s => !string.IsNullOrEmpty(s))
+            .ToList();
+
+        var version = new PlateModMetadata().Version;
+        logger.Success(applied.Count > 0
+            ? $"[PLATE] {version} loaded: {string.Join(", ", applied)}"
+            : $"[PLATE] {version} loaded: all modules disabled in config.jsonc");
+
         return Task.CompletedTask;
     }
 
@@ -71,7 +79,7 @@ public class PlateServerMod(
         if (!File.Exists(path))
         {
             File.WriteAllText(path, DefaultConfigJsonc);
-            logger.Info($"[PLATE] Config not found, default written to {path}");
+            logger.Debug($"[PLATE] Config not found, default written to {path}");
         }
 
         try

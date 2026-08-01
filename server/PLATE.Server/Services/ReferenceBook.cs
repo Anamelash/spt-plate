@@ -81,7 +81,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         if (!File.Exists(path))
         {
             File.WriteAllText(path, DefaultReferenceJsonc);
-            logger.Info($"[PLATE] Ammo reference written: {path}");
+            logger.Debug($"[PLATE] Ammo reference written: {path}");
         }
 
         try

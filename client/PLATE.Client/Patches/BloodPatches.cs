@@ -34,17 +34,32 @@ namespace PLATE.Client.Patches
 
             // the local player applies items via ApplyItem (both overloads);
             // DoMedEffect is called only by observed controllers (bots)
+            var applyItemHooks = 0;
             foreach (var target in PatchTargets.Health_ApplyItemOverloads)
             {
                 try
                 {
                     harmony.Patch(target, postfix: new HarmonyMethod(typeof(BloodPatches),
                         nameof(TransfusionApplyItemPostfix)));
+                    applyItemHooks++;
                 }
                 catch (Exception ex)
                 {
-                    Plugin.Log.LogError($"[PLATE] Blood: ApplyItem patch failed: {ex.Message}");
+                    Plugin.PatchFailures++;
+                    Plugin.Log.LogError(
+                        $"[PLATE] Blood: ApplyItem patch failed on " +
+                        $"{target.DeclaringType?.FullName}.{target.Name}: {ex}");
                 }
+            }
+
+            // no hook at all means the transfusion item silently does nothing in raid —
+            // loud, because it looks like a broken item rather than a broken patch
+            if (applyItemHooks == 0)
+            {
+                Plugin.PatchFailures++;
+                Plugin.Log.LogError(
+                    "[PLATE] Blood: no ApplyItem hook applied — the blood bag will NOT work. " +
+                    "Health controller layout changed; the patch targets need re-resolving.");
             }
 
             // push signals for cripple recalculation (the 5-7 s safety polling picks up anything missed)
@@ -83,6 +98,7 @@ namespace PLATE.Client.Patches
         {
             if (target == null)
             {
+                Plugin.PatchFailures++;
                 Plugin.Log.LogError($"[PLATE] Blood: target for {postfixName} not resolved, skipped");
                 return;
             }
@@ -93,7 +109,8 @@ namespace PLATE.Client.Patches
             }
             catch (Exception ex)
             {
-                Plugin.Log.LogError($"[PLATE] Blood: failed to patch {target.Name}: {ex.Message}");
+                Plugin.PatchFailures++;
+                Plugin.Log.LogError($"[PLATE] Blood: failed to patch {target.Name}: {ex}");
             }
         }
 
