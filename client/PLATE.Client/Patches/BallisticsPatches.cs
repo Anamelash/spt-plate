@@ -280,19 +280,20 @@ namespace PLATE.Client.Patches
             var exits = shot.IsForwardHit &&
                         (shot.BulletState == EftBulletClass.EBulletState.DeviationHit ||
                          shot.BulletState == EftBulletClass.EBulletState.FragmentationHit);
-            var chordMm = exits
-                ? ChordMm(bpc, __instance.HitPoint, __instance.Direction, dia)
-                : -1f; // stopped inside the part: full deposition over L
+            // the chord is needed either way: when the projectile exits it bounds the
+            // energy it could leave behind, when it stops it bounds the channel it
+            // could have cut before running out of body
+            var chordMm = ChordMm(bpc, __instance.HitPoint, __instance.Direction, dia);
 
-            var d = ClientWoundModel.Compute(mass, dia, v, x, frag, chordMm, wound);
+            var d = ClientWoundModel.Compute(mass, dia, v, x, frag, chordMm, exits, wound);
             var vital = VitalMult(bpc.BodyPartColliderType);
             __instance.Damage = d.DamageHp * vital * DamageScale(bpc.Player as Player);
 
             Overlay.HitFeed.PushPanel(d.Contact
                 ? $"  W {bpc.BodyPartType}: contact {v:0} m/s -> {__instance.Damage:0.#}"
                 : $"  W {bpc.BodyPartColliderType}: {v:0} m/s, L {d.ChannelMm:0}" +
-                  (exits ? $"/T {chordMm:0}" : "") +
-                  $" mm, PC {d.Pc:0.#}+TC {d.Tc:0.#}" +
+                  $"/T {chordMm:0} mm, E {d.DepositFrac * 100f:0}%" +
+                  $", PC {d.Pc:0.#}+TC {d.Tc:0.#}" +
                   (vital > 1f ? $" x{vital:0.#}" : "") +
                   $" -> {__instance.Damage:0.#}" + (exits ? " (through)" : ""));
         }

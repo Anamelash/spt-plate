@@ -87,6 +87,10 @@ Crushed tissue along the channel, proportional to the volume actually swept:
 PC = A · (1 + ExpansionAreaFactor · X) · min(L, T) / WoundVolumePerHp
 ```
 
+`min(L, T)` holds whether the projectile exits or stops inside: a bullet caught
+by bone still only wounds the tissue it passed through, and no channel can be
+longer than the body in front of it.
+
 ### Temporary cavity
 
 Tissue is elastic and survives being stretched slowly. Stretch only becomes
@@ -98,8 +102,19 @@ eff(v) = 1 / (1 + exp(−(v − TcVelocityCenter) / TcVelocityWidth))
 TC      = eff(v) · E · φ · (1 + TcFragBonus · frag) / TcEnergyPerHp
 ```
 
-`φ = min(L,T)/L` is the share of the channel that fell inside this body part, and
-therefore roughly the share of energy deposited in it. `frag` is the round's
+`φ` is the share of the projectile's energy left in this body part. The share of
+the *path* is not the share of the *energy*: the same quadratic drag that gives
+the logarithmic depth gives `v(s) = v · exp(−s/λ)` with `λ = GelDepthK · (m/A) ·
+(1 − ExpansionDepthFactor · X)`, so energy falls off twice as fast as velocity
+and most of it is spent in the first hand's width of tissue.
+
+```
+φ = 1 − exp(−2 · min(L,T) / λ)     projectile exits the part
+φ = 1                              projectile stops in it (bone, lodged)
+```
+
+A rifle bullet crossing a 250 mm chest leaves about 80% of its energy behind, not
+the 25% its share of the channel would suggest. `frag` is the round's
 fragmentation chance: fragmentation converts stretching into tearing, so the
 tissue no longer springs back.
 

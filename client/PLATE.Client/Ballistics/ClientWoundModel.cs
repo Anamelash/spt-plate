@@ -23,6 +23,9 @@ namespace PLATE.Client.Ballistics
             public float Pc;
             public float Tc;
 
+            /// <summary>Share of the projectile's energy left in this part, 0..1.</summary>
+            public float DepositFrac;
+
             /// <summary>Contact branch (v ≤ v_stop): a bruise without a channel.</summary>
             public bool Contact;
         }
@@ -48,12 +51,14 @@ namespace PLATE.Client.Ballistics
         }
 
         /// <summary>
-        /// Energy deposition in a body part. pathMm — the path inside the part
-        /// (collider chord); pathMm ≤ 0 — the projectile stayed in the part
-        /// (bone/stuck): full deposition over L, the chord does not limit it.
+        /// Energy deposition in a body part. pathMm — the path available inside the
+        /// part (collider chord); exits — the projectile left the part, so only the
+        /// energy it lost on the way through stays behind. A projectile that stops
+        /// inside (bone, lodged) leaves all of it, but still cannot cut a channel
+        /// longer than the tissue in front of it.
         /// </summary>
         public static Deposit Compute(float massG, float diaMm, float v, float x,
-            float frag, float pathMm, AmmoDataCache.WoundParams p)
+            float frag, float pathMm, bool exits, AmmoDataCache.WoundParams p)
         {
             var e = 0.5f * (massG / 1000f) * v * v;
             var budget = e / Mathf.Max((float)p.EnergyCapPerHp, 0.1f);
@@ -65,10 +70,24 @@ namespace PLATE.Client.Ballistics
                 return new Deposit { DamageHp = budget, Contact = true };
             }
 
-            var path = pathMm > 0f ? Mathf.Min(pathMm, l) : l;
-            var phi = path / l; // share of the path (≈ energy) left in the part
-
             var area = Mathf.PI * diaMm * diaMm / 4f;
+
+            // the wound channel ends where the body ends: a bullet stopped by bone
+            // does not carve a metre of cavity through a 250 mm chest
+            var path = pathMm > 0f ? Mathf.Min(pathMm, l) : l;
+
+            // energy left behind. Quadratic drag gives v(s) = v·exp(-s/lambda), so a
+            // projectile that makes it through leaves 1-(v_out/v)² of its energy; one
+            // that stops leaves everything. Lambda is the same characteristic length
+            // the channel depth is built from, so both use one drag law.
+            var phi = 1f;
+            if (exits)
+            {
+                var lambda = Mathf.Max((float)p.GelDepthK * (massG / Mathf.Max(area, 1e-3f)) *
+                                       (1f - (float)p.ExpansionDepthFactor * x), 1e-3f);
+                phi = 1f - Mathf.Exp(-2f * path / lambda);
+            }
+
             var areaEff = area * (1f + (float)p.ExpansionAreaFactor * x);
             var pc = areaEff * path / (float)p.WoundVolumePerHp;
 
@@ -83,6 +102,7 @@ namespace PLATE.Client.Ballistics
                 ChannelMm = l,
                 Pc = pc,
                 Tc = tc,
+                DepositFrac = phi,
             };
         }
     }
