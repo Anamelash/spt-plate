@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using EFT;
 using EFT.HealthSystem;
@@ -41,14 +42,12 @@ namespace PLATE.Client.Patches
                 {
                     harmony.Patch(target, postfix: new HarmonyMethod(typeof(BloodPatches),
                         nameof(TransfusionApplyItemPostfix)));
-                    PatchStats.Track(harmony, target,
-                        $"ApplyItem[{target.DeclaringType?.Name}]");
+                    PatchStats.Track(harmony, target, ApplyItemLabel(target));
                     applyItemHooks++;
                 }
                 catch (Exception ex)
                 {
-                    PatchStats.MarkFailed(target,
-                        $"ApplyItem[{target.DeclaringType?.Name}]", ex.Message);
+                    PatchStats.MarkFailed(target, ApplyItemLabel(target), ex.Message);
                     Plugin.Log.LogError(
                         $"[PLATE] Blood: ApplyItem patch failed on " +
                         $"{target.DeclaringType?.FullName}.{target.Name}: {ex}");
@@ -86,6 +85,11 @@ namespace PLATE.Client.Patches
                 }
             }
         }
+
+        /// <summary>Distinguishes the two ApplyItem overloads, which share a patch.</summary>
+        private static string ApplyItemLabel(MethodBase target) =>
+            $"ApplyItem[{target.DeclaringType?.Name}." +
+            $"{string.Join(",", target.GetParameters().Select(p => p.ParameterType.Name))}]";
 
         private static bool LowEdgeKeepAlivePrefix(object __instance)
         {
@@ -129,6 +133,7 @@ namespace PLATE.Client.Patches
         private static void BleedingTickPostfix(ActiveHealthController.Bleeding __instance,
             float deltaTime)
         {
+            PatchStats.Hit(nameof(BleedingTickPostfix));
             if (Off)
             {
                 return;
@@ -235,6 +240,7 @@ namespace PLATE.Client.Patches
         private static void GuaranteedBleedPostfix(ActiveHealthController __instance,
             EBodyPart bodyPart, float damage, DamageInfoStruct damageInfo, float __result)
         {
+            PatchStats.Hit(nameof(GuaranteedBleedPostfix));
             if (Off || damageInfo.BlockedBy.HasValue)
             {
                 return;
@@ -432,6 +438,7 @@ namespace PLATE.Client.Patches
         private static void PartDestroyedPostfix(ActiveHealthController __instance,
             EBodyPart bodyPart, EDamageType damageType)
         {
+            PatchStats.Hit(nameof(PartDestroyedPostfix));
             if (Off)
             {
                 return;
@@ -512,6 +519,7 @@ namespace PLATE.Client.Patches
         private static void TransfusionCanApplyPostfix(object __instance,
             EFT.InventoryLogic.Item item, ref bool __result)
         {
+            PatchStats.Hit(nameof(TransfusionCanApplyPostfix));
             if (Off || __result || item == null || item.TemplateId.ToString() != TransfusionTpl)
             {
                 return;
@@ -551,12 +559,14 @@ namespace PLATE.Client.Patches
         private static void MedEffectPostfix(ActiveHealthController __instance,
             EFT.InventoryLogic.Item item)
         {
+            PatchStats.Hit(nameof(MedEffectPostfix));
             TryTransfusionRestore(__instance, item);
         }
 
         private static void TransfusionApplyItemPostfix(object __instance,
-            EFT.InventoryLogic.Item item)
+            EFT.InventoryLogic.Item item, MethodBase __originalMethod)
         {
+            PatchStats.Hit(__originalMethod);
             TryTransfusionRestore(__instance, item);
         }
 

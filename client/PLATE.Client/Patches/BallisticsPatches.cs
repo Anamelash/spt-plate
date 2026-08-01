@@ -185,6 +185,7 @@ namespace PLATE.Client.Patches
         private static void DamageInfoCtorPostfix(ref DamageInfoStruct __instance,
             EDamageType damageType, EftBulletClass shot)
         {
+            PatchStats.Hit(nameof(DamageInfoCtorPostfix));
             var isFragment = damageType == EDamageType.GrenadeFragment ||
                              damageType == EDamageType.Landmine;
             if (Off || (damageType != EDamageType.Bullet && !isFragment))
@@ -500,6 +501,7 @@ namespace PLATE.Client.Patches
         private static bool IsPenetratedPrefix(BodyPartCollider __instance,
             EftBulletClass shot, Vector3 hitPoint, ref bool __result)
         {
+            PatchStats.Hit(nameof(IsPenetratedPrefix));
             if (Off || !PlateClientConfig.PhysDamageModel.Value)
             {
                 return true;
@@ -665,6 +667,7 @@ namespace PLATE.Client.Patches
         /// </summary>
         private static bool ArmorPenetrationPrefix(ArmorComponent __instance, EftBulletClass shot)
         {
+            PatchStats.Hit(nameof(ArmorPenetrationPrefix));
             if (Off)
             {
                 return true;

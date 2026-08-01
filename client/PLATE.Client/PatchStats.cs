@@ -28,11 +28,19 @@ namespace PLATE.Client
             public bool Applied;
             public string Error;
             public long Fired;
-            public float LastAt;
+
+            /// <summary>
+            /// Environment.TickCount, not Time.time: this type is exercised by tests
+            /// outside Unity, where Time.time is an engine ECall and throws.
+            /// </summary>
+            public int LastAt;
         }
 
         private static readonly Dictionary<MethodBase, Entry> ByMethod =
             new Dictionary<MethodBase, Entry>();
+
+        private static readonly Dictionary<string, Entry> ByLabel =
+            new Dictionary<string, Entry>();
 
         private static readonly List<Entry> Ordered = new List<Entry>();
 
@@ -55,6 +63,7 @@ namespace PLATE.Client
             };
 
             Ordered.Add(entry);
+            ByLabel[label] = entry;
             if (target != null)
             {
                 ByMethod[target] = entry;
@@ -88,36 +97,48 @@ namespace PLATE.Client
             Failures++;
         }
 
-        /// <summary>Shared counting postfix — see the class summary.</summary>
-        public static void Counter(MethodBase __originalMethod)
+        /// <summary>
+        /// Counts one invocation. Called explicitly from the patch bodies.
+        ///
+        /// Do NOT go back to attaching a generic counting postfix via a second
+        /// harmony.Patch on the same target: that shipped in 0.9.2 and broke
+        /// CanApplyItem, which returns bool and lives on a generic base HarmonyX
+        /// already warns about. Re-patching it mangled __result, the applicability
+        /// gate started refusing every medical item in raid, and nothing in the log
+        /// pointed at us. Telemetry must never be able to change behaviour.
+        /// </summary>
+        public static void Hit(string label)
         {
-            if (__originalMethod != null && ByMethod.TryGetValue(__originalMethod, out var e))
+            if (ByLabel.TryGetValue(label, out var e))
             {
                 e.Fired++;
-                e.LastAt = UnityEngine.Time.time;
+                e.LastAt = Environment.TickCount;
             }
         }
 
-        private static readonly HarmonyMethod CounterMethod =
-            new HarmonyMethod(typeof(PatchStats), nameof(Counter));
-
         /// <summary>
-        /// Records the target as applied and attaches the fire counter to it. Safe to
-        /// call for prefix-patched targets too: Harmony still runs postfixes.
+        /// Exact variant for hooks shared by several overloads. Harmony injects
+        /// __originalMethod as a parameter of the existing patch — that is plain
+        /// argument injection, not an additional patch, and is safe.
         /// </summary>
+        public static void Hit(MethodBase original)
+        {
+            if (original != null && ByMethod.TryGetValue(original, out var e))
+            {
+                e.Fired++;
+                e.LastAt = Environment.TickCount;
+            }
+        }
+
+        /// <summary>Records the target as applied. Bookkeeping only — patches nothing.</summary>
         public static void Track(Harmony harmony, MethodBase target, string label)
         {
             MarkApplied(target, label);
-            try
-            {
-                harmony.Patch(target, postfix: CounterMethod);
-            }
-            catch (Exception ex)
-            {
-                // the real patch is already in place; losing the counter is not fatal
-                Plugin.Log.LogWarning($"[PLATE] hook counter not attached to {label}: {ex.Message}");
-            }
         }
+
+        /// <summary>Labels of hooks that could not be attached.</summary>
+        public static IEnumerable<string> FailedLabels() =>
+            Ordered.Where(e => !e.Applied).Select(e => e.Label);
 
         /// <summary>Human-readable table for the event journal.</summary>
         public static IEnumerable<string> Report()

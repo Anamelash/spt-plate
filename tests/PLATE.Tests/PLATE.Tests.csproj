@@ -1,0 +1,84 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net471 to match the client: the tests load the same game assemblies it does -->
+    <TargetFramework>net471</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <!-- surfaced to the tests so they can find the game install and skip without it -->
+    <DefineConstants>$(DefineConstants)</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\client\PLATE.Client\PLATE.Client.csproj" />
+  </ItemGroup>
+
+  <!-- Game assemblies, same HintPaths as the client. Copied locally here (unlike in
+       the client) so the test host can actually load them. -->
+  <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>$(SptGameDir)\BepInEx\core\0Harmony.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="BepInEx">
+      <HintPath>$(SptGameDir)\BepInEx\core\BepInEx.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(SptGameDir)\EscapeFromTarkov_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(SptGameDir)\EscapeFromTarkov_Data\Managed\UnityEngine.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(SptGameDir)\EscapeFromTarkov_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>$(SptGameDir)\EscapeFromTarkov_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Comfort">
+      <HintPath>$(SptGameDir)\EscapeFromTarkov_Data\Managed\Comfort.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="ItemComponent.Types">
+      <HintPath>$(SptGameDir)\EscapeFromTarkov_Data\Managed\ItemComponent.Types.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(SptGameDir)\EscapeFromTarkov_Data\Managed\Newtonsoft.Json.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="GameDir.cs">
+      <DesignTime>true</DesignTime>
+    </Compile>
+  </ItemGroup>
+
+  <!-- bake the configured game path in so tests can resolve the rest of Managed/ -->
+  <Target Name="WriteGameDir" BeforeTargets="BeforeCompile">
+    <WriteLinesToFile
+      File="$(IntermediateOutputPath)GameDir.g.cs"
+      Lines="namespace PLATE.Tests { internal static class GameDir { public const string Path = @&quot;$(SptGameDir)&quot;%3B } }"
+      Overwrite="true" />
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)GameDir.g.cs" />
+    </ItemGroup>
+  </Target>
+
+</Project>

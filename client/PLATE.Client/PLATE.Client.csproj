@@ -17,6 +17,13 @@
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- the patch integrity tests drive the internal patch classes directly -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>PLATE.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <!-- All game assemblies are referenced by HintPath from the install and not copied to the output -->
   <ItemGroup>
     <Reference Include="BepInEx">
