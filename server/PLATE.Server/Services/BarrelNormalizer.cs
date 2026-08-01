@@ -65,6 +65,7 @@ public class BarrelNormalizer(
         }
 
         var barrelCaliber = MapBarrelsToCalibers(items, out var hasRemovableBarrel);
+        var familyCaliber = MapFamiliesToCalibers(items, barrelCaliber, reference);
         var changed = new List<Change>();
         var skipped = new List<Change>();
 
@@ -79,7 +80,18 @@ public class BarrelNormalizer(
             var name = item.Name ?? "";
             var old = p.Velocity.Value;
 
-            if (barrelCaliber.TryGetValue(item.Id, out var caliber))
+            // the name is the better witness where it carries a caliber: a barrel is
+            // listed by whichever weapons happen to accept it, and a pack that adds a
+            // .40 Glock referencing the 9x19 barrel makes the slot walk say .40
+            var isBarrel = name.StartsWith("barrel_", StringComparison.OrdinalIgnoreCase);
+            var caliber = isBarrel ? CaliberFromName(name, reference) ?? "" : "";
+            if (caliber.Length == 0 && isBarrel && !barrelCaliber.ContainsKey(item.Id) &&
+                familyCaliber.TryGetValue(Family(name), out var byFamily))
+            {
+                caliber = byFamily;
+            }
+
+            if (caliber.Length > 0 || barrelCaliber.TryGetValue(item.Id, out caliber))
             {
                 Normalize(item, p, caliber, ParseLength(name), reference, b, changed, skipped);
                 continue;
@@ -106,6 +118,19 @@ public class BarrelNormalizer(
                     skipped.Remove(row);
                 }
 
+                continue;
+            }
+
+            // a barrel whose caliber we could not work out is still a barrel: clamping it
+            // to a couple of percent would quietly hand a sawn-off Mosin full-length
+            // ballistics. Leave it and say so
+            if (isBarrel)
+            {
+                skipped.Add(new Change
+                {
+                    Name = name, Caliber = "?", LengthMm = ParseLength(name), Old = old,
+                    New = old, Note = "no weapon links this barrel to a caliber",
+                });
                 continue;
             }
 
@@ -174,6 +199,89 @@ public class BarrelNormalizer(
         return null;
     }
 
+    /// <summary>
+    /// Caliber read off the item name. Names carry it as the bare dimensions —
+    /// barrel_glock_glock_114mm_9x19_std — while the id spells it with a suffix,
+    /// Caliber9x19PARA, so the id is matched by its dimensions with the trailing
+    /// letters dropped. Only an unambiguous single hit counts.
+    /// </summary>
+    private static string? CaliberFromName(string name, ReferenceBook.AmmoReference reference)
+    {
+        string? hit = null;
+
+        foreach (var id in reference.Barrels.Keys)
+        {
+            var token = id.StartsWith("Caliber", StringComparison.OrdinalIgnoreCase)
+                ? id.Substring("Caliber".Length)
+                : id;
+            token = token.TrimEnd('A', 'B', 'C', 'P', 'R', 'M', 'N', 'O', 'T', 'S', 'E', 'D');
+            if (token.Length < 3 || !name.Contains(token, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (hit != null)
+            {
+                return null; // two calibers claim this name; let the slot walk decide
+            }
+
+            hit = id;
+        }
+
+        return hit;
+    }
+
+    /// <summary>Weapon family a barrel belongs to: "barrel_mosin_izhmash_..." -> "barrel_mosin".</summary>
+    private static string Family(string name)
+    {
+        var parts = name.Split('_');
+        return parts.Length >= 2 ? $"{parts[0]}_{parts[1]}" : name;
+    }
+
+    /// <summary>
+    /// Caliber per weapon family, from the barrels that did resolve. Some barrels hang
+    /// off a receiver no weapon lists directly — the sawn-off Mosin's are like that, and
+    /// leaving them alone means a 200 mm barrel keeps a -54% modifier nobody derived.
+    /// Only families whose resolved barrels all agree are used; a family that mixes
+    /// calibers teaches nothing.
+    /// </summary>
+    private static Dictionary<string, string> MapFamiliesToCalibers(
+        Dictionary<MongoId, TemplateItem> items,
+        Dictionary<MongoId, string> barrelCaliber,
+        ReferenceBook.AmmoReference reference)
+    {
+        var families = new Dictionary<string, HashSet<string>>();
+
+        foreach (var (id, caliber) in barrelCaliber)
+        {
+            if (!items.TryGetValue(id, out var item))
+            {
+                continue;
+            }
+
+            var name = item.Name ?? "";
+            if (!name.StartsWith("barrel_", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            // the name knows better where it says so, and it is what teaches the family
+            var known = CaliberFromName(name, reference) ?? caliber;
+            var family = Family(name);
+            if (!families.TryGetValue(family, out var set))
+            {
+                set = new HashSet<string>();
+                families[family] = set;
+            }
+
+            set.Add(known);
+        }
+
+        return families
+            .Where(kv => kv.Value.Count == 1)
+            .ToDictionary(kv => kv.Key, kv => kv.Value.First());
+    }
+
     private static double ParseLength(string name)
     {
         var m = LengthInName.Match(name);
@@ -218,7 +326,15 @@ public class BarrelNormalizer(
             .ToDictionary(kv => kv.Key, kv => kv.Value.First());
     }
 
-    /// <summary>Barrel items reachable through a weapon's slots, including nested ones.</summary>
+    /// <summary>
+    /// Slots that can lead to a barrel. Following anything else lets the walk escape
+    /// into the shared accessory graph — a rail that fits fifty weapons reaches all of
+    /// their barrels, and a 9x19 Glock barrel comes back labelled .40 S&W.
+    /// </summary>
+    private static readonly string[] BarrelPath =
+        ["mod_barrel", "mod_reciever", "mod_receiver", "mod_handguard", "mod_gas_block"];
+
+    /// <summary>Barrel items reachable from a weapon along the barrel path.</summary>
     private static IEnumerable<MongoId> BarrelsUnder(TemplateItem weapon,
         Dictionary<MongoId, TemplateItem> items)
     {
@@ -237,6 +353,12 @@ public class BarrelNormalizer(
 
             foreach (var slot in slots)
             {
+                var slotName = slot.Name ?? "";
+                if (!BarrelPath.Contains(slotName, StringComparer.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 var filters = slot.Properties?.Filters;
                 if (filters == null)
                 {
@@ -255,7 +377,7 @@ public class BarrelNormalizer(
                         yield return id;
                     }
 
-                    // handguards and gas blocks can hold a barrel further down
+                    // receivers, handguards and gas blocks can hold the barrel further down
                     queue.Enqueue(child);
                 }
             }
@@ -275,9 +397,12 @@ public class BarrelNormalizer(
         sb.AppendLine("`C measured` means the caliber has a fitted ladder behind it; `C from case` "
                       + "means it was derived from case capacity and is worth about ±35%.");
         sb.AppendLine();
+        sb.AppendLine("Weapon packs clone items, so the same name can appear several times "
+                      + "with different ids and different starting values.");
+        sb.AppendLine();
         sb.AppendLine("| Item | Caliber | Length, mm | Was | Now | Source |");
         sb.AppendLine("|---|---|---|---|---|---|");
-        foreach (var c in changed.OrderBy(c => c.Caliber).ThenBy(c => c.LengthMm))
+        foreach (var c in changed.OrderBy(c => c.Caliber).ThenBy(c => c.LengthMm).ThenBy(c => c.Name))
         {
             var length = c.LengthMm > 0 ? $"{c.LengthMm:N0}" : "—";
             sb.AppendLine($"| {c.Name} | {c.Caliber} | {length} | {c.Old:N1}% | **{c.New:N1}%** | {c.Note} |");
