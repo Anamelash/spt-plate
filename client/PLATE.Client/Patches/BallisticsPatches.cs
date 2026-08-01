@@ -39,9 +39,12 @@ namespace PLATE.Client.Patches
                 harmony.Patch(PatchTargets.BodyPart_IsPenetrated,
                     prefix: new HarmonyMethod(typeof(BallisticsPatches),
                         nameof(IsPenetratedPrefix)));
+                PatchStats.Track(harmony, PatchTargets.BodyPart_IsPenetrated,
+                    nameof(IsPenetratedPrefix));
             }
             else
             {
+                PatchStats.MarkFailed(null, nameof(IsPenetratedPrefix), "target not resolved");
                 Plugin.Log.LogError("[PLATE] Ballistics: IsPenetrated not resolved, " +
                                     "vanilla overpen rule stays");
             }
@@ -53,9 +56,12 @@ namespace PLATE.Client.Patches
                 harmony.Patch(PatchTargets.Armor_SetPenetrationStatus,
                     prefix: new HarmonyMethod(typeof(BallisticsPatches),
                         nameof(ArmorPenetrationPrefix)));
+                PatchStats.Track(harmony, PatchTargets.Armor_SetPenetrationStatus,
+                    nameof(ArmorPenetrationPrefix));
             }
             else
             {
+                PatchStats.MarkFailed(null, nameof(ArmorPenetrationPrefix), "target not resolved");
                 Plugin.Log.LogError("[PLATE] Ballistics: SetPenetrationStatus not resolved, " +
                                     "physical armor / fragment block skipped");
             }
@@ -84,6 +90,7 @@ namespace PLATE.Client.Patches
         {
             if (target == null)
             {
+                PatchStats.MarkFailed(null, postfixName, "target not resolved");
                 Plugin.Log.LogError($"[PLATE] Ballistics: target for {postfixName} not resolved, skipped");
                 return;
             }
@@ -95,9 +102,11 @@ namespace PLATE.Client.Patches
                         ? null
                         : new HarmonyMethod(typeof(BallisticsPatches), prefixName),
                     postfix: new HarmonyMethod(typeof(BallisticsPatches), postfixName));
+                PatchStats.Track(harmony, target, postfixName);
             }
             catch (Exception ex)
             {
+                PatchStats.MarkFailed(target, postfixName, ex.Message);
                 Plugin.Log.LogError($"[PLATE] Ballistics: failed to patch {target.Name}: {ex.Message}");
             }
         }

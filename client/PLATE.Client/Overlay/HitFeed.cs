@@ -123,6 +123,7 @@ namespace PLATE.Client.Overlay
             }
         }
 
+        /// <summary>Overlay visuals only — driven by OverlayHud, which may not exist.</summary>
         public static void Tick(float now)
         {
             var ttl = PlateClientConfig.OverlayFloatSeconds.Value;
@@ -131,12 +132,32 @@ namespace PLATE.Client.Overlay
             {
                 StackByVictim.Clear();
             }
+        }
 
+        /// <summary>
+        /// Journal flush, once a second. Driven by the plugin itself and not by the
+        /// overlay: the journal is what bug reports are built from, so it must not
+        /// depend on a debug visualisation being switched on.
+        /// </summary>
+        public static void FlushTick(float now)
+        {
             if (now >= _nextFlush)
             {
                 _nextFlush = now + 1f;
                 FlushLog();
             }
+        }
+
+        /// <summary>Appends the hook telemetry table, then flushes.</summary>
+        public static void WriteHookReport()
+        {
+            if (!PlateClientConfig.OverlayLogHits.Value)
+            {
+                return;
+            }
+
+            LogBuffer.AddRange(PatchStats.Report());
+            FlushLog();
         }
 
         private const long MaxLogBytes = 500 * 1024;
@@ -161,7 +182,19 @@ namespace PLATE.Client.Overlay
             {
                 if (_logPath == null)
                 {
-                    _logPath = Path.Combine(BepInEx.Paths.PluginPath, "PLATE", "events.log");
+                    // next to our own assembly rather than a hardcoded folder name:
+                    // the plugin may sit directly in plugins/, or in a differently
+                    // named folder, and on a case-sensitive filesystem "PLATE" and
+                    // "plate" are not the same directory
+                    var dir = Path.GetDirectoryName(
+                        System.Reflection.Assembly.GetExecutingAssembly().Location);
+                    if (string.IsNullOrEmpty(dir))
+                    {
+                        dir = Path.Combine(BepInEx.Paths.PluginPath, "PLATE");
+                    }
+
+                    Directory.CreateDirectory(dir);
+                    _logPath = Path.Combine(dir, "events.log");
                     File.AppendAllText(_logPath,
                         $"{Environment.NewLine}===== session {DateTime.Now:yyyy-MM-dd HH:mm:ss} " +
                         $"(PLATE {Plugin.Version}) ====={Environment.NewLine}");
@@ -180,7 +213,9 @@ namespace PLATE.Client.Overlay
             }
             catch (Exception ex)
             {
-                Plugin.Log.LogWarning($"[PLATE] event log write failed: {ex.Message}");
+                // path included: without it this is undiagnosable from a user's log
+                Plugin.Log.LogError(
+                    $"[PLATE] event log write failed ({_logPath ?? "path unresolved"}): {ex.Message}");
             }
 
             LogBuffer.Clear();

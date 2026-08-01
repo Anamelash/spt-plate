@@ -198,6 +198,25 @@ broken — results in combination with PLATE. Mods that overhaul the same system
 
 ## Release history
 
+### 0.9.2
+
+- **Fixed: the event journal was never written unless the debug overlay was on.**
+  `events.log` was flushed from the overlay's update loop, and the overlay is off
+  by default — so the file that bug reports are built from did not exist for
+  anyone. The journal now runs on its own and the setting moved out of the
+  overlay section, where it read as an overlay sub-option.
+- The journal is written next to the plugin assembly instead of a hardcoded
+  folder name. It now works when the dll sits directly in `plugins/`, or in a
+  folder with different capitalisation — the latter mattered on Linux, where
+  `PLATE` and `plate` are different directories. Failures to write now name the
+  path they tried.
+- **Added: hook telemetry.** Every patch records whether it attached and how many
+  times it actually ran, and the table is written to the journal at raid end.
+  "Patch failed to attach", "patch attached to a method the game never calls" and
+  "patch ran and bailed out early" produce identical symptoms — a feature that
+  quietly does nothing — and were previously impossible to tell apart from a
+  report.
+
 ### 0.9.1
 
 - **Fixed: the blood transfusion kit did nothing in raid.** The hook that lets the

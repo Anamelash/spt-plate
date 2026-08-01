@@ -12,13 +12,13 @@ namespace PLATE.Client
     {
         public const string Guid = "com.anamelash.plate";
         public const string Name = "P.L.A.T.E.";
-        public const string Version = "0.9.1";
+        public const string Version = "0.9.2";
 
         internal static ManualLogSource Log;
         internal static Harmony HarmonyInstance;
 
         /// <summary>Patches that could not be applied; reported once after startup.</summary>
-        internal static int PatchFailures;
+        internal static int PatchFailures => PatchStats.Failures;
 
         private void Awake()
         {
@@ -92,6 +92,33 @@ namespace PLATE.Client
 
             Log.LogInfo($"{Name} {Version} loaded" +
                         (PatchFailures > 0 ? $" WITH {PatchFailures} FAILED PATCH(ES)" : ""));
+        }
+
+        /// <summary>
+        /// Journal upkeep. Lives on the plugin itself so it runs whatever modules are
+        /// enabled — the event journal used to be flushed by the overlay component,
+        /// which is off by default, so no journal was ever written unless someone
+        /// switched on a debug visualisation they had no reason to switch on.
+        /// </summary>
+        private void Update()
+        {
+            HitFeed.FlushTick(UnityEngine.Time.time);
+
+            // raid end: dump the hook telemetry while the session is still fresh
+            var inRaid = Comfort.Common.Singleton<EFT.GameWorld>.Instance != null;
+            if (_wasInRaid && !inRaid)
+            {
+                HitFeed.WriteHookReport();
+            }
+
+            _wasInRaid = inRaid;
+        }
+
+        private bool _wasInRaid;
+
+        private void OnDestroy()
+        {
+            HitFeed.WriteHookReport();
         }
 
         private void RunPatchTargetsSelfTest()

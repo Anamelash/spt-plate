@@ -446,15 +446,18 @@ namespace PLATE.Client
                 new AcceptableValueRange<float>(0.5f, 8f), true);
             OverlayOnlyMyFights = Bind(sOverlay, "Only my fights", true,
                 "Show only events caused by your own shots.", null, true);
-            OverlayLogHits = Bind(sOverlay, "Log events to file", true,
-                "Write the event journal to BepInEx/plugins/PLATE/events.log (buffered, " +
-                "rotated at 500 KB). Attach this file to bug reports.",
-                null, true);
             OverlayMaxFloatDistance = Bind(sOverlay, "Max float distance, m", 300f,
                 "Floating text is not drawn beyond this distance.",
                 new AcceptableValueRange<float>(50f, 1000f), true);
 
             // ===== 6. Debug (all advanced, off by default) =====
+            // The journal is deliberately NOT under the overlay section: it used to be,
+            // and since the overlay is off by default that made the file bug reports are
+            // built from silently non-existent for everyone.
+            OverlayLogHits = Bind(sDebug, "Log events to file", true,
+                "Write the event journal to events.log next to the plugin (buffered, " +
+                "rotated at 500 KB). Works with the overlay off. Attach this to bug reports.",
+                null, true);
             TrackSelfHits = Bind(sDebug, "Track hits on you", false,
                 "Instrument hits ON YOU (noisy during development).", null, true);
             SelfTestOnLoad = Bind(sDebug, "Patch targets self-test on load", true,

@@ -158,6 +158,7 @@ namespace PLATE.Client.Patches
         {
             if (target == null)
             {
+                PatchStats.MarkFailed(null, $"overlay:{postfixName}", "target not resolved");
                 Plugin.Log.LogError($"[PLATE] Overlay: target for {postfixName} not resolved, skipped");
                 return;
             }
@@ -169,9 +170,11 @@ namespace PLATE.Client.Patches
                         ? null
                         : new HarmonyMethod(typeof(OverlayPatches), prefixName),
                     postfix: new HarmonyMethod(typeof(OverlayPatches), postfixName));
+                PatchStats.Track(harmony, target, $"overlay:{postfixName}");
             }
             catch (Exception ex)
             {
+                PatchStats.MarkFailed(target, $"overlay:{postfixName}", ex.Message);
                 Plugin.Log.LogError($"[PLATE] Overlay: failed to patch {target.Name}: {ex.Message}");
             }
         }

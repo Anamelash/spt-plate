@@ -41,11 +41,14 @@ namespace PLATE.Client.Patches
                 {
                     harmony.Patch(target, postfix: new HarmonyMethod(typeof(BloodPatches),
                         nameof(TransfusionApplyItemPostfix)));
+                    PatchStats.Track(harmony, target,
+                        $"ApplyItem[{target.DeclaringType?.Name}]");
                     applyItemHooks++;
                 }
                 catch (Exception ex)
                 {
-                    Plugin.PatchFailures++;
+                    PatchStats.MarkFailed(target,
+                        $"ApplyItem[{target.DeclaringType?.Name}]", ex.Message);
                     Plugin.Log.LogError(
                         $"[PLATE] Blood: ApplyItem patch failed on " +
                         $"{target.DeclaringType?.FullName}.{target.Name}: {ex}");
@@ -56,7 +59,7 @@ namespace PLATE.Client.Patches
             // loud, because it looks like a broken item rather than a broken patch
             if (applyItemHooks == 0)
             {
-                Plugin.PatchFailures++;
+                PatchStats.MarkFailed(null, "ApplyItem", "no concrete implementation patched");
                 Plugin.Log.LogError(
                     "[PLATE] Blood: no ApplyItem hook applied — the blood bag will NOT work. " +
                     "Health controller layout changed; the patch targets need re-resolving.");
@@ -98,7 +101,7 @@ namespace PLATE.Client.Patches
         {
             if (target == null)
             {
-                Plugin.PatchFailures++;
+                PatchStats.MarkFailed(null, postfixName, "target not resolved");
                 Plugin.Log.LogError($"[PLATE] Blood: target for {postfixName} not resolved, skipped");
                 return;
             }
@@ -106,10 +109,11 @@ namespace PLATE.Client.Patches
             try
             {
                 harmony.Patch(target, postfix: new HarmonyMethod(typeof(BloodPatches), postfixName));
+                PatchStats.Track(harmony, target, postfixName);
             }
             catch (Exception ex)
             {
-                Plugin.PatchFailures++;
+                PatchStats.MarkFailed(target, postfixName, ex.Message);
                 Plugin.Log.LogError($"[PLATE] Blood: failed to patch {target.Name}: {ex}");
             }
         }
