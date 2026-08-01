@@ -57,6 +57,35 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         public double TntG { get; set; } = 110;
     }
 
+    public class BarrelRef
+    {
+        /// <summary>Weapon whose barrel the cartridge's InitialSpeed is quoted for.</summary>
+        public string Prototype { get; set; } = "";
+
+        /// <summary>That weapon's barrel length, mm. A barrel this long changes nothing.</summary>
+        public double RefMm { get; set; }
+
+        /// <summary>
+        /// Le Duc constant, mm. Fitted to a published barrel-length ladder where one
+        /// exists; 0 means "work it out from the case", which is good to about ±35%.
+        /// </summary>
+        public double C { get; set; }
+
+        /// <summary>Case capacity, mm³ (1 grain of water = 64.8 mm³). Only used when C is 0.</summary>
+        public double CaseMm3 { get; set; }
+
+        /// <summary>Bore diameter, mm. Only used when C is 0.</summary>
+        public double BoreMm { get; set; }
+    }
+
+    public class WeaponBarrelRef
+    {
+        public string Prototype { get; set; } = "";
+
+        /// <summary>Barrel length of the real weapon, mm.</summary>
+        public double LengthMm { get; set; }
+    }
+
     public class AmmoReference
     {
         /// <summary>Key — the cartridge template's _name in the DB.</summary>
@@ -64,6 +93,15 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
 
         /// <summary>Key — the grenade template's _name in the DB.</summary>
         public Dictionary<string, GrenadeRef> Grenades { get; set; } = new();
+
+        /// <summary>Key — the caliber id (ammoCaliber on the weapon template).</summary>
+        public Dictionary<string, BarrelRef> Barrels { get; set; } = new();
+
+        /// <summary>
+        /// Key — the weapon template's _name. Only for weapons whose barrel does not
+        /// come off, so its length cannot be read from a barrel item.
+        /// </summary>
+        public Dictionary<string, WeaponBarrelRef> Weapons { get; set; } = new();
 
         public BlastAnchorRef BlastAnchor { get; set; } = new();
     }
@@ -145,6 +183,58 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "weapon_grenade_chattabka_vog17":   { "Prototype": "VOG-17M", "FragMassG": 0.50, "FragV0": 1100, "TntG": 36 },
             "weapon_grenade_chattabka_vog25":   { "Prototype": "VOG-25",  "FragMassG": 0.40, "FragV0": 1100, "TntG": 48 },
             "weapon_grenade_v40":               { "Prototype": "V40",     "FragMassG": 0.15, "FragV0": 800,  "TntG": 20 }
+          },
+
+          // ===== Barrels: muzzle velocity by barrel length =====
+          // v(L) = v_inf*L/(L+C) — Le Duc. RefMm is the barrel the cartridge's in-game
+          // InitialSpeed belongs to (the service weapon of the caliber), so a barrel of
+          // that length gets a 0% modifier and everything else is relative to it.
+          // C comes from a published barrel-length ladder where one exists; C=0 means
+          // "derive it from the case" (1.67*CaseMm3/bore area, good to about +-35%).
+          // CaseMm3: 1 grain of water = 64.8 mm3.
+          "Barrels": {
+            // --- C measured against published ladders ---
+            "Caliber762x51":     { "Prototype": "M14, 559 mm",        "RefMm": 559, "C": 129, "CaseMm3": 3640, "BoreMm": 7.82 },
+            "Caliber556x45NATO": { "Prototype": "M16A2, 508 mm",      "RefMm": 508, "C": 134, "CaseMm3": 1850, "BoreMm": 5.70 },
+            "Caliber762x39":     { "Prototype": "AKM, 415 mm",        "RefMm": 415, "C": 68,  "CaseMm3": 2310, "BoreMm": 7.92 },
+            "Caliber762x35":     { "Prototype": ".300 BLK, 406 mm",   "RefMm": 406, "C": 58,  "CaseMm3": 1670, "BoreMm": 7.82 },
+            "Caliber9x19PARA":   { "Prototype": "pistol, 120 mm",     "RefMm": 120, "C": 24,  "CaseMm3": 860,  "BoreMm": 9.01 },
+            "Caliber9x33R":      { "Prototype": "revolver, 152 mm",   "RefMm": 152, "C": 56,  "CaseMm3": 1620, "BoreMm": 9.07 },
+
+            // --- C derived from the case: case volumes below are approximate ---
+            "Caliber545x39":     { "Prototype": "AK-74, 415 mm",      "RefMm": 415, "C": 0, "CaseMm3": 1850, "BoreMm": 5.60 },
+            "Caliber762x54R":    { "Prototype": "SVD, 620 mm",        "RefMm": 620, "C": 0, "CaseMm3": 4150, "BoreMm": 7.92 },
+            "Caliber9x39":       { "Prototype": "AS Val, 200 mm",     "RefMm": 200, "C": 0, "CaseMm3": 1600, "BoreMm": 9.25 },
+            "Caliber366TKM":     { "Prototype": "VPO-209, 415 mm",    "RefMm": 415, "C": 0, "CaseMm3": 2200, "BoreMm": 9.50 },
+            "Caliber1143x23ACP": { "Prototype": "M1911, 127 mm",      "RefMm": 127, "C": 0, "CaseMm3": 1620, "BoreMm": 11.50 },
+            "Caliber762x25TT":   { "Prototype": "TT, 116 mm",         "RefMm": 116, "C": 0, "CaseMm3": 1170, "BoreMm": 7.87 },
+            "Caliber9x18PM":     { "Prototype": "PM, 93 mm",          "RefMm": 93,  "C": 0, "CaseMm3": 840,  "BoreMm": 9.27 },
+            "Caliber9x21":       { "Prototype": "SR-1, 120 mm",       "RefMm": 120, "C": 0, "CaseMm3": 1100, "BoreMm": 9.00 },
+            "Caliber57x28":      { "Prototype": "P90, 263 mm",        "RefMm": 263, "C": 0, "CaseMm3": 1430, "BoreMm": 5.70 },
+            "Caliber46x30":      { "Prototype": "MP7, 180 mm",        "RefMm": 180, "C": 0, "CaseMm3": 970,  "BoreMm": 4.65 },
+            "Caliber68x51":      { "Prototype": "XM7, 330 mm",        "RefMm": 330, "C": 0, "CaseMm3": 3890, "BoreMm": 7.00 },
+            "Caliber86x70":      { "Prototype": ".338 LM, 690 mm",    "RefMm": 690, "C": 0, "CaseMm3": 7390, "BoreMm": 8.60 },
+            "Caliber127x55":     { "Prototype": "ASh-12, 420 mm",     "RefMm": 420, "C": 0, "CaseMm3": 2590, "BoreMm": 12.70 },
+            "Caliber127x33":     { "Prototype": "SR-2 class, 400 mm", "RefMm": 400, "C": 0, "CaseMm3": 3050, "BoreMm": 12.70 },
+            "Caliber12g":        { "Prototype": "shotgun, 660 mm",    "RefMm": 660, "C": 0, "CaseMm3": 4500, "BoreMm": 18.50 },
+            "Caliber20g":        { "Prototype": "shotgun, 660 mm",    "RefMm": 660, "C": 0, "CaseMm3": 3600, "BoreMm": 15.60 },
+            "Caliber23x75":      { "Prototype": "KS-23, 510 mm",      "RefMm": 510, "C": 0, "CaseMm3": 5000, "BoreMm": 23.00 }
+          },
+
+          // Weapons whose barrel does not come off, so its length cannot be read from a
+          // barrel item. Lengths are the real prototype's. Anything not listed here keeps
+          // its own velocity modifier, clamped, and is printed in the normalization report.
+          "Weapons": {
+            "weapon_izhmash_aks74u_545x39":  { "Prototype": "AKS-74U", "LengthMm": 206.5 },
+            "weapon_izhmash_aks74un_545x39": { "Prototype": "AKS-74UN", "LengthMm": 206.5 },
+            "weapon_izhmash_aks74ub_545x39": { "Prototype": "AKS-74UB", "LengthMm": 206.5 },
+            "weapon_izhmash_pp-19-01_9x19":  { "Prototype": "PP-19-01 Vityaz", "LengthMm": 237 },
+            "weapon_izhmash_saiga_9_9x19":   { "Prototype": "Saiga-9", "LengthMm": 237 },
+            "weapon_zis_ppsh41_762x25":      { "Prototype": "PPSh-41", "LengthMm": 269 },
+            "weapon_tochmash_pb_9x18pm":     { "Prototype": "PB", "LengthMm": 105 },
+            "weapon_tula_tt_762x25":         { "Prototype": "TT-33", "LengthMm": 116 },
+            "weapon_izhmash_pm_9x18pm":      { "Prototype": "PM", "LengthMm": 93 },
+            "weapon_kbp_rsh_12_127x55":      { "Prototype": "RSh-12", "LengthMm": 165 }
           },
 
           // Blast anchor: Strength_i = Strength_anchor * (TntG_i / TntG_anchor)^(1/3)
