@@ -286,7 +286,7 @@ namespace PLATE.Client.Patches
 
             var d = ClientWoundModel.Compute(mass, dia, v, x, frag, chordMm, wound);
             var vital = VitalMult(bpc.BodyPartColliderType);
-            __instance.Damage = d.DamageHp * vital * PlateClientConfig.DamageScale.Value;
+            __instance.Damage = d.DamageHp * vital * DamageScale(bpc.Player as Player);
 
             Overlay.HitFeed.PushPanel(d.Contact
                 ? $"  W {bpc.BodyPartType}: contact {v:0} m/s -> {__instance.Damage:0.#}"
@@ -295,6 +295,18 @@ namespace PLATE.Client.Patches
                   $" mm, PC {d.Pc:0.#}+TC {d.Tc:0.#}" +
                   (vital > 1f ? $" x{vital:0.#}" : "") +
                   $" -> {__instance.Damage:0.#}" + (exits ? " (through)" : ""));
+        }
+
+        /// <summary>
+        /// Damage scale of the hit VICTIM's category — same split as the blood knobs,
+        /// so "PMCs are made of paper, scavs are not" is one setting each.
+        /// </summary>
+        private static float DamageScale(Player victim)
+        {
+            return Blood.PlateBloodManager.CategoryValue(victim,
+                PlateClientConfig.DamageScalePlayer.Value,
+                PlateClientConfig.DamageScalePmc.Value,
+                PlateClientConfig.DamageScaleScav.Value);
         }
 
         // --- Absolute penetration from impact energy density ---

@@ -182,8 +182,10 @@ which is what makes a tourniquet applied late still worth applying.
 
 ## Quality of life
 
-- F12 menu holds the gameplay-level settings, including a global **damage
-  scale** (from bullet-sponge to instant-kill for the curious). Fine-tuning —
+- F12 menu holds the gameplay-level settings, including a **damage scale** and a
+  **bleed rate** multiplier (from bullet-sponge to instant-kill for the curious),
+  set separately for you, PMC bots and Savage-side NPCs — so "I want a fair fight
+  but scavs should not bleed out in the woods" is two sliders. Fine-tuning —
   material profiles, model constants — lives in the config files next to the
   mod, server side and client side.
 - An event journal (`events.log`, size-capped) records every hit with its full

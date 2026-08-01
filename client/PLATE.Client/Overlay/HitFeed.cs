@@ -195,9 +195,12 @@ namespace PLATE.Client.Overlay
 
                     Directory.CreateDirectory(dir);
                     _logPath = Path.Combine(dir, "events.log");
+                    // the changed settings go in the header: a good share of "the mod
+                    // is broken" reports are one knob turned to an extreme
                     File.AppendAllText(_logPath,
                         $"{Environment.NewLine}===== session {DateTime.Now:yyyy-MM-dd HH:mm:ss} " +
-                        $"(PLATE {Plugin.Version}) ====={Environment.NewLine}");
+                        $"(PLATE {Plugin.Version}) ====={Environment.NewLine}" +
+                        $"settings: {PlateClientConfig.ChangedSettings()}{Environment.NewLine}");
                 }
 
                 // size-based rotation: keep one previous generation as events.old.log

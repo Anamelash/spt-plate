@@ -190,6 +190,37 @@ namespace PLATE.Client.Blood
             return p.Side == EPlayerSide.Savage ? scav : pmc;
         }
 
+        /// <summary>
+        /// Same split for numeric knobs. An unidentified participant falls into the
+        /// PMC bucket, matching the "everyone who is not you and not Savage" rule above.
+        /// </summary>
+        public static float CategoryValue(Player p, float player, float pmc, float scav)
+        {
+            if (p == null)
+            {
+                return pmc;
+            }
+
+            if (p.IsYourPlayer)
+            {
+                return player;
+            }
+
+            return p.Side == EPlayerSide.Savage ? scav : pmc;
+        }
+
+        /// <summary>
+        /// How fast blood leaves this participant relative to the model: scales every
+        /// bleed and the cardiac output cap together, so the whole loss timeline is
+        /// stretched or compressed without changing which wound dominates.
+        /// </summary>
+        public static float BleedRateMult(Player p)
+        {
+            return CategoryValue(p, PlateClientConfig.BleedRatePlayer.Value,
+                PlateClientConfig.BleedRatePmc.Value,
+                PlateClientConfig.BleedRateScav.Value);
+        }
+
         /// <summary>Internal bleed rate when a body part gets destroyed.</summary>
         public static float DestroyedPartBleed(EBodyPart part)
         {
@@ -246,15 +277,18 @@ namespace PLATE.Client.Blood
             CrippleSystem.TickFall(s, dt);
             PerfTrace.End("cripple.fall", tf);
 
-            // read through the toggle rather than the stored rate, so switching internal
-            // bleeding off in F12 takes effect immediately instead of after the raid
-            var internalMlSec = InternalAllowed(s.Player) ? s.InternalMlSec : 0f;
+            // read through the toggle and the multiplier rather than the stored rate, so
+            // both take effect immediately in F12 instead of after the raid
+            var mult = BleedRateMult(s.Player);
+            var internalMlSec = InternalAllowed(s.Player) ? s.InternalMlSec * mult : 0f;
 
             // total blood loss per frame is capped by cardiac output (~5 L/min):
-            // no matter how many wounds there are, blood physically cannot drain faster
-            var drain = s.PendingExternalMl + internalMlSec * SelfLimit(s) * dt;
+            // no matter how many wounds there are, blood physically cannot drain faster.
+            // The cap is scaled by the same multiplier — otherwise a raised bleed rate
+            // would do nothing for anyone already bleeding at the physiological ceiling
+            var drain = s.PendingExternalMl * mult + internalMlSec * SelfLimit(s) * dt;
             s.PendingExternalMl = 0f;
-            var cap = PlateClientConfig.CardiacOutputMlSec.Value * dt;
+            var cap = PlateClientConfig.CardiacOutputMlSec.Value * mult * dt;
             s.Cur = Mathf.Max(0f, s.Cur - Mathf.Min(drain, cap));
 
             // passive regeneration: only after 5+ s with no external drain and no internal bleeding

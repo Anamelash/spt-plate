@@ -48,7 +48,10 @@ namespace PLATE.Client
         public static ConfigEntry<bool> FragRescale;
         public static ConfigEntry<bool> PhysDamageModel;
         public static ConfigEntry<bool> PhysArmorModel;
-        public static ConfigEntry<float> DamageScale;
+        public static ConfigEntry<float> LegacyDamageScale;
+        public static ConfigEntry<float> DamageScalePlayer;
+        public static ConfigEntry<float> DamageScalePmc;
+        public static ConfigEntry<float> DamageScaleScav;
         public static ConfigEntry<bool> ArmorLocalDegradation;
         public static ConfigEntry<float> VitalBrainMult;
         public static ConfigEntry<float> VitalJawMult;
@@ -103,6 +106,9 @@ namespace PLATE.Client
         public static ConfigEntry<bool> InternalBleedPlayer;
         public static ConfigEntry<bool> InternalBleedPmc;
         public static ConfigEntry<bool> InternalBleedScav;
+        public static ConfigEntry<float> BleedRatePlayer;
+        public static ConfigEntry<float> BleedRatePmc;
+        public static ConfigEntry<float> BleedRateScav;
         public static ConfigEntry<float> PassiveRegenMlMin;
         public static ConfigEntry<bool> BloodHudVisible;
         public static ConfigEntry<bool> HeartbeatAtTier2;
@@ -129,7 +135,7 @@ namespace PLATE.Client
         public static ConfigEntry<int> ConfigVersion;
 
         /// <summary>Bump on every change to an existing setting's default.</summary>
-        private const int CurrentConfigVersion = 2;
+        private const int CurrentConfigVersion = 3;
 
         // --- Armor material profiles ---
         public class MaterialProfile
@@ -202,9 +208,22 @@ namespace PLATE.Client
                 "a penetrating bullet pays with energy, deforms and loses mass — a weakened " +
                 "projectile enters the body. Replaces the vanilla pen roll. Material " +
                 "profiles live in the server config. Requires Physical damage model.");
-            DamageScale = Bind(sBal, "Damage scale", 1.0f,
-                "Global multiplier for flesh damage computed by the physical model. " +
+            // the single "Damage scale" knob was split per category; its saved value is
+            // carried into the three by the v3 migration so an existing tuning is not
+            // reset (the key has to stay verbatim — reading the old one is the point)
+            LegacyDamageScale = Bind(sBal, "Damage scale", 1.0f,
+                "Superseded by the per-category damage scales below. Read once on update " +
+                "to seed them; editing it now does nothing.",
+                new AcceptableValueRange<float>(0.1f, 10f), true);
+            DamageScalePlayer = Bind(sBal, "Damage scale: Player", 1.0f,
+                "Multiplier for flesh damage YOU take, computed by the physical model. " +
                 "1.0 = realism as calibrated; below — bullet-sponge mode, above — for maniacs.",
+                new AcceptableValueRange<float>(0.1f, 10f));
+            DamageScalePmc = Bind(sBal, "Damage scale: PMC", 1.0f,
+                "Same for PMC bots (USEC/BEAR).",
+                new AcceptableValueRange<float>(0.1f, 10f));
+            DamageScaleScav = Bind(sBal, "Damage scale: Scav", 1.0f,
+                "Same for all Savage-side NPCs: scavs, bosses, raiders, cultists, etc.",
                 new AcceptableValueRange<float>(0.1f, 10f));
             ArmorLocalDegradation = Bind(sBal, "Armor local degradation", true,
                 "Per-location hit memory: the penetration threshold drops locally around " +
@@ -321,6 +340,18 @@ namespace PLATE.Client
                 "Same for PMC bots (USEC/BEAR).");
             InternalBleedScav = Bind(sBlood, "Internal bleeding: Scav", true,
                 "Same for all Savage-side NPCs.");
+            BleedRatePlayer = Bind(sBlood, "Bleed rate: Player", 1.0f,
+                "Multiplier for how fast blood leaves YOUR body — every bleed, external " +
+                "and internal, plus the cardiac output cap, so 2.0 really is twice as fast. " +
+                "0 = you never lose blood, bleedings become cosmetic. Applies immediately, " +
+                "including to bleedings already running.",
+                new AcceptableValueRange<float>(0f, 10f));
+            BleedRatePmc = Bind(sBlood, "Bleed rate: PMC", 1.0f,
+                "Same for PMC bots (USEC/BEAR).",
+                new AcceptableValueRange<float>(0f, 10f));
+            BleedRateScav = Bind(sBlood, "Bleed rate: Scav", 1.0f,
+                "Same for all Savage-side NPCs.",
+                new AcceptableValueRange<float>(0f, 10f));
             FractureCollapsePlayer = Bind(sBlood, "Fracture collapse: Player", true,
                 "Leg fracture without a splint: collapse to prone when trying to walk, " +
                 "and a jump ban (also with a destroyed stomach/leg). A splint lifts the restrictions.");
@@ -532,6 +563,31 @@ namespace PLATE.Client
         }
 
         /// <summary>
+        /// Everything the user moved away from its default, one line, for the journal
+        /// header. Reading a bug report without knowing the settings behind it wastes a
+        /// round trip on every side.
+        /// </summary>
+        public static string ChangedSettings()
+        {
+            if (_cfg == null)
+            {
+                return "unavailable";
+            }
+
+            var changed = new List<string>();
+            foreach (var key in _cfg.Keys)
+            {
+                var entry = _cfg[key];
+                if (entry != null && !Equals(entry.BoxedValue, entry.DefaultValue))
+                {
+                    changed.Add($"{key.Key}={entry.BoxedValue}");
+                }
+            }
+
+            return changed.Count == 0 ? "all default" : string.Join(", ", changed);
+        }
+
+        /// <summary>
         /// BepInEx: the value saved in the cfg always wins over a new default from code.
         /// Migration updates a setting to the new default ONLY if the user never changed
         /// it (current value == old default). Custom values are left alone.
@@ -552,6 +608,15 @@ namespace PLATE.Client
                 Migrate(BleedHeavyLeg, 13f, 16f);
                 Migrate(BleedHeavyArm, 7f, 8f);
                 Migrate(StomachDestroyedBleed, 35f, 80f);
+            }
+
+            // v3: "Damage scale" became one knob per side — carry the old value over
+            if (ConfigVersion.Value < 3)
+            {
+                var legacy = LegacyDamageScale.Value;
+                Migrate(DamageScalePlayer, 1f, legacy);
+                Migrate(DamageScalePmc, 1f, legacy);
+                Migrate(DamageScaleScav, 1f, legacy);
             }
 
             ConfigVersion.Value = CurrentConfigVersion;
