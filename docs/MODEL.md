@@ -351,6 +351,21 @@ them rather than from a damage-number lottery.
 Every round in the database, including rounds added by other mods, is re-derived
 from its physical data at server start.
 
+### What the number on the card means
+
+A hit has no single damage value: the same round does 110 or 235 depending on how
+much of the body it crosses. The card therefore quotes one defined test rather
+than an average — a **perpendicular hit into the centre of the chest of a gelatin
+manikin at 5 m**: 250 mm of tissue, the anteroposterior chest depth of an adult
+male, at muzzle velocity, with no oblique lengthening of the path. Everything
+else in the model is the same code as in a raid, and 250 mm sits close to the
+median chord a torso hit actually produces, so the card reads as a typical
+centre-mass hit rather than a best case.
+
+The depth is `BodyDepthMm` in the server config. It only ever affects the
+displayed value and the fallback damage when the physics model is off; a real hit
+deposits along the collider chord it actually crosses.
+
 ### Expansiveness index
 
 `X` is not in the game data, so it is inferred as a percentile blend within each

@@ -81,6 +81,10 @@ public class PlateServerMod(
             File.WriteAllText(path, DefaultConfigJsonc);
             logger.Debug($"[PLATE] Config not found, default written to {path}");
         }
+        else
+        {
+            MigrateConfigText(path);
+        }
 
         try
         {
@@ -97,6 +101,35 @@ public class PlateServerMod(
         {
             logger.Error($"[PLATE] Failed to parse {ConfigFileName}, using defaults: {ex.Message}");
             return new PlateServerConfig();
+        }
+    }
+
+    /// <summary>
+    /// Retired defaults in an existing config. A value is only rewritten when it still
+    /// holds the old default — a value the user picked is theirs. Surgical text edits
+    /// rather than a rewrite: the file is hand-edited jsonc and the comments in it are
+    /// the documentation.
+    /// </summary>
+    private void MigrateConfigText(string path)
+    {
+        try
+        {
+            var text = File.ReadAllText(path);
+            var before = text;
+
+            // the card's reference shot got a definition: a perpendicular hit into the
+            // chest of a gelatin manikin, 250 mm, instead of an unlabelled 350 mm
+            text = text.Replace("\"BodyDepthMm\": 350", "\"BodyDepthMm\": 250");
+
+            if (text != before)
+            {
+                File.WriteAllText(path, text);
+                logger.Debug($"[PLATE] {ConfigFileName}: retired defaults updated");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.Warning($"[PLATE] Could not update {ConfigFileName}: {ex.Message}");
         }
     }
 
@@ -128,8 +161,10 @@ public class PlateServerMod(
             // Expansion: shortens the channel (1−cX·X) and widens the cross-section A·(1+eX·X)
             "ExpansionDepthFactor": 0.4,
             "ExpansionAreaFactor": 1.35,
-            // Body (torso) thickness, mm — the channel deposits nothing beyond it
-            "BodyDepthMm": 350,
+            // Reference shot the card damage is quoted for: perpendicular hit into the
+            // centre of the chest of a gelatin manikin at 5 m. 250 mm is the chest depth
+            // of an adult male. In a raid the path is the real collider chord instead.
+            "BodyDepthMm": 250,
             // Permanent cavity: mm³ of channel volume per 1 HP. Anchor: 9x19 PST -> ~54
             "WoundVolumePerHp": 710,
             // Temporary pulsating cavity: eff = 1/(1+exp(−(v−center)/width)) —

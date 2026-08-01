@@ -25,7 +25,7 @@ namespace PLATE.Tests
             GelStopVelocity = 50,
             ExpansionDepthFactor = 0.4,
             ExpansionAreaFactor = 1.35,
-            BodyDepthMm = 350,
+            BodyDepthMm = 250,
             WoundVolumePerHp = 710,
             TcVelocityCenter = 600,
             TcVelocityWidth = 80,

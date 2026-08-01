@@ -185,8 +185,14 @@ public class PlateServerConfig
         /// <summary>How much expansion/tumbling widens the channel: cross-section A·(1 + this·X).</summary>
         public double ExpansionAreaFactor { get; set; } = 1.35;
 
-        /// <summary>Body (torso) thickness, mm — the channel deposits nothing beyond it.</summary>
-        public double BodyDepthMm { get; set; } = 350;
+        /// <summary>
+        /// Tissue depth of the reference shot the card damage is quoted for, mm.
+        /// The protocol: perpendicular hit into the centre of the chest of a gelatin
+        /// manikin at 5 m. 250 mm is the anteroposterior chest depth of an adult male;
+        /// 5 m means muzzle velocity, and perpendicular means no oblique lengthening.
+        /// In a raid the path comes from the actual collider chord, not from this.
+        /// </summary>
+        public double BodyDepthMm { get; set; } = 250;
 
         /// <summary>mm³ of permanent cavity volume per 1 HP of damage.
         /// Anchor: 9x19 PST -> ~54 (vanilla).</summary>
