@@ -160,7 +160,9 @@ namespace PLATE.Client.Overlay
             FlushLog();
         }
 
-        private const long MaxLogBytes = 500 * 1024;
+        // one busy raid is worth ~1 MB; rotating inside a raid splits the evidence and
+        // loses the session header that says which settings produced it
+        private const long MaxLogBytes = 4 * 1024 * 1024;
 
         /// <summary>General event journal entry (system events, not tied to a hit).</summary>
         public static void LogEvent(string line)
