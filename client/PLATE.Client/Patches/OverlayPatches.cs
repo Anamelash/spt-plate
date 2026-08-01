@@ -46,6 +46,7 @@ namespace PLATE.Client.Patches
 
         private static void KillPostfix(ActiveHealthController __instance, EDamageType damageType)
         {
+            PatchStats.Hit($"overlay:{nameof(KillPostfix)}");
             if (Off)
             {
                 return;
@@ -78,6 +79,7 @@ namespace PLATE.Client.Patches
         private static void DestroyBodyPartPostfix(ActiveHealthController __instance,
             EBodyPart bodyPart, EDamageType damageType)
         {
+            PatchStats.Hit($"overlay:{nameof(DestroyBodyPartPostfix)}");
             if (Off)
             {
                 return;
@@ -104,6 +106,7 @@ namespace PLATE.Client.Patches
         private static void DoBleedPostfix(ActiveHealthController __instance,
             bool isHeavy, EBodyPart bodyPart)
         {
+            PatchStats.Hit($"overlay:{nameof(DoBleedPostfix)}");
             if (Off)
             {
                 return;
@@ -130,6 +133,7 @@ namespace PLATE.Client.Patches
 
         private static void DoFracturePostfix(ActiveHealthController __instance, EBodyPart bodyPart)
         {
+            PatchStats.Hit($"overlay:{nameof(DoFracturePostfix)}");
             if (Off)
             {
                 return;
@@ -207,6 +211,7 @@ namespace PLATE.Client.Patches
         private static void HealthApplyDamagePostfix(ActiveHealthController __instance,
             EBodyPart bodyPart, float damage, DamageInfoStruct damageInfo, float __result)
         {
+            PatchStats.Hit($"overlay:{nameof(HealthApplyDamagePostfix)}");
             if (Off)
             {
                 return;
@@ -289,6 +294,7 @@ namespace PLATE.Client.Patches
         private static void ArmorApplyDamagePostfix(ArmorComponent __instance,
             ref DamageInfoStruct damageInfo, float __state, float __result)
         {
+            PatchStats.Hit($"overlay:{nameof(ArmorApplyDamagePostfix)}");
             if (Off)
             {
                 return;
@@ -318,6 +324,7 @@ namespace PLATE.Client.Patches
 
         private static void BulletDegradePostfix(EftBulletClass __instance)
         {
+            PatchStats.Hit($"overlay:{nameof(BulletDegradePostfix)}");
             if (Off)
             {
                 return;
@@ -353,6 +360,7 @@ namespace PLATE.Client.Patches
 
         private static void BulletOverpenPostfix(EftBulletClass __instance)
         {
+            PatchStats.Hit($"overlay:{nameof(BulletOverpenPostfix)}");
             if (Off)
             {
                 return;
@@ -388,6 +396,7 @@ namespace PLATE.Client.Patches
 
         private static void BulletFragmentPostfix(EftBulletClass __instance)
         {
+            PatchStats.Hit($"overlay:{nameof(BulletFragmentPostfix)}");
             if (Off)
             {
                 return;

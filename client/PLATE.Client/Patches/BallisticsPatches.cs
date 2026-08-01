@@ -312,6 +312,7 @@ namespace PLATE.Client.Patches
         /// </summary>
         private static void AbsolutePenPostfix(EftBulletClass __instance)
         {
+            PatchStats.Hit(nameof(AbsolutePenPostfix));
             if (Off || !PlateClientConfig.PhysDamageModel.Value)
             {
                 return;
@@ -915,6 +916,7 @@ namespace PLATE.Client.Patches
         private static void ArmorMitigationPostfix(ArmorComponent __instance,
             ref DamageInfoStruct damageInfo, ArmorCallState __state)
         {
+            PatchStats.Hit(nameof(ArmorMitigationPostfix));
             var dt = damageInfo.DamageType;
             if (Off || (dt != EDamageType.Bullet && dt != EDamageType.GrenadeFragment &&
                         dt != EDamageType.Landmine))
@@ -1121,6 +1123,7 @@ namespace PLATE.Client.Patches
 
         private static void FragmentBudgetPostfix(EftBulletClass __instance)
         {
+            PatchStats.Hit(nameof(FragmentBudgetPostfix));
             if (Off || !PlateClientConfig.FragRescale.Value)
             {
                 return;
@@ -1216,6 +1219,7 @@ namespace PLATE.Client.Patches
 
         private static void OverpenChildPostfix(EftBulletClass __instance)
         {
+            PatchStats.Hit(nameof(OverpenChildPostfix));
             if (Off)
             {
                 return;

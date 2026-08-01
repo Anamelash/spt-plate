@@ -465,6 +465,7 @@ namespace PLATE.Client.Patches
 
         private static void FracturePushPostfix(ActiveHealthController __instance)
         {
+            PatchStats.Hit(nameof(FracturePushPostfix));
             if (!Off)
             {
                 PlateBloodManager.RequestRefresh(__instance.Player);
@@ -476,6 +477,7 @@ namespace PLATE.Client.Patches
         /// <summary>Fracture removal (splint/surgery/anything) — instant recalculation.</summary>
         private static void EffectRemovedPushPostfix(object __instance)
         {
+            PatchStats.Hit(nameof(EffectRemovedPushPostfix));
             if (Off || __instance.GetType().Name != "Fracture")
             {
                 return;
@@ -498,6 +500,7 @@ namespace PLATE.Client.Patches
 
         private static void RestorePushPostfix(ActiveHealthController __instance)
         {
+            PatchStats.Hit(nameof(RestorePushPostfix));
             if (!Off)
             {
                 PlateBloodManager.RequestRefresh(__instance.Player);
@@ -650,6 +653,7 @@ namespace PLATE.Client.Patches
 
         private static void KillPostfix(ActiveHealthController __instance)
         {
+            PatchStats.Hit(nameof(KillPostfix));
             try
             {
                 PlateBloodManager.MarkDead(__instance.Player?.ProfileId);

@@ -198,6 +198,23 @@ broken — results in combination with PLATE. Mods that overhaul the same system
 
 ## Release history
 
+### 0.9.3
+
+- **Fixed: no medical item could be used in raid.** 0.9.2's hook telemetry attached
+  a second patch to every hook, including the gate that decides whether an item is
+  applicable. That gate returns a value, and re-patching it corrupted the answer, so
+  bandages, medkits and blood bags were all refused while out of raid kept working.
+  Telemetry no longer patches anything — it counts from inside the existing hooks.
+- The hook table no longer reports uninstrumented hooks as "never ran", and a hook
+  registered against several methods is listed once instead of appearing dead on a
+  duplicate row.
+- **Added: a test suite** that loads the real game assemblies and checks the patch
+  set without launching the game — every target resolves and is patchable, the item
+  hooks land on concrete classes, telemetry attaches nothing, the patch set applies,
+  and no target is patched twice. Both of the defects that reached release are
+  caught by it; that was verified by reintroducing each one and watching the suite
+  go red.
+
 ### 0.9.2
 
 - **Fixed: the event journal was never written unless the debug overlay was on.**

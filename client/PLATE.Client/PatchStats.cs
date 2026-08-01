@@ -49,18 +49,30 @@ namespace PLATE.Client
 
         private static Entry GetOrAdd(MethodBase target, string label)
         {
-            if (target != null && ByMethod.TryGetValue(target, out var existing))
+            if (target != null && ByMethod.TryGetValue(target, out var byMethod))
             {
-                return existing;
+                return byMethod;
             }
 
-            var entry = new Entry
+            var name = target == null
+                ? "(unresolved)"
+                : $"{Short(target.DeclaringType)}.{target.Name}";
+
+            // one row per label: a patch registered against several targets (the same
+            // postfix on RestoreBodyPart and FullRestoreBodyPart, say) shares a counter,
+            // so showing it twice with the count on one row reads as a dead hook
+            if (ByLabel.TryGetValue(label, out var byLabel))
             {
-                Label = label,
-                Target = target == null
-                    ? "(unresolved)"
-                    : $"{Short(target.DeclaringType)}.{target.Name}",
-            };
+                byLabel.Target += ", " + name;
+                if (target != null)
+                {
+                    ByMethod[target] = byLabel;
+                }
+
+                return byLabel;
+            }
+
+            var entry = new Entry { Label = label, Target = name };
 
             Ordered.Add(entry);
             ByLabel[label] = entry;
