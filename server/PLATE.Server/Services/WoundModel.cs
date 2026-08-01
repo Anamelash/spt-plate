@@ -48,7 +48,7 @@ public static class WoundModel
         // the PATH is not the share of the ENERGY — a rifle bullet loses most of its
         // energy in the first hand's width of tissue.
         var lambda = Math.Max(a.GelDepthK * sd * (1 - a.ExpansionDepthFactor * x), 1e-3);
-        var phi = depth > a.BodyDepthMm ? 1 - Math.Exp(-2 * inBody / lambda) : 1.0;
+        var phi = 1 - Math.Exp(-2 * inBody / lambda);
 
         // Permanent cavity: channel volume including expansion/tumbling
         var areaEff = area * (1 + a.ExpansionAreaFactor * x);

@@ -52,13 +52,12 @@ namespace PLATE.Client.Ballistics
 
         /// <summary>
         /// Energy deposition in a body part. pathMm — the path available inside the
-        /// part (collider chord); exits — the projectile left the part, so only the
-        /// energy it lost on the way through stays behind. A projectile that stops
-        /// inside (bone, lodged) leaves all of it, but still cannot cut a channel
-        /// longer than the tissue in front of it.
+        /// part (collider chord). Whether the projectile leaves the part is not asked:
+        /// the drag law answers it. A channel that ends inside the part deposits
+        /// everything; one that runs past it leaves only what the tissue took.
         /// </summary>
         public static Deposit Compute(float massG, float diaMm, float v, float x,
-            float frag, float pathMm, bool exits, AmmoDataCache.WoundParams p)
+            float frag, float pathMm, AmmoDataCache.WoundParams p)
         {
             var e = 0.5f * (massG / 1000f) * v * v;
             var budget = e / Mathf.Max((float)p.EnergyCapPerHp, 0.1f);
@@ -76,17 +75,14 @@ namespace PLATE.Client.Ballistics
             // does not carve a metre of cavity through a 250 mm chest
             var path = pathMm > 0f ? Mathf.Min(pathMm, l) : l;
 
-            // energy left behind. Quadratic drag gives v(s) = v·exp(-s/lambda), so a
-            // projectile that makes it through leaves 1-(v_out/v)² of its energy; one
-            // that stops leaves everything. Lambda is the same characteristic length
-            // the channel depth is built from, so both use one drag law.
-            var phi = 1f;
-            if (exits)
-            {
-                var lambda = Mathf.Max((float)p.GelDepthK * (massG / Mathf.Max(area, 1e-3f)) *
-                                       (1f - (float)p.ExpansionDepthFactor * x), 1e-3f);
-                phi = 1f - Mathf.Exp(-2f * path / lambda);
-            }
+            // energy left behind: quadratic drag gives v(s) = v·exp(-s/lambda), so the
+            // tissue keeps 1-(v_out/v)² of the energy. No separate "it stopped" branch —
+            // when the channel ends inside the part, path is the whole channel and this
+            // already comes out at ~1. Asking the game whether a child bullet was
+            // spawned instead handed full muzzle energy to a part that was only clipped.
+            var lambda = Mathf.Max((float)p.GelDepthK * (massG / Mathf.Max(area, 1e-3f)) *
+                                   (1f - (float)p.ExpansionDepthFactor * x), 1e-3f);
+            var phi = 1f - Mathf.Exp(-2f * path / lambda);
 
             var areaEff = area * (1f + (float)p.ExpansionAreaFactor * x);
             var pc = areaEff * path / (float)p.WoundVolumePerHp;

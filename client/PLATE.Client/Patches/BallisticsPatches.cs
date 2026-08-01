@@ -273,19 +273,14 @@ namespace PLATE.Client.Patches
             var x = EffectiveX(shot); // accounts for armor-induced deformation in this hit
             var frag = (float)AmmoDataCache.GetFrag(shot.Ammo?.TemplateId);
 
-            // overpenetration OR fragmentation: in both cases the energy keeps moving
-            // beyond the chord (as a swarm of fragments) — the part receives the
-            // deposition along the chord. Full deposition only when the bullet stops
-            // (bone / lodged).
-            var exits = shot.IsForwardHit &&
-                        (shot.BulletState == EftBulletClass.EBulletState.DeviationHit ||
-                         shot.BulletState == EftBulletClass.EBulletState.FragmentationHit);
-            // the chord is needed either way: when the projectile exits it bounds the
-            // energy it could leave behind, when it stops it bounds the channel it
-            // could have cut before running out of body
+            // the path through this part bounds everything: the cavity it can cut and
+            // the energy it can leave behind. Whether the projectile carries on past it
+            // is the drag law's answer, not the game's bullet state
+            var t = PerfTrace.Begin();
             var chordMm = ChordMm(bpc, __instance.HitPoint, __instance.Direction, dia);
+            PerfTrace.End("wound.chord", t);
 
-            var d = ClientWoundModel.Compute(mass, dia, v, x, frag, chordMm, exits, wound);
+            var d = ClientWoundModel.Compute(mass, dia, v, x, frag, chordMm, wound);
             var vital = VitalMult(bpc.BodyPartColliderType);
             __instance.Damage = d.DamageHp * vital * DamageScale(bpc.Player as Player);
 
@@ -295,7 +290,8 @@ namespace PLATE.Client.Patches
                   $"/T {chordMm:0} mm, E {d.DepositFrac * 100f:0}%" +
                   $", PC {d.Pc:0.#}+TC {d.Tc:0.#}" +
                   (vital > 1f ? $" x{vital:0.#}" : "") +
-                  $" -> {__instance.Damage:0.#}" + (exits ? " (through)" : ""));
+                  $" -> {__instance.Damage:0.#}" +
+                  (d.ChannelMm > chordMm ? " (through)" : ""));
         }
 
         /// <summary>
@@ -383,6 +379,19 @@ namespace PLATE.Client.Patches
                 ? null
                 : _victimColliders.GetValue(p,
                     pl => pl.gameObject.GetComponentsInChildren<BodyPartCollider>());
+        }
+
+        /// <summary>
+        /// Builds the collider list for a player before anyone shoots them. The scan
+        /// walks a fully rigged character and is the one piece of per-victim work heavy
+        /// enough to be felt as a hitch, so it must not happen on the frame of a hit.
+        /// Called from the plugin's Update for one player at a time.
+        /// </summary>
+        internal static void WarmVictimColliders(Player p)
+        {
+            var t = PerfTrace.Begin();
+            GetVictimColliders(p);
+            PerfTrace.End("wound.warmColliders", t);
         }
 
         /// <summary>

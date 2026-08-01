@@ -5,13 +5,13 @@ using Xunit;
 namespace PLATE.Tests
 {
     /// <summary>
-    /// The two properties the wound channel must not lose again.
+    /// What the wound channel must not lose again.
     ///
-    /// Both were wrong at once in 0.9.5 and cancelled each other out badly: a bullet
-    /// crossing a torso was credited with the share of the PATH it travelled (~30%)
-    /// instead of the share of its ENERGY it actually lost (~80%), while a bullet
-    /// that stopped inside was allowed to carve its full gelatin depth — 800 mm of
-    /// permanent cavity inside a 250 mm chest.
+    /// Up to 0.9.5 a bullet crossing a torso was credited with the share of the PATH it
+    /// travelled (~30%) instead of the share of its ENERGY it actually lost (~80%); a
+    /// bullet the game called "stopped" was allowed to carve its full gelatin depth,
+    /// 800 mm of cavity inside a 250 mm chest, and to hand over its full muzzle energy
+    /// to a part it had merely clipped.
     ///
     /// Pure arithmetic: no game assemblies, no Unity runtime.
     /// </summary>
@@ -40,12 +40,45 @@ namespace PLATE.Tests
         private const float V = 803f;
         private const float X = 0.79f;
 
+        /// <summary>
+        /// When the channel ends inside the part, everything is left behind except what
+        /// the projectile still carries at the velocity where it stops cutting tissue —
+        /// a residue of (v_stop/v)², which is 0.4% for a rifle round and only becomes
+        /// visible down in pistol-subsonic territory. No flag decides this; the same
+        /// drag law that ends the channel also says how much energy went into it.
+        /// </summary>
         [Fact]
-        public void A_projectile_that_stops_leaves_all_of_its_energy()
+        public void A_channel_that_ends_inside_the_part_leaves_everything_it_could()
         {
-            var d = ClientWoundModel.Compute(MassG, DiaMm, V, X, 0f, 250f, false, Params());
+            var p = Params();
+            const float chord = 600f;
+            const float slow = 120f;
 
-            Assert.Equal(1f, d.DepositFrac, 3);
+            var l = ClientWoundModel.ChannelMm(MassG, DiaMm, slow, X, p);
+            Assert.True(l < chord, "the test needs a channel that ends inside the part");
+
+            var residue = (p.GelStopVelocity / slow) * (p.GelStopVelocity / slow);
+            var d = ClientWoundModel.Compute(MassG, DiaMm, slow, X, 0f, chord, p);
+            Assert.Equal(1.0 - residue, d.DepositFrac, 3);
+
+            var fast = ClientWoundModel.Compute(MassG, DiaMm, V, X, 0f, 4000f, p);
+            Assert.True(fast.DepositFrac > 0.99f,
+                $"a rifle round that went nowhere else left only {fast.DepositFrac:P1} behind");
+        }
+
+        /// <summary>
+        /// A part the projectile merely clipped must not be charged for the whole
+        /// cartridge. Before the drag law decided this, a bullet with a metre of
+        /// penetration left "in" a 96 mm calf was credited with 100% of its energy.
+        /// </summary>
+        [Fact]
+        public void A_clipped_part_is_not_charged_for_the_whole_cartridge()
+        {
+            var p = Params();
+            var d = ClientWoundModel.Compute(MassG, DiaMm, V, X, 0f, 96f, p);
+
+            Assert.True(d.DepositFrac < 0.5f,
+                $"96 mm of tissue absorbed {d.DepositFrac:P0} of a rifle round");
         }
 
         /// <summary>
@@ -65,7 +98,7 @@ namespace PLATE.Tests
             var vOut = V * Math.Exp(-chord / lambda);
             var expected = 1.0 - (vOut / V) * (vOut / V);
 
-            var d = ClientWoundModel.Compute(MassG, DiaMm, V, X, 0f, chord, true, p);
+            var d = ClientWoundModel.Compute(MassG, DiaMm, V, X, 0f, chord, p);
 
             Assert.Equal(expected, d.DepositFrac, 3);
 
@@ -76,10 +109,11 @@ namespace PLATE.Tests
         }
 
         /// <summary>
-        /// A projectile stopped by bone still only wounds the tissue it went through.
+        /// The cavity is set by the tissue actually crossed, not by how deep the round
+        /// would have gone in a block of gelatin.
         /// </summary>
         [Fact]
-        public void A_stopped_projectile_cannot_cut_a_channel_longer_than_the_part()
+        public void The_cavity_is_no_longer_than_the_part()
         {
             var p = Params();
             const float chord = 250f;
@@ -87,16 +121,11 @@ namespace PLATE.Tests
             var l = ClientWoundModel.ChannelMm(MassG, DiaMm, V, X, p);
             Assert.True(l > 3f * chord, "the test needs a channel far longer than the part");
 
-            var stopped = ClientWoundModel.Compute(MassG, DiaMm, V, X, 0f, chord, false, p);
-            var through = ClientWoundModel.Compute(MassG, DiaMm, V, X, 0f, chord, true, p);
+            var d = ClientWoundModel.Compute(MassG, DiaMm, V, X, 0f, chord, p);
 
-            // same tissue crossed either way, so the same permanent cavity
-            Assert.Equal(through.Pc, stopped.Pc, 3);
-
-            // and it is the chord that sets it, not the gelatin depth
             var area = Math.PI * DiaMm * DiaMm / 4.0;
             var expected = area * (1 + p.ExpansionAreaFactor * X) * chord / p.WoundVolumePerHp;
-            Assert.Equal(expected, stopped.Pc, 1);
+            Assert.Equal(expected, d.Pc, 1);
         }
 
         /// <summary>
@@ -109,7 +138,7 @@ namespace PLATE.Tests
             var last = 0f;
             foreach (var chord in new[] { 50f, 100f, 150f, 250f, 350f, 500f })
             {
-                var d = ClientWoundModel.Compute(MassG, DiaMm, V, X, 0f, chord, true, p);
+                var d = ClientWoundModel.Compute(MassG, DiaMm, V, X, 0f, chord, p);
                 Assert.True(d.DamageHp >= last,
                     $"chord {chord} mm dealt {d.DamageHp:0.#}, less than the shorter path before it");
                 last = d.DamageHp;
