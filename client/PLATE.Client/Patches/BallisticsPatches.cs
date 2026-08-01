@@ -287,7 +287,8 @@ namespace PLATE.Client.Patches
             var ammo = AmmoLabel(shot);
             Overlay.HitFeed.PushPanel(d.Contact
                 ? $"  W {ammo} {bpc.BodyPartType}: contact {v:0} m/s -> {__instance.Damage:0.#}"
-                : $"  W {ammo} {bpc.BodyPartColliderType}: {v:0} m/s, L {d.ChannelMm:0}" +
+                : $"  W {ammo} {bpc.BodyPartColliderType}: {v:0}/{shot.InitialSpeed:0} m/s" +
+                  $", L {d.ChannelMm:0}" +
                   $"/T {chordMm:0} mm, E {d.DepositFrac * 100f:0}%" +
                   $", PC {d.Pc:0.#}+TC {d.Tc:0.#}" +
                   (vital > 1f ? $" x{vital:0.#}" : "") +
