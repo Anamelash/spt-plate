@@ -198,6 +198,14 @@ broken — results in combination with PLATE. Mods that overhaul the same system
 
 ## Release history
 
+### 0.9.4
+
+- Surgical kits (CMS, Surv12) now close the bleedings on the limb they repair.
+  Toggleable.
+- Internal bleeding — the kind no field medicine can close, from destroyed limbs,
+  behind-armor trauma and blast — can now be switched off, separately for you, PMC
+  bots and Savage-side NPCs.
+
 ### 0.9.3
 
 - Fixed: medical items could not be used in raid on 0.9.2.

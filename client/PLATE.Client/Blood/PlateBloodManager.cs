@@ -109,10 +109,27 @@ namespace PLATE.Client.Blood
             s.LastExternalDrainAt = Time.time;
         }
 
+        /// <summary>
+        /// Whether internal bleeding applies to this participant. Internal bleeds
+        /// cannot be closed by any field medicine, so this is the switch for anyone
+        /// who does not want that in their raids.
+        /// </summary>
+        public static bool InternalAllowed(Player p)
+        {
+            return CategoryOn(p, PlateClientConfig.InternalBleedPlayer.Value,
+                PlateClientConfig.InternalBleedPmc.Value,
+                PlateClientConfig.InternalBleedScav.Value);
+        }
+
         public static void AddInternal(Player player, float mlSec)
         {
             var s = GetOrCreate(player);
             if (s == null || s.Dead)
+            {
+                return;
+            }
+
+            if (!InternalAllowed(player))
             {
                 return;
             }
@@ -229,15 +246,19 @@ namespace PLATE.Client.Blood
             CrippleSystem.TickFall(s, dt);
             PerfTrace.End("cripple.fall", tf);
 
+            // read through the toggle rather than the stored rate, so switching internal
+            // bleeding off in F12 takes effect immediately instead of after the raid
+            var internalMlSec = InternalAllowed(s.Player) ? s.InternalMlSec : 0f;
+
             // total blood loss per frame is capped by cardiac output (~5 L/min):
             // no matter how many wounds there are, blood physically cannot drain faster
-            var drain = s.PendingExternalMl + s.InternalMlSec * SelfLimit(s) * dt;
+            var drain = s.PendingExternalMl + internalMlSec * SelfLimit(s) * dt;
             s.PendingExternalMl = 0f;
             var cap = PlateClientConfig.CardiacOutputMlSec.Value * dt;
             s.Cur = Mathf.Max(0f, s.Cur - Mathf.Min(drain, cap));
 
             // passive regeneration: only after 5+ s with no external drain and no internal bleeding
-            if (s.InternalMlSec <= 0f && Time.time - s.LastExternalDrainAt > 5f && s.Cur < s.Max)
+            if (internalMlSec <= 0f && Time.time - s.LastExternalDrainAt > 5f && s.Cur < s.Max)
             {
                 s.Cur = Mathf.Min(s.Max, s.Cur + PlateClientConfig.PassiveRegenMlMin.Value / 60f * dt);
             }

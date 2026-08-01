@@ -12,7 +12,7 @@ namespace PLATE.Client
     {
         public const string Guid = "com.anamelash.plate";
         public const string Name = "P.L.A.T.E.";
-        public const string Version = "0.9.3";
+        public const string Version = "0.9.4";
 
         internal static ManualLogSource Log;
         internal static Harmony HarmonyInstance;

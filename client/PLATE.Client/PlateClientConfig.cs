@@ -99,6 +99,10 @@ namespace PLATE.Client
         public static ConfigEntry<bool> DeathForPlayer;
         public static ConfigEntry<bool> DeathForPmc;
         public static ConfigEntry<bool> DeathForScav;
+        public static ConfigEntry<bool> SurgeryStopsBleeding;
+        public static ConfigEntry<bool> InternalBleedPlayer;
+        public static ConfigEntry<bool> InternalBleedPmc;
+        public static ConfigEntry<bool> InternalBleedScav;
         public static ConfigEntry<float> PassiveRegenMlMin;
         public static ConfigEntry<bool> BloodHudVisible;
         public static ConfigEntry<bool> HeartbeatAtTier2;
@@ -304,6 +308,19 @@ namespace PLATE.Client
             DeathForScav = Bind(sBlood, "Death from bleeding: Scav", true,
                 "Death from blood loss for all Savage-side NPCs: scavs, bosses, " +
                 "raiders, cultists, etc.");
+            SurgeryStopsBleeding = Bind(sBlood, "Surgical kit stops bleeding", true,
+                "A surgical kit (CMS, Surv12) also closes the bleedings on the limb it " +
+                "repairs. Vanilla leaves them running, which under PLATE keeps draining " +
+                "blood out of a limb that was just operated on.");
+            InternalBleedPlayer = Bind(sBlood, "Internal bleeding: Player", true,
+                "Internal bleeding for YOU: from a destroyed body part, from behind-armor " +
+                "trauma and from blast barotrauma. It has no wound icon and no field " +
+                "medicine can close it — bandages, tourniquets and surgery do not reach it. " +
+                "Turn off if you would rather every bleed be treatable.");
+            InternalBleedPmc = Bind(sBlood, "Internal bleeding: PMC", true,
+                "Same for PMC bots (USEC/BEAR).");
+            InternalBleedScav = Bind(sBlood, "Internal bleeding: Scav", true,
+                "Same for all Savage-side NPCs.");
             FractureCollapsePlayer = Bind(sBlood, "Fracture collapse: Player", true,
                 "Leg fracture without a splint: collapse to prone when trying to walk, " +
                 "and a jump ban (also with a destroyed stomach/leg). A splint lifts the restrictions.");

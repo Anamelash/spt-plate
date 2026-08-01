@@ -498,12 +498,60 @@ namespace PLATE.Client.Patches
             }
         }
 
-        private static void RestorePushPostfix(ActiveHealthController __instance)
+        private static void RestorePushPostfix(ActiveHealthController __instance, EBodyPart bodyPart)
         {
             PatchStats.Hit(nameof(RestorePushPostfix));
-            if (!Off)
+            if (Off)
             {
-                PlateBloodManager.RequestRefresh(__instance.Player);
+                return;
+            }
+
+            PlateBloodManager.RequestRefresh(__instance.Player);
+            StopBleedingAfterSurgery(__instance, bodyPart);
+        }
+
+        /// <summary>
+        /// A surgical kit closes the bleeding on the limb it repairs.
+        ///
+        /// Restoring a destroyed body part in raid is only possible with a surgical
+        /// kit, so this firing means the kit was used. Vanilla leaves the bleeding
+        /// running, and under PLATE that keeps draining blood out of a limb that has
+        /// supposedly just been operated on.
+        ///
+        /// Treated limb only, and external bleedings only: an internal bleed is a
+        /// vessel a field kit cannot reach, and it has its own toggle.
+        /// </summary>
+        private static void StopBleedingAfterSurgery(ActiveHealthController ahc, EBodyPart bodyPart)
+        {
+            if (!PlateClientConfig.SurgeryStopsBleeding.Value || ahc == null || !ahc.IsAlive)
+            {
+                return;
+            }
+
+            try
+            {
+                var closed = 0;
+                // ToList: ForceRemove mutates the controller's effect collection
+                foreach (var effect in ahc.GetAllActiveEffects().ToList())
+                {
+                    if (effect is ActiveHealthController.Bleeding bleeding &&
+                        bleeding.BodyPart == bodyPart)
+                    {
+                        bleeding.ForceRemove();
+                        closed++;
+                    }
+                }
+
+                if (closed > 0)
+                {
+                    Overlay.HitFeed.PushPanel(
+                        $"{Overlay.OverlayHud.NameOf(ahc.Player)} SURGERY {bodyPart}: " +
+                        $"{closed} bleeding(s) closed");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogError(nameof(StopBleedingAfterSurgery), ex);
             }
         }
 
