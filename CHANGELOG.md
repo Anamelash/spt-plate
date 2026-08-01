@@ -200,53 +200,29 @@ broken — results in combination with PLATE. Mods that overhaul the same system
 
 ### 0.9.3
 
-- **Fixed: no medical item could be used in raid.** 0.9.2's hook telemetry attached
-  a second patch to every hook, including the gate that decides whether an item is
-  applicable. That gate returns a value, and re-patching it corrupted the answer, so
-  bandages, medkits and blood bags were all refused while out of raid kept working.
-  Telemetry no longer patches anything — it counts from inside the existing hooks.
-- The hook table no longer reports uninstrumented hooks as "never ran", and a hook
-  registered against several methods is listed once instead of appearing dead on a
-  duplicate row.
-- **Added: a test suite** that loads the real game assemblies and checks the patch
-  set without launching the game — every target resolves and is patchable, the item
-  hooks land on concrete classes, telemetry attaches nothing, the patch set applies,
-  and no target is patched twice. Both of the defects that reached release are
-  caught by it; that was verified by reintroducing each one and watching the suite
-  go red.
+- Fixed: medical items could not be used in raid on 0.9.2.
+- The hook report in the event journal no longer lists active hooks as inactive.
+- Added a test suite over the patch layer, validated against the installed game
+  assemblies without launching the game (`pwsh -File build/test.ps1`).
 
 ### 0.9.2
 
-- **Fixed: the event journal was never written unless the debug overlay was on.**
-  `events.log` was flushed from the overlay's update loop, and the overlay is off
-  by default — so the file that bug reports are built from did not exist for
-  anyone. The journal now runs on its own and the setting moved out of the
-  overlay section, where it read as an overlay sub-option.
-- The journal is written next to the plugin assembly instead of a hardcoded
-  folder name. It now works when the dll sits directly in `plugins/`, or in a
-  folder with different capitalisation — the latter mattered on Linux, where
-  `PLATE` and `plate` are different directories. Failures to write now name the
-  path they tried.
-- **Added: hook telemetry.** Every patch records whether it attached and how many
-  times it actually ran, and the table is written to the journal at raid end.
-  "Patch failed to attach", "patch attached to a method the game never calls" and
-  "patch ran and bailed out early" produce identical symptoms — a feature that
-  quietly does nothing — and were previously impossible to tell apart from a
-  report.
+Withdrawn — superseded by 0.9.3.
+
+- Fixed: the event journal was only written when the debug overlay was enabled.
+  It now runs independently, and its setting moved out of the overlay section.
+- The journal is written next to the plugin rather than to a fixed folder name,
+  so it works regardless of where the plugin is installed or how the folder is
+  capitalised. Write failures name the path.
+- Added hook telemetry: each hook reports whether it attached and how often it
+  ran, summarised in the journal at raid end.
 
 ### 0.9.1
 
-- **Fixed: the blood transfusion kit did nothing in raid.** The hook that lets the
-  player apply an item never attached, because it targeted an abstract method that
-  has no body to patch. Drinking a blood bag restored no volume and consumed no
-  charge — for everyone, on every platform. It now hooks the concrete health
-  controllers instead, found by walking the type tree rather than by name.
-- Failed patches are no longer quiet. Any hook that does not attach is counted and
-  reported as an error at startup, and the load line says how many failed. The
-  previous startup self-check only verified that patch targets *existed*, which is
-  why the above shipped.
-- Server startup logs a single summary line instead of a dozen; per-module detail
-  moved behind debug logging. Warnings and errors are unchanged and still verbose.
+- Fixed: the blood transfusion kit had no effect in raid.
+- Hooks that fail to attach are now reported at startup instead of passing
+  quietly.
+- Server startup logs one summary line; per-module detail moved to debug level.
 
 ### 0.9.0
 
