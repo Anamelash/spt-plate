@@ -755,6 +755,16 @@ namespace PLATE.Client.Patches
 
         // --- 5. Death — remove from tracking ---
 
+        /// <summary>
+        /// Every death funnels through the health controller, including the ones our own
+        /// blood system causes. Player.OnDead looks like the more universal hook but
+        /// cannot be detoured — the patch self-test rejects it — and an unproven hook
+        /// that silently never fires is exactly how a release ships a dead feature.
+        ///
+        /// Without a death line the journal shows hit after hit and never says whether
+        /// the target went down, which is the whole question behind any "he tanked ten
+        /// rounds" report.
+        /// </summary>
         private static void KillPostfix(ActiveHealthController __instance, EDamageType damageType)
         {
             PatchStats.Hit(nameof(KillPostfix));
@@ -762,10 +772,6 @@ namespace PLATE.Client.Patches
             {
                 var player = __instance.Player;
                 PlateBloodManager.MarkDead(player?.ProfileId);
-
-                // without this the journal shows hit after hit and never says whether the
-                // target went down, which is the only thing a "he tanked ten rounds"
-                // report actually turns on
                 if (player != null)
                 {
                     Overlay.HitFeed.PushPanel(

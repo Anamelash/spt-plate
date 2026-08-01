@@ -284,14 +284,33 @@ namespace PLATE.Client.Patches
             var vital = VitalMult(bpc.BodyPartColliderType);
             __instance.Damage = d.DamageHp * vital * DamageScale(bpc.Player as Player);
 
+            var ammo = AmmoLabel(shot);
             Overlay.HitFeed.PushPanel(d.Contact
-                ? $"  W {bpc.BodyPartType}: contact {v:0} m/s -> {__instance.Damage:0.#}"
-                : $"  W {bpc.BodyPartColliderType}: {v:0} m/s, L {d.ChannelMm:0}" +
+                ? $"  W {ammo} {bpc.BodyPartType}: contact {v:0} m/s -> {__instance.Damage:0.#}"
+                : $"  W {ammo} {bpc.BodyPartColliderType}: {v:0} m/s, L {d.ChannelMm:0}" +
                   $"/T {chordMm:0} mm, E {d.DepositFrac * 100f:0}%" +
                   $", PC {d.Pc:0.#}+TC {d.Tc:0.#}" +
                   (vital > 1f ? $" x{vital:0.#}" : "") +
                   $" -> {__instance.Damage:0.#}" +
                   (d.ChannelMm > chordMm ? " (through)" : ""));
+        }
+
+        /// <summary>
+        /// What was fired, for the journal. The template name carries both caliber and
+        /// load ("762x51_M80"); the "patron_" prefix every one of them shares is
+        /// dropped. Reading a hit without knowing the round tells you very little.
+        /// </summary>
+        private static string AmmoLabel(EftBulletClass shot)
+        {
+            var name = shot?.Ammo?.Template?.Name;
+            if (string.IsNullOrEmpty(name))
+            {
+                return "?";
+            }
+
+            return name.StartsWith("patron_", StringComparison.OrdinalIgnoreCase)
+                ? name.Substring("patron_".Length)
+                : name;
         }
 
         /// <summary>
