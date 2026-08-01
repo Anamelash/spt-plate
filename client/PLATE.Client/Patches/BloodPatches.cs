@@ -246,7 +246,13 @@ namespace PLATE.Client.Patches
                 return;
             }
 
-            LogHealthAfterHit(__instance);
+            // bleedings still call ApplyDamage every tick with zero damage (their HP
+            // damage is disabled — the blood system drains volume instead), and logging
+            // those turned a third of the journal into unchanged repeats
+            if (damage > 0f)
+            {
+                LogHealthAfterHit(__instance);
+            }
 
             var dt = damageInfo.DamageType;
             if (dt == EDamageType.Explosion)
