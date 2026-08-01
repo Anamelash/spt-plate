@@ -124,14 +124,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
 
         try
         {
-            var options = new JsonSerializerOptions
-            {
-                ReadCommentHandling = JsonCommentHandling.Skip,
-                AllowTrailingCommas = true,
-                PropertyNameCaseInsensitive = true,
-            };
-            _cached = JsonSerializer.Deserialize<AmmoReference>(File.ReadAllText(path), options)
-                      ?? new AmmoReference();
+            _cached = Parse(File.ReadAllText(path)) ?? new AmmoReference();
         }
         catch (Exception ex)
         {
@@ -139,7 +132,70 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             _cached = new AmmoReference();
         }
 
+        FillMissingSections(_cached);
         return _cached;
+    }
+
+    private static AmmoReference? Parse(string json)
+    {
+        return JsonSerializer.Deserialize<AmmoReference>(json, new JsonSerializerOptions
+        {
+            ReadCommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true,
+            PropertyNameCaseInsensitive = true,
+        });
+    }
+
+    /// <summary>
+    /// The file is written once and then only read, so a section added in a later
+    /// version would never reach anyone who already has one — the feature behind it
+    /// would silently do nothing on every existing install. Sections the file does not
+    /// have are taken from the shipped defaults; sections it does have are left alone,
+    /// including whatever the user edited into them.
+    /// </summary>
+    private void FillMissingSections(AmmoReference loaded)
+    {
+        var filled = MergeShippedDefaults(loaded);
+        if (filled.Count > 0)
+        {
+            logger.Debug($"[PLATE] {FileName} predates these sections, using the shipped ones: " +
+                         string.Join(", ", filled));
+        }
+    }
+
+    /// <summary>Fills empty sections from the shipped book; returns what it filled.</summary>
+    public static List<string> MergeShippedDefaults(AmmoReference loaded)
+    {
+        AmmoReference? shipped = null;
+        AmmoReference Shipped() => shipped ??= Parse(DefaultReferenceJsonc) ?? new AmmoReference();
+
+        var filled = new List<string>();
+
+        if (loaded.Shotshells.Count == 0)
+        {
+            loaded.Shotshells = Shipped().Shotshells;
+            filled.Add(nameof(loaded.Shotshells));
+        }
+
+        if (loaded.Grenades.Count == 0)
+        {
+            loaded.Grenades = Shipped().Grenades;
+            filled.Add(nameof(loaded.Grenades));
+        }
+
+        if (loaded.Barrels.Count == 0)
+        {
+            loaded.Barrels = Shipped().Barrels;
+            filled.Add(nameof(loaded.Barrels));
+        }
+
+        if (loaded.Weapons.Count == 0)
+        {
+            loaded.Weapons = Shipped().Weapons;
+            filled.Add(nameof(loaded.Weapons));
+        }
+
+        return filled;
     }
 
     /// <summary>

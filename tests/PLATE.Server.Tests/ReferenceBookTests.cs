@@ -123,6 +123,31 @@ public class ReferenceBookTests
         }
     }
 
+    /// <summary>
+    /// The file is written once and then only read. Without a fallback a section added
+    /// in a later version reaches nobody who already ran the mod, and the feature behind
+    /// it does nothing on every existing install — which is exactly how the barrel pass
+    /// silently did nothing on its first run here.
+    /// </summary>
+    [Fact]
+    public void A_reference_file_written_before_a_section_existed_still_gets_it()
+    {
+        // what an install that predates the barrel work has on disk
+        var old = new ReferenceBook.AmmoReference
+        {
+            Shotshells = { ["patron_12x70_buckshot"] = new ReferenceBook.ShotshellRef() },
+        };
+
+        var filled = ReferenceBook.MergeShippedDefaults(old);
+
+        Assert.Contains("Barrels", filled);
+        Assert.Contains("Weapons", filled);
+        Assert.True(old.Barrels.ContainsKey("Caliber762x51"));
+
+        // and the section it did have is left exactly as the user had it
+        Assert.Single(old.Shotshells);
+    }
+
     [Fact]
     public void Integral_barrel_weapons_have_plausible_lengths()
     {
