@@ -227,7 +227,6 @@ public class ReferenceBookTests
             "Titan/4", "Titan/5", "Titan/6",
             "UHMWPE/3", "UHMWPE/4", "UHMWPE/5", "UHMWPE/6",
             "Aluminium/4",
-            "Glass/1", "Glass/2", "Glass/3", "Glass/4",
         ];
 
         foreach (var key in shipped)
@@ -277,14 +276,16 @@ public class ReferenceBookTests
 
         string[] shipped =
         [
-            "Aramid/1", "Aramid/2", "Aramid/3", "Aramid/4", "Aramid/5", "Aramid/6",
-            "UHMWPE/1", "UHMWPE/2", "UHMWPE/3", "UHMWPE/4", "UHMWPE/5", "UHMWPE/6",
+            // capped materials only reach 2, so those are the only entries they need
+            "Aramid/1", "Aramid/2",
+            "UHMWPE/1", "UHMWPE/2",
+            "Glass/1", "Glass/2",
+            // a hard shell really is thicker on a heavier helmet
             "ArmoredSteel/2", "ArmoredSteel/3", "ArmoredSteel/4", "ArmoredSteel/5", "ArmoredSteel/6",
             "Titan/2", "Titan/3", "Titan/4", "Titan/5", "Titan/6",
             "Combined/3", "Combined/4", "Combined/5", "Combined/6",
             "Ceramic/4", "Ceramic/5", "Ceramic/6",
             "Aluminium/3", "Aluminium/4",
-            "Glass/1", "Glass/2", "Glass/3", "Glass/4",
         ];
 
         foreach (var key in shipped)
@@ -293,43 +294,36 @@ public class ReferenceBookTests
             Assert.InRange(soft[key].ThicknessMm, 2, 20);
         }
 
-        // and it must actually differ from the plate table where both exist, otherwise
-        // splitting them bought nothing
-        Assert.True(soft["UHMWPE/3"].ThicknessMm < plates["UHMWPE/3"].ThicknessMm / 2);
+        // and it must actually differ from the plate table, otherwise splitting them
+        // bought nothing: a polyethylene package is a fraction of a monolithic plate
+        Assert.True(soft["UHMWPE/2"].ThicknessMm < plates["UHMWPE/3"].ThicknessMm / 2);
     }
 
     /// <summary>
-    /// Woven aramid stops pistol rounds and fragments — the 6B5 chest package is 30
-    /// layers of TSVM-DZh, about 8 mm, and everything the game rates higher is the same
-    /// fabric a little thicker. The class number cannot lift that ceiling any more than
-    /// it can for a polycarbonate visor.
+    /// A woven package and a visor cannot be rated past 2 by being made thicker, so the
+    /// table must not offer a rung above it — an entry at 3 would be applied to
+    /// something and would mean the rating had lifted a ceiling it cannot lift.
     /// </summary>
     [Fact]
-    public void A_woven_pack_never_gets_a_plate_thickness()
+    public void Capped_materials_have_no_rung_above_two()
     {
-        foreach (var (key, armour) in Shipped().SoftArmor.Where(kv => kv.Key.StartsWith("Aramid/")))
+        foreach (var (key, _) in Shipped().SoftArmor)
         {
-            Assert.InRange(armour.ThicknessMm, 2, 13);
+            var parts = key.Split('/');
+            if (parts[0] is "Aramid" or "UHMWPE" or "Glass")
+            {
+                Assert.True(int.Parse(parts[1]) <= 2,
+                    $"{key}: woven fabric and laminate stop where they stop");
+            }
         }
     }
 
-    /// <summary>
-    /// A visor is polycarbonate and triplex, and that material stops pistol rounds and
-    /// fragments — no class number changes what it is made of. The heaviest one in the
-    /// game is 1.8 kg, about 14 mm of laminate over a face; a rifle-proof visor would be
-    /// four or five times that and nobody has ever worn one. If this table ever hands
-    /// glass a plate-like thickness, the game gets a face shield that eats rifle rounds
-    /// because a number said so.
-    /// </summary>
+
+    /// <summary>A visor is never a plate, so the plate table must not offer one.</summary>
     [Fact]
-    public void Ballistic_glass_never_gets_a_rifle_plate_thickness()
+    public void Glass_is_not_in_the_plate_table()
     {
-        foreach (var (key, plate) in Shipped().ArmorByClass.Where(kv => kv.Key.StartsWith("Glass/")))
-        {
-            Assert.InRange(plate.ThicknessMm, 2, 15);
-            Assert.True(int.Parse(key.Split('/')[1]) <= 4,
-                $"{key}: the game has no glass above class 4, and reality has none above 2");
-        }
+        Assert.DoesNotContain(Shipped().ArmorByClass.Keys, k => k.StartsWith("Glass/"));
     }
 
     [Fact]

@@ -227,11 +227,32 @@ public class ArmorNormalizer(
     private static ReferenceBook.ArmorPlateRef? ClassReference(
         ReferenceBook.AmmoReference reference, string itemName, string material, int cls)
     {
-        var table = itemName.StartsWith("item_equipment_plate_", StringComparison.OrdinalIgnoreCase)
-            ? reference.ArmorByClass
-            : reference.SoftArmor;
+        if (itemName.StartsWith("item_equipment_plate_", StringComparison.OrdinalIgnoreCase))
+        {
+            return reference.ArmorByClass.TryGetValue($"{material}/{cls}", out var plate)
+                ? plate
+                : null;
+        }
 
-        return table.TryGetValue($"{material}/{cls}", out var r) ? r : null;
+        return reference.SoftArmor.TryGetValue($"{material}/{SoftRating(material, cls)}", out var r)
+            ? r
+            : null;
+    }
+
+    /// <summary>
+    /// Materials with a ceiling their rating cannot lift. A woven package and a
+    /// polycarbonate visor stop pistol rounds and fragments; getting to Br3 with aramid
+    /// alone would take around 200 mm of it, which is why carriers are sold as Br1 or
+    /// Br2 and everything above that in a vest is a plate. Whatever the game prints on
+    /// one, it is read at 2.
+    /// </summary>
+    private static readonly string[] CappedAtTwo = ["Aramid", "UHMWPE", "Glass"];
+
+    private static int SoftRating(string material, int cls)
+    {
+        return CappedAtTwo.Contains(material, StringComparer.OrdinalIgnoreCase)
+            ? Math.Min(cls, 2)
+            : cls;
     }
 
     /// <summary>Drops the shared prefix so the report reads as plate names.</summary>
