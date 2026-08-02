@@ -153,6 +153,16 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         /// <summary>Backing package behind the plate, mm of fibre (0 = none).</summary>
         public double BackingMm { get; set; }
 
+        /// <summary>
+        /// Density of the hard element, g/cm³, when it is not what the material table
+        /// says. The game has one Ceramic and the table reads it as alumina, but an
+        /// ESAPI is boron carbide at 2.52 — so 10 mm of it weighs two thirds of what
+        /// 10 mm of alumina would. Without this the thickness would have to be fudged
+        /// to keep the areal density right, and the geometry would stop being real.
+        /// 0 = the material table is correct for this one.
+        /// </summary>
+        public double DensityGCm3 { get; set; }
+
         public string Source { get; set; } = "";
     }
 
@@ -541,19 +551,29 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
 
             // --- plates ---
             "sapi_6_frontback":         { "Prototype": "ESAPI", "Material": "Ceramic", "ThicknessMm": 10, "BackingMm": 12,
-                                          "Source": "boron carbide 10 mm on a UHMWPE backer, 5.5 lb in medium" },
+                                          "DensityGCm3": 2.52,
+                                          "Source": "boron carbide 10 mm on a UHMWPE backer; 5.5 lb over a 9.5x12.5 in medium is 3.26 g/cm2" },
             "SSAPI_ESBI_6_side":        { "Prototype": "ESBI side insert", "Material": "Ceramic", "ThicknessMm": 10, "BackingMm": 10,
-                                          "Source": "the ESAPI construction in a side cut" },
+                                          "DensityGCm3": 2.52,
+                                          "Source": "the ESAPI construction in a side cut; 2.25 lb over 6x8 in is the same 3.30 g/cm2" },
             // the one panel in the series anybody has measured and published: 365x290x20
             // and 3.8 kg, alumina tile on a UHMWPE composite. 3.59 g/cm2, of which the
             // tile is 6 mm and the backer the other 13 - which comes to the 20 quoted.
             // Its face is what the rest of the Granit masses are read over
             "granit4rs":                { "Prototype": "Granit-4RS", "Material": "Ceramic", "ThicknessMm": 6, "BackingMm": 13,
                                           "Source": "365x290x20 mm chest panel, 3.8 kg; alumina on UHMWPE" },
-            "granit4_5class_front":     { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 5.4, "BackingMm": 12,
-                                          "Source": "3.4 kg Br5 panel over the face the 4RS measures" },
-            "granit4_5class_back":      { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 5.4, "BackingMm": 12,
-                                          "Source": "3.4 kg Br5 panel over the face the 4RS measures" },
+            "granit4_5class_front":     { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 6.2, "BackingMm": 14,
+                                          "Source": "the Br5 of the line: 314x265 mm, 3.10 kg in size 2" },
+            "granit4_5class_back":      { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 6.2, "BackingMm": 14,
+                                          "Source": "the Br5 of the line: 314x265 mm, 3.10 kg in size 2" },
+            "granitBr4":                { "Prototype": "Granit Br4 (Granit-5A)", "Material": "Ceramic", "ThicknessMm": 5.4, "BackingMm": 12,
+                                          "Source": "314x265 mm, 2.70 kg in size 2; 2.55 in size 1 and 3.05 in size 3" },
+            "granitBr5":                { "Prototype": "Granit Br5", "Material": "Ceramic", "ThicknessMm": 6.2, "BackingMm": 14,
+                                          "Source": "314x265 mm, 3.10 kg in size 2; 2.95 in size 1 and 3.47 in size 3" },
+            "granit":                   { "Prototype": "Granit Br5, first execution", "Material": "Ceramic", "ThicknessMm": 7.2, "BackingMm": 15,
+                                          "Source": "305x263x22 mm, 3.45 kg in size 2; 330x263 and 3.75 kg in size 3" },
+            "granit4_zhukBr3_3class_front": { "Prototype": "Zhuk-3", "Material": "UHMWPE", "ThicknessMm": 23,
+                                          "Source": "300x250 mm SAPI cut, 23 mm, 1.70 kg - all polyethylene, and the mass over that face comes to the 23" },
             "korund_vmk_6class_front":  { "Prototype": "Korund-VM-K", "Material": "Ceramic", "ThicknessMm": 6.2, "BackingMm": 17,
                                           "Source": "260x260x23 mm ceramic panel, 2.5 kg" },
             "korund_vm_k_6class_back":  { "Prototype": "Korund-VM-K", "Material": "Ceramic", "ThicknessMm": 6.2, "BackingMm": 17,
@@ -641,6 +661,14 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                   "Source": "6 mm polycarbonate; V50 350 m/s against a 1 g, 6 mm ball" },
             "item_equipment_helmet_galvion_mandible": { "Prototype": "Batlskin Viper mandible", "Material": "Aramid", "ThicknessMm": 9.7,
                                   "Source": "0.42 kg in medium over the roughly 3 dm2 a mandible covers" },
+            // both read over the 3 dm2 a face shield covers, so the six-to-one in their
+            // masses is the six-to-one in what they stop
+            "helmet_ops_core_handgun_face_shield": { "Prototype": "Ops-Core multi-hit handgun shield", "Material": "Glass", "ThicknessMm": 17.8,
+                                  "Source": "2.95 lb over 3 dm2 - the heaviest thing in this table, and it is a face shield" },
+            "item_equipment_helmet_team_wendy_exfil_face_shield": { "Prototype": "EXFIL face shield", "Material": "Glass", "ThicknessMm": 3.1,
+                                  "Source": "230 g in size 1 - a fragmentation visor, not a handgun one" },
+            "item_equipment_helmet_team_wendy_exfil_face_shield_coyote": { "Prototype": "EXFIL face shield", "Material": "Glass", "ThicknessMm": 3.1,
+                                  "Source": "230 g in size 1 - a fragmentation visor, not a handgun one" },
 
             // rating without construction: the maker says what it stops and no more
             "helmet_zsh_1-2m_v1_face_shield": { "Prototype": "ZSh-1-2M visor", "Material": "Glass", "Rating": 2,
@@ -730,25 +758,19 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "item_equipment_helmet_kiverm_shield": "Fort publish nothing about the visor",
             "item_equipment_helmet_vulkan_shield": "no mass published for the Vulkan-5 visor",
             "helmet_ops_core_fast_visor": "Ops-Core publish a fragmentation rating and no mass",
-            "helmet_ops_core_handgun_face_shield": "Ops-Core publish a handgun rating and no mass",
             "helmet_ops_core_fast_gunsight_mandible": "no mass published for the Ops-Core mandible",
             "item_equipment_helmet_galvion_fixed_arm_visor": "no mass published for the Batlskin visor",
             "item_equipment_helmet_galvion_applique": "no mass published for the applique",
-            "item_equipment_helmet_team_wendy_exfil_face_shield": "no mass published for the EXFIL visor",
-            "item_equipment_helmet_team_wendy_exfil_face_shield_coyote": "no mass published for the EXFIL visor",
             "item_equipment_helmet_k1c_shield": "no construction published",
 
-            // plates: the makers publish a class and a price, and a mass only sometimes
-            "korund":                 "no thickness published for the Korund steel panel",
-            "korund_vm":              "no thickness published for the Korund-VM steel panel",
-            "korund_6b12":            "no thickness published for the 6B12 panel",
-            "granit":                 "Tekhinkom publish no mass for the side panel",
-            "granitBr4":              "Tekhinkom publish no mass for the Br4 panel",
-            "granitBr5":              "Tekhinkom publish no mass for the Br5+ panel",
+            // steel panels are the one part of the Russian catalogue nobody prints a
+            // mass for - the ceramic ones are all on the retailers' pages to the gram
+            "korund":                 "steel panel; KlASS publish a class and no mass",
+            "korund_vm":              "steel panel; KlASS publish a class and no mass",
+            "korund_6b12":            "steel panel; the 6B12 mass is quoted for the whole vest",
             "granit4_4class_diy_back": "a cut-down panel, not a product",
-            "granit4_6b33_4class_front": "no thickness published for the 6B33 steel panel",
-            "granit4_zhukBr3_3class_front": "no thickness published for the Zhuk insert",
-            "SSAPI_5_side":           "sources disagree on whether the plain SAPI side is alumina or boron carbide",
+            "granit4_6b33_4class_front": "steel panel; the 6B33 mass is quoted for the whole vest",
+            "SSAPI_5_side":           "the plain SAPI side, and sources disagree on whether it is alumina or boron carbide",
 
             // eyewear and masks
             "item_equipment_glasses_npp": "a polycarbonate shooting lens; no thickness published",

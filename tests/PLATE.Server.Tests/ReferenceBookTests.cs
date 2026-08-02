@@ -242,6 +242,35 @@ public class ReferenceBookTests
     }
 
     /// <summary>
+    /// Thickness times density is areal density, and that is the quantity a penetration
+    /// model actually spends. It is also the check that catches a figure entered under
+    /// the wrong convention: the ESAPI is 10 mm, but of boron carbide at 2.52, and read
+    /// as the alumina the material table holds it would weigh half again what it does.
+    /// Nothing wearable is under 0.3 g/cm² or over 5.
+    /// </summary>
+    [Fact]
+    public void Every_documented_construction_weighs_something_a_person_could_wear()
+    {
+        var materials = Shipped().ArmorMaterials;
+
+        foreach (var (name, plate) in Shipped().ArmorPlates)
+        {
+            if (plate.ThicknessMm <= 0 || plate.Material.Length == 0)
+            {
+                continue;
+            }
+
+            var density = plate.DensityGCm3 > 0
+                ? plate.DensityGCm3
+                : materials[plate.Material].DensityGCm3;
+
+            // mm * g/cm³ -> g/cm² is a tenth
+            var arealGCm2 = plate.ThicknessMm * density / 10.0;
+            Assert.InRange(arealGCm2, 0.3, 5.0);
+        }
+    }
+
+    /// <summary>
     /// The stand-in plate for a rating has to exist for every rating the game actually
     /// ships, or the armour it invented falls through to its own mass — which any mod
     /// that scales weight quietly rewrites.
