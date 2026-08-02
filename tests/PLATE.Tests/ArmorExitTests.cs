@@ -32,12 +32,40 @@ namespace PLATE.Tests
         {
             const float e = 3500f;
 
-            var ball = ArmorExit.ImpactDensity(e, Dia, 1f);
-            var ap = ArmorExit.ImpactDensity(e, Dia, 0.491f);
+            // M80 ball and M993 at the same energy: X 0.25 against 0.05
+            var ball = ArmorExit.ImpactDensity(e, Dia, 1f, 0.25f, 0.6f);
+            var ap = ArmorExit.ImpactDensity(e, Dia, 0.491f, 0.05f, 0.6f);
 
-            Assert.Equal(e / (Mathf.PI * Dia * Dia / 4f), ball, 2);
-            Assert.True(ap / ball > 1.9f && ap / ball < 2.1f,
-                $"the core should roughly double the density, it multiplied it by {ap / ball:0.00}");
+            Assert.True(ap / ball > 2f && ap / ball < 2.4f,
+                $"the core should better than double the density, it multiplied it by {ap / ball:0.00}");
+        }
+
+        /// <summary>
+        /// The other half of the same sentence, and the one this pass nearly dropped.
+        /// A hollow point flattens on the face of the panel before it has finished
+        /// loading it, so the same energy lands on more of the plate. Removing the old
+        /// construction multiplier without putting this back handed every expanding
+        /// round in the game a penetration buff.
+        /// </summary>
+        [Fact]
+        public void A_bullet_that_flattens_loads_more_of_the_plate_not_less()
+        {
+            const float e = 2000f;
+
+            var fmj = ArmorExit.ImpactDensity(e, Dia, 1f, 0.25f, 0.6f);
+            var hollow = ArmorExit.ImpactDensity(e, Dia, 1f, 0.9f, 0.6f);
+
+            Assert.True(hollow < fmj,
+                "a hollow point must arrive at a lower density than an FMJ of the same energy");
+            Assert.Equal(1.15f / 1.54f, hollow / fmj, 3);
+        }
+
+        [Fact]
+        public void Turning_the_spread_off_leaves_the_bare_cross_section()
+        {
+            var area = ArmorExit.ImpactArea(Dia, 1f, 0.9f, 0f);
+
+            Assert.Equal(Mathf.PI * Dia * Dia / 4f, area, 3);
         }
 
         /// <summary>

@@ -31,14 +31,27 @@ namespace PLATE.Client.Ballistics
         }
 
         /// <summary>
-        /// Impact energy density on the plate, J/mm². The core's area, not the bullet's:
-        /// a 5.5 mm carbide core in a 7.85 mm bullet arrives at twice the density the
-        /// same energy spread over the full jacket would.
+        /// The area the energy actually lands on, mm². Two things move it and they pull
+        /// opposite ways. A hard core concentrates: 5.5 mm of carbide in a 7.85 mm bullet
+        /// arrives on half the face the full jacket would. A bullet that can deform
+        /// flattens against the panel before it has finished loading it, spreading the
+        /// same energy wider — which is why a hollow point is poor against armour whatever
+        /// energy it carries.
         /// </summary>
-        public static float ImpactDensity(float energyJ, float diaMm, float coreAreaFrac)
+        /// <param name="expansionOnArmor">How far a fully deformable bullet spreads: × (1 + this·X).</param>
+        public static float ImpactArea(float diaMm, float coreAreaFrac, float x,
+            float expansionOnArmor)
         {
             var area = Mathf.PI * diaMm * diaMm / 4f;
-            return energyJ / Mathf.Max(area * coreAreaFrac, 1e-4f);
+            return Mathf.Max(
+                area * coreAreaFrac * (1f + expansionOnArmor * Mathf.Clamp01(x)), 1e-4f);
+        }
+
+        /// <summary>Impact energy density on the plate, J/mm².</summary>
+        public static float ImpactDensity(float energyJ, float diaMm, float coreAreaFrac,
+            float x, float expansionOnArmor)
+        {
+            return energyJ / ImpactArea(diaMm, coreAreaFrac, x, expansionOnArmor);
         }
 
         /// <param name="massG">Mass of the whole bullet at impact, g.</param>

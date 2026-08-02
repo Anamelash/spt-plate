@@ -274,6 +274,10 @@ public class PlateServerMod(
             "DurabilityFloor": 0.4,
             // Floor of local degradation (a shattered segment holds at least this fraction)
             "DegradeFloor": 0.15,
+            // How far a deformable bullet spreads on the face of the panel before it has
+            // finished loading it: impact area x (1 + this*X). A core concentrates the
+            // energy, deformation spreads it. 0 = every bullet loads its own calibre
+            "ExpansionOnArmor": 0.6,
             // Material profiles: ULimitMult/ECostMult — threshold and energy-cost
             // multipliers (E_cost = ECostMult·U_eff·A_core); KDef — deformation
             // (X_out = X + KDef·X); KFrag — erosion of whatever comes through, a

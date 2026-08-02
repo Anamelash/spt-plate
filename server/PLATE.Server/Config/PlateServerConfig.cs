@@ -109,6 +109,15 @@ public class PlateServerConfig
         /// (a shattered ceramic segment still holds at least this fraction of the threshold).</summary>
         public double DegradeFloor { get; set; } = 0.15;
 
+        /// <summary>
+        /// How far a fully deformable bullet spreads against the face of a panel before
+        /// it has finished loading it: impact area × (1 + this·X). The other half of
+        /// what the core fraction says — a core concentrates the energy, deformation
+        /// spreads it, and a hollow point is poor against armour for the second reason
+        /// whatever energy it carries. 0 = every bullet loads its own calibre.
+        /// </summary>
+        public double ExpansionOnArmor { get; set; } = 0.6;
+
         /// <summary>Armor material profiles (key — EFT MaterialType).</summary>
         public Dictionary<string, MaterialProfile> Materials { get; set; } = new()
         {

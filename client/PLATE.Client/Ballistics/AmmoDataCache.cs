@@ -79,6 +79,10 @@ namespace PLATE.Client.Ballistics
             public double[] ClassULimitJmm2 { get; set; }
             public double DurabilityFloor { get; set; } = 0.4;
             public double DegradeFloor { get; set; } = 0.15;
+
+            /// <summary>Spread of a deformable bullet on the panel face: area × (1 + this·X).</summary>
+            public double ExpansionOnArmor { get; set; } = 0.6;
+
             public Dictionary<string, ArmorMatProfile> Materials { get; set; }
 
             private static readonly ArmorMatProfile Default = new()

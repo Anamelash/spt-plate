@@ -268,7 +268,10 @@ public class AmmoNormalizer(
                 r.P.Damage = r.NewDamage;
                 ApplyBleedDeltas(r, a, pellet: (r.P.ProjectileCount ?? 1) > 1);
 
-                var penEnergy = a.PenPerEnergyDensity * (r.E0 / (r.Area * r.CoreArea));
+                // the same impact area the client computes at the moment of a hit, so the
+                // number on the card and the number that decides the hit agree
+                var penEnergy = a.PenPerEnergyDensity *
+                                (r.E0 / ImpactArea(r.Area, r.CoreArea, r.X, cfg.Armor.ExpansionOnArmor));
                 r.NewPen = (int)Math.Clamp(
                     Math.Round(a.PenetrationBlend * penEnergy + (1 - a.PenetrationBlend) * r.OldPen),
                     1, 120);
@@ -289,8 +292,10 @@ public class AmmoNormalizer(
                 r.NewDamage = Math.Clamp(ComputeDamage(r, a), a.MinPelletDamage, a.DamageCap);
                 r.P.Damage = r.NewDamage;
 
-                // a pellet or a dart is one piece of metal — no core, no jacket
-                var penEnergy = a.PenPerEnergyDensity * (r.E0 / r.Area);
+                // a pellet or a dart is one piece of metal — no core, no jacket, but a
+                // lead ball still flattens on the way in
+                var penEnergy = a.PenPerEnergyDensity *
+                                (r.E0 / ImpactArea(r.Area, 1, r.X, cfg.Armor.ExpansionOnArmor));
                 r.NewPen = (int)Math.Clamp(
                     Math.Round(a.PenetrationBlend * penEnergy + (1 - a.PenetrationBlend) * r.OldPen),
                     1, 120);
@@ -364,6 +369,19 @@ public class AmmoNormalizer(
         r.P.HeavyBleedingDelta = Math.Round(Math.Clamp(heavy, 0, a.HeavyDeltaMax), 3);
         r.P.LightBleedingDelta = Math.Round(
             Math.Clamp(a.BleedLightBase + a.BleedLightPerMm * r.DiaMm, 0, a.LightDeltaMax), 3);
+    }
+
+    /// <summary>
+    /// The area a projectile's energy actually lands on, mm². A hard core concentrates
+    /// it and deformation spreads it, and the two pull opposite ways: this is the same
+    /// arithmetic the client runs at the moment of a hit (ArmorExit.ImpactArea), kept in
+    /// step so the number on the item card and the number that decides the hit agree.
+    /// </summary>
+    public static double ImpactArea(double areaMm2, double coreAreaFrac, double x,
+        double expansionOnArmor)
+    {
+        return Math.Max(areaMm2 * coreAreaFrac * (1 + expansionOnArmor * Math.Clamp(x, 0, 1)),
+            1e-4);
     }
 
     /// <summary>
@@ -513,6 +531,7 @@ public class AmmoNormalizer(
             cfg.Armor.ClassULimitJmm2,
             cfg.Armor.DurabilityFloor,
             cfg.Armor.DegradeFloor,
+            cfg.Armor.ExpansionOnArmor,
             cfg.Armor.Materials,
         };
         return JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });

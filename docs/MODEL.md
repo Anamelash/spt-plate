@@ -209,16 +209,23 @@ with specific energy.
 ### Threshold
 
 ```
-U_hit   = E / (A · CoreAreaFrac)
+A_hit   = A · CoreAreaFrac · (1 + ExpansionOnArmor · X)
+U_hit   = E / A_hit
 U_limit = ClassULimit(class) · ULimitMult(material) · durability / max(cos θ, AngleMinCos)
 ```
 
-The plate meets the hard core, not the calibre. A 5.5 mm tungsten-carbide core in a
+Two things move the area the energy lands on, and they pull opposite ways.
+
+The plate meets the hard core, not the calibre: a 5.5 mm tungsten-carbide core in a
 7.85 mm bullet arrives at twice the energy density that the same energy spread over
-the full jacket would — that is where armor piercing comes from, and it is read from
+the full jacket would. That is where armor piercing comes from, and it is read from
 the round's published construction rather than from a multiplier keyed off how soft
-the bullet is. A bullet with no separable core takes the whole area, so for most
-ammunition this is plain `E/A`.
+the bullet is.
+
+And a bullet that can deform flattens against the face of the panel before it has
+finished loading it, so the same energy lands on more of the plate. This is why a
+hollow point is poor against armor whatever energy it carries, and it is the reason
+the two terms are separate: a soft bullet with a hard core — an M855A1 — does both.
 
 Class thresholds are anchored to the GOST protection classes: each class is rated
 against a specific test cartridge, so the threshold is that cartridge's specific
@@ -252,7 +259,7 @@ Outside the band the outcome is deterministic.
 A projectile that defeats the panel pays for it:
 
 ```
-E_cost = ECostMult · U_limit · A · CoreAreaFrac   work ∝ strength × hole × thickness
+E_cost = ECostMult · U_limit · A_hit              work ∝ strength × hole × thickness
 v_out  = √(2·(E − E_cost) / m)                   the whole bullet decelerated as one
 m_out  = m · CoreMassFrac · (1 − KFrag)          jacket stripped, then eroded
 d_out  = d · √CoreAreaFrac                       what carries on is the core

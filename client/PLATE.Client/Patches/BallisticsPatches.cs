@@ -756,7 +756,6 @@ namespace PLATE.Client.Patches
                 return true; // malformed template — vanilla roll
             }
 
-            var area = Mathf.PI * dia * dia / 4f;
             var v = shot.Vector3_1.magnitude;
             var e = 0.5f * (mass / 1000f) * v * v;
             var x = EffectiveX(shot);
@@ -784,7 +783,8 @@ namespace PLATE.Client.Patches
             // spread over the full jacket — that is where armour piercing comes from,
             // and it used to be imitated by a multiplier keyed off how soft the bullet was.
             AmmoDataCache.GetCore(shot.Ammo?.TemplateId, out var coreArea, out var coreMass);
-            var uHit = ArmorExit.ImpactDensity(eForU, dia, coreArea);
+            var hitArea = ArmorExit.ImpactArea(dia, coreArea, x, (float)cfg.ExpansionOnArmor);
+            var uHit = eForU / hitArea;
 
             // threshold: class × material × wear × slanted (oblique) thickness
             var prof = cfg.Profile(armor.Template.ArmorMaterial.ToString());
@@ -829,8 +829,9 @@ namespace PLATE.Client.Patches
             var pierce = pierceChance > 0f && UnityEngine.Random.value < pierceChance;
 
             // energy price of penetration: work ∝ strength × hole area × thickness, and
-            // the hole is the size of what makes it — a core punches a narrower one
-            var eCost = (float)prof.ECostMult * uLimit * area * coreArea;
+            // the hole is the size of what makes it — a core punches a narrower one and
+            // a bullet that flattened on the way in punches a wider one
+            var eCost = (float)prof.ECostMult * uLimit * hitArea;
             var eOut = e - eCost;
 
             if (!pierce || eOut < 1f)

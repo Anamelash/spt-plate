@@ -83,7 +83,9 @@ the projectile has to defeat it with specific energy:
   advantage, taken from the round's published construction. Rounds whose "steel
   core" is too soft to hold its shape against a plate get nothing: an M855 and an
   M855A1 are the same weight in the same case, and the difference between them is
-  40 HRC against 58.
+  40 HRC against 58. The other half of the same sentence: a bullet that can deform
+  flattens on the face of the panel before it has finished loading it, so a hollow
+  point spreads its energy wider and does badly against armor whatever it carries.
 - **A penetrating bullet pays for the hole, and leaves its jacket in it.** What
   goes on through is the core — lighter, narrower, and *harder* than the bullet
   was, because the deformable material was the part that stayed behind. An M855
