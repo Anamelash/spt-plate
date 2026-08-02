@@ -57,6 +57,35 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         public double TntG { get; set; } = 110;
     }
 
+    public class BarrelRef
+    {
+        /// <summary>Weapon whose barrel the cartridge's InitialSpeed is quoted for.</summary>
+        public string Prototype { get; set; } = "";
+
+        /// <summary>That weapon's barrel length, mm. A barrel this long changes nothing.</summary>
+        public double RefMm { get; set; }
+
+        /// <summary>
+        /// Le Duc constant, mm. Fitted to a published barrel-length ladder where one
+        /// exists; 0 means "work it out from the case", which is good to about ±35%.
+        /// </summary>
+        public double C { get; set; }
+
+        /// <summary>Case capacity, mm³ (1 grain of water = 64.8 mm³). Only used when C is 0.</summary>
+        public double CaseMm3 { get; set; }
+
+        /// <summary>Bore diameter, mm. Only used when C is 0.</summary>
+        public double BoreMm { get; set; }
+    }
+
+    public class WeaponBarrelRef
+    {
+        public string Prototype { get; set; } = "";
+
+        /// <summary>Barrel length of the real weapon, mm.</summary>
+        public double LengthMm { get; set; }
+    }
+
     public class AmmoReference
     {
         /// <summary>Key — the cartridge template's _name in the DB.</summary>
@@ -64,6 +93,15 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
 
         /// <summary>Key — the grenade template's _name in the DB.</summary>
         public Dictionary<string, GrenadeRef> Grenades { get; set; } = new();
+
+        /// <summary>Key — the caliber id (ammoCaliber on the weapon template).</summary>
+        public Dictionary<string, BarrelRef> Barrels { get; set; } = new();
+
+        /// <summary>
+        /// Key — the weapon template's _name. Only for weapons whose barrel does not
+        /// come off, so its length cannot be read from a barrel item.
+        /// </summary>
+        public Dictionary<string, WeaponBarrelRef> Weapons { get; set; } = new();
 
         public BlastAnchorRef BlastAnchor { get; set; } = new();
     }
@@ -86,14 +124,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
 
         try
         {
-            var options = new JsonSerializerOptions
-            {
-                ReadCommentHandling = JsonCommentHandling.Skip,
-                AllowTrailingCommas = true,
-                PropertyNameCaseInsensitive = true,
-            };
-            _cached = JsonSerializer.Deserialize<AmmoReference>(File.ReadAllText(path), options)
-                      ?? new AmmoReference();
+            _cached = Parse(File.ReadAllText(path)) ?? new AmmoReference();
         }
         catch (Exception ex)
         {
@@ -101,7 +132,70 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             _cached = new AmmoReference();
         }
 
+        FillMissingSections(_cached);
         return _cached;
+    }
+
+    private static AmmoReference? Parse(string json)
+    {
+        return JsonSerializer.Deserialize<AmmoReference>(json, new JsonSerializerOptions
+        {
+            ReadCommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true,
+            PropertyNameCaseInsensitive = true,
+        });
+    }
+
+    /// <summary>
+    /// The file is written once and then only read, so a section added in a later
+    /// version would never reach anyone who already has one — the feature behind it
+    /// would silently do nothing on every existing install. Sections the file does not
+    /// have are taken from the shipped defaults; sections it does have are left alone,
+    /// including whatever the user edited into them.
+    /// </summary>
+    private void FillMissingSections(AmmoReference loaded)
+    {
+        var filled = MergeShippedDefaults(loaded);
+        if (filled.Count > 0)
+        {
+            logger.Debug($"[PLATE] {FileName} predates these sections, using the shipped ones: " +
+                         string.Join(", ", filled));
+        }
+    }
+
+    /// <summary>Fills empty sections from the shipped book; returns what it filled.</summary>
+    public static List<string> MergeShippedDefaults(AmmoReference loaded)
+    {
+        AmmoReference? shipped = null;
+        AmmoReference Shipped() => shipped ??= Parse(DefaultReferenceJsonc) ?? new AmmoReference();
+
+        var filled = new List<string>();
+
+        if (loaded.Shotshells.Count == 0)
+        {
+            loaded.Shotshells = Shipped().Shotshells;
+            filled.Add(nameof(loaded.Shotshells));
+        }
+
+        if (loaded.Grenades.Count == 0)
+        {
+            loaded.Grenades = Shipped().Grenades;
+            filled.Add(nameof(loaded.Grenades));
+        }
+
+        if (loaded.Barrels.Count == 0)
+        {
+            loaded.Barrels = Shipped().Barrels;
+            filled.Add(nameof(loaded.Barrels));
+        }
+
+        if (loaded.Weapons.Count == 0)
+        {
+            loaded.Weapons = Shipped().Weapons;
+            filled.Add(nameof(loaded.Weapons));
+        }
+
+        return filled;
     }
 
     /// <summary>
@@ -145,6 +239,134 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "weapon_grenade_chattabka_vog17":   { "Prototype": "VOG-17M", "FragMassG": 0.50, "FragV0": 1100, "TntG": 36 },
             "weapon_grenade_chattabka_vog25":   { "Prototype": "VOG-25",  "FragMassG": 0.40, "FragV0": 1100, "TntG": 48 },
             "weapon_grenade_v40":               { "Prototype": "V40",     "FragMassG": 0.15, "FragV0": 800,  "TntG": 20 }
+          },
+
+          // ===== Barrels: muzzle velocity by barrel length =====
+          // v(L) = v_inf*L/(L+C) — Le Duc. RefMm is the barrel the cartridge's in-game
+          // InitialSpeed belongs to (the service weapon of the caliber), so a barrel of
+          // that length gets a 0% modifier and everything else is relative to it.
+          // C comes from a published barrel-length ladder where one exists; C=0 means
+          // "derive it from the case" (1.67*CaseMm3/bore area, good to about +-35%).
+          // CaseMm3: 1 grain of water = 64.8 mm3.
+          "Barrels": {
+            // --- C measured against published ladders ---
+            "Caliber762x51":     { "Prototype": "M14, 559 mm",        "RefMm": 559, "C": 129, "CaseMm3": 3640, "BoreMm": 7.82 },
+            "Caliber556x45NATO": { "Prototype": "M16A2, 508 mm",      "RefMm": 508, "C": 134, "CaseMm3": 1850, "BoreMm": 5.70 },
+            "Caliber762x39":     { "Prototype": "AKM, 415 mm",        "RefMm": 415, "C": 68,  "CaseMm3": 2310, "BoreMm": 7.92 },
+            "Caliber762x35":     { "Prototype": ".300 BLK, 406 mm",   "RefMm": 406, "C": 58,  "CaseMm3": 1670, "BoreMm": 7.82 },
+            "Caliber9x19PARA":   { "Prototype": "pistol, 120 mm",     "RefMm": 120, "C": 24,  "CaseMm3": 860,  "BoreMm": 9.01 },
+            "Caliber9x33R":      { "Prototype": "revolver, 152 mm",   "RefMm": 152, "C": 56,  "CaseMm3": 1620, "BoreMm": 9.07 },
+
+            // --- C derived from the case: case volumes below are approximate ---
+            "Caliber545x39":     { "Prototype": "AK-74, 415 mm",      "RefMm": 415, "C": 0, "CaseMm3": 1850, "BoreMm": 5.60 },
+            "Caliber762x54R":    { "Prototype": "SVD, 620 mm",        "RefMm": 620, "C": 0, "CaseMm3": 4150, "BoreMm": 7.92 },
+            "Caliber9x39":       { "Prototype": "AS Val, 200 mm",     "RefMm": 200, "C": 0, "CaseMm3": 1600, "BoreMm": 9.25 },
+            "Caliber366TKM":     { "Prototype": "VPO-209, 415 mm",    "RefMm": 415, "C": 0, "CaseMm3": 2200, "BoreMm": 9.50 },
+            "Caliber1143x23ACP": { "Prototype": "M1911, 127 mm",      "RefMm": 127, "C": 0, "CaseMm3": 1620, "BoreMm": 11.50 },
+            "Caliber762x25TT":   { "Prototype": "TT, 116 mm",         "RefMm": 116, "C": 0, "CaseMm3": 1170, "BoreMm": 7.87 },
+            "Caliber9x18PM":     { "Prototype": "PM, 93 mm",          "RefMm": 93,  "C": 0, "CaseMm3": 840,  "BoreMm": 9.27 },
+            "Caliber9x21":       { "Prototype": "SR-1, 120 mm",       "RefMm": 120, "C": 0, "CaseMm3": 1100, "BoreMm": 9.00 },
+            "Caliber57x28":      { "Prototype": "P90, 263 mm",        "RefMm": 263, "C": 0, "CaseMm3": 1430, "BoreMm": 5.70 },
+            "Caliber46x30":      { "Prototype": "MP7, 180 mm",        "RefMm": 180, "C": 0, "CaseMm3": 970,  "BoreMm": 4.65 },
+            "Caliber68x51":      { "Prototype": "XM7, 330 mm",        "RefMm": 330, "C": 0, "CaseMm3": 3890, "BoreMm": 7.00 },
+            "Caliber86x70":      { "Prototype": ".338 LM, 690 mm",    "RefMm": 690, "C": 0, "CaseMm3": 7390, "BoreMm": 8.60 },
+            "Caliber127x55":     { "Prototype": "ASh-12, 420 mm",     "RefMm": 420, "C": 0, "CaseMm3": 2590, "BoreMm": 12.70 },
+            "Caliber127x33":     { "Prototype": "SR-2 class, 400 mm", "RefMm": 400, "C": 0, "CaseMm3": 3050, "BoreMm": 12.70 },
+            "Caliber12g":        { "Prototype": "shotgun, 660 mm",    "RefMm": 660, "C": 0, "CaseMm3": 4500, "BoreMm": 18.50 },
+            "Caliber20g":        { "Prototype": "shotgun, 660 mm",    "RefMm": 660, "C": 0, "CaseMm3": 3600, "BoreMm": 15.60 },
+            "Caliber23x75":      { "Prototype": "KS-23, 510 mm",      "RefMm": 510, "C": 0, "CaseMm3": 5000, "BoreMm": 23.00 },
+
+            // --- calibers added by weapon packs; absent installs simply skip them ---
+            "Caliber102x22":     { "Prototype": ".40 S&W, 102 mm",         "RefMm": 102, "C": 0, "CaseMm3": 1030,  "BoreMm": 10.16 },
+            "Caliber11x33R":     { "Prototype": ".44 Magnum, 152 mm",      "RefMm": 152, "C": 0, "CaseMm3": 1720,  "BoreMm": 10.90 },
+            "Caliber792x33":     { "Prototype": "StG-44, 419 mm",          "RefMm": 419, "C": 0, "CaseMm3": 2200,  "BoreMm": 8.20 },
+            "Caliber792x57":     { "Prototype": "Kar98k, 600 mm",          "RefMm": 600, "C": 0, "CaseMm3": 4340,  "BoreMm": 8.20 },
+            "Caliber65x52":      { "Prototype": "Carcano M91, 780 mm",     "RefMm": 780, "C": 0, "CaseMm3": 3170,  "BoreMm": 6.70 },
+            "Caliber762x63":     { "Prototype": ".30-06, 610 mm",          "RefMm": 610, "C": 0, "CaseMm3": 4430,  "BoreMm": 7.82 },
+            "Caliber762x67B":    { "Prototype": ".300 Win Mag, 610 mm",    "RefMm": 610, "C": 0, "CaseMm3": 5570,  "BoreMm": 7.82 },
+            "Caliber6ARC":       { "Prototype": "6mm ARC, 460 mm",         "RefMm": 460, "C": 0, "CaseMm3": 2200,  "BoreMm": 6.17 },
+            "Caliber784x49":     { "Prototype": ".308 Marlin Express, 610 mm", "RefMm": 610, "C": 0, "CaseMm3": 3200, "BoreMm": 7.82 },
+            "Caliber86x63":      { "Prototype": ".338 Norma, 660 mm",      "RefMm": 660, "C": 0, "CaseMm3": 6280,  "BoreMm": 8.60 },
+            "Caliber93x64":      { "Prototype": "9.3x64 Brenneke, 600 mm", "RefMm": 600, "C": 0, "CaseMm3": 5570,  "BoreMm": 9.30 },
+            "Caliber1036x77":    { "Prototype": ".408 CheyTac, 740 mm",    "RefMm": 740, "C": 0, "CaseMm3": 7970,  "BoreMm": 10.36 },
+            "Caliber127x99":     { "Prototype": ".50 BMG, 737 mm",         "RefMm": 737, "C": 0, "CaseMm3": 19000, "BoreMm": 12.95 },
+            "Caliber127x108":    { "Prototype": "12.7x108, 1000 mm",       "RefMm": 1000, "C": 0, "CaseMm3": 21000, "BoreMm": 12.98 },
+            // note the multiplication sign in the key: that is how the pack spells it
+            "Caliber17.8×89":    { "Prototype": ".700 Nitro Express, 610 mm", "RefMm": 610, "C": 0, "CaseMm3": 11000, "BoreMm": 17.80 }
+          },
+
+          // Weapons whose barrel does not come off, so its length cannot be read from a
+          // barrel item. Lengths are the real prototype's. Anything not listed here keeps
+          // its own velocity modifier, clamped, and is printed in the normalization report.
+          "Weapons": {
+            // --- Kalashnikov pattern: the barrel is part of the weapon, the gas block bolts on ---
+            "weapon_izhmash_ak74_545x39":     { "Prototype": "AK-74", "LengthMm": 415 },
+            "weapon_izhmash_ak74m_545x39":    { "Prototype": "AK-74M", "LengthMm": 415 },
+            "weapon_izhmash_ak74n_545x39":    { "Prototype": "AK-74N", "LengthMm": 415 },
+            "weapon_izhmash_aks74_545x39":    { "Prototype": "AKS-74", "LengthMm": 415 },
+            "weapon_izhmash_aks74n_545x39":   { "Prototype": "AKS-74N", "LengthMm": 415 },
+            "weapon_izhmash_aks74u_545x39":   { "Prototype": "AKS-74U", "LengthMm": 206.5 },
+            "weapon_izhmash_aks74un_545x39":  { "Prototype": "AKS-74UN", "LengthMm": 206.5 },
+            "weapon_izhmash_aks74ub_545x39":  { "Prototype": "AKS-74UB", "LengthMm": 206.5 },
+            "weapon_izhmash_ak12_545x39":     { "Prototype": "AK-12", "LengthMm": 415 },
+            "weapon_izhmash_ak105_545x39":    { "Prototype": "AK-105", "LengthMm": 314 },
+            "weapon_izhmash_ak101_556x45":    { "Prototype": "AK-101", "LengthMm": 415 },
+            "weapon_izhmash_ak102_556x45":    { "Prototype": "AK-102", "LengthMm": 314 },
+            "weapon_izhmash_ak103_762x39":    { "Prototype": "AK-103", "LengthMm": 415 },
+            "weapon_izhmash_ak104_762x39":    { "Prototype": "AK-104", "LengthMm": 314 },
+            "weapon_izhmash_akm_762x39":      { "Prototype": "AKM", "LengthMm": 415 },
+            "weapon_izhmash_akmn_762x39":     { "Prototype": "AKMN", "LengthMm": 415 },
+            "weapon_izhmash_akms_762x39":     { "Prototype": "AKMS", "LengthMm": 415 },
+            "weapon_izhmash_akmsn_762x39":    { "Prototype": "AKMSN", "LengthMm": 415 },
+            "weapon_sag_ak545_545x39":        { "Prototype": "SAG AK-545", "LengthMm": 415 },
+            "weapon_sag_ak545_short_545x39":  { "Prototype": "SAG AK-545 Short", "LengthMm": 314 },
+            "weapon_rifle_dynamics_704_762x39": { "Prototype": "RD-704", "LengthMm": 409 },
+            "weapon_molot_akm_vpo_209_366_TKM": { "Prototype": "VPO-209", "LengthMm": 415 },
+            "weapon_molot_vepr_km_vpo_136_762x39": { "Prototype": "VPO-136", "LengthMm": 415 },
+            "weapon_molot_vepr_hunter_vpo-101_762x51": { "Prototype": "VPO-101", "LengthMm": 520 },
+            "weapon_molot_op_sks_762x39":     { "Prototype": "OP-SKS", "LengthMm": 520 },
+
+            // --- submachine guns and machine pistols ---
+            "weapon_izhmash_pp-19-01_9x19":   { "Prototype": "PP-19-01 Vityaz", "LengthMm": 237 },
+            "weapon_izhmash_saiga_9_9x19":    { "Prototype": "Saiga-9", "LengthMm": 237 },
+            "weapon_zis_ppsh41_762x25":       { "Prototype": "PPSh-41", "LengthMm": 269 },
+            "weapon_zmz_pp-91_9x18pm":        { "Prototype": "PP-91 Kedr", "LengthMm": 120 },
+            "weapon_zmz_pp-91-01_9x18pm":     { "Prototype": "PP-91-01 Kedr-B", "LengthMm": 120 },
+            "weapon_tochmash_sr2m_veresk_9x21": { "Prototype": "SR-2M Veresk", "LengthMm": 172 },
+            "weapon_hk_mp5_navy3_9x19":       { "Prototype": "MP5", "LengthMm": 225 },
+            "weapon_hk_mp5_kurtz_9x19":       { "Prototype": "MP5K", "LengthMm": 115 },
+            "weapon_hk_mp7a1_46x30":          { "Prototype": "MP7A1", "LengthMm": 180 },
+            "weapon_hk_mp7a2_46x30":          { "Prototype": "MP7A2", "LengthMm": 180 },
+            "weapon_bt_mp9_9x19":             { "Prototype": "B&T MP9", "LengthMm": 130 },
+            "weapon_bt_mp9n_9x19":            { "Prototype": "B&T MP9-N", "LengthMm": 130 },
+            "weapon_iwi_uzi_9x19":            { "Prototype": "Uzi", "LengthMm": 260 },
+            "weapon_iwi_uzi_pro_pistol_9x19": { "Prototype": "Uzi Pro Pistol", "LengthMm": 114 },
+
+            // --- pistols and revolvers ---
+            "weapon_izhmeh_pm_9x18pm":        { "Prototype": "PM", "LengthMm": 93.5 },
+            "weapon_izhmeh_pm_treaded_9x18pm": { "Prototype": "PM threaded", "LengthMm": 93.5 },
+            "weapon_izhmeh_mp443_9x19":       { "Prototype": "MP-443 Grach", "LengthMm": 112.4 },
+            "weapon_tochmash_pb_9x18pm":      { "Prototype": "PB", "LengthMm": 105 },
+            "weapon_tochmash_sr1mp_9x21":     { "Prototype": "SR-1MP Gyurza", "LengthMm": 120 },
+            "weapon_molot_aps_9x18pm":        { "Prototype": "APS Stechkin", "LengthMm": 140 },
+            "weapon_toz_apb_9x18pm":          { "Prototype": "APB", "LengthMm": 140 },
+            "weapon_tula_tt_762x25":          { "Prototype": "TT-33", "LengthMm": 116 },
+            "weapon_kbp_rsh_12_127x55":       { "Prototype": "RSh-12", "LengthMm": 165 },
+            "weapon_chiappa_rhino_50ds_9x33R": { "Prototype": "Chiappa Rhino 50DS", "LengthMm": 127 },
+
+            // --- rifles, shotguns, machine guns ---
+            "weapon_izhmash_mosin_infantry_762x54": { "Prototype": "Mosin M91/30", "LengthMm": 730 },
+            "weapon_izhmash_sv-98_762x54r":   { "Prototype": "SV-98", "LengthMm": 650 },
+            "weapon_remington_model_700_762x51": { "Prototype": "Remington 700", "LengthMm": 660 },
+            "weapon_accuracy_inernational_axmc_86x70": { "Prototype": "AI AXMC", "LengthMm": 686 },
+            "weapon_ckib_ash_12_127x55":      { "Prototype": "ASh-12.7", "LengthMm": 305 },
+            "weapon_ckib_nsv_utes_127x108":   { "Prototype": "NSV Utes", "LengthMm": 1100 },
+            "weapon_zid_pkm_762x54r":         { "Prototype": "PKM", "LengthMm": 645 },
+            "weapon_zid_rpd_762x39":          { "Prototype": "RPD", "LengthMm": 520 },
+            "weapon_izhmash_saiga12k_10_12g": { "Prototype": "Saiga-12K", "LengthMm": 430 },
+            "weapon_kiba_saiga12k_fa_12g":    { "Prototype": "Saiga-12K FA", "LengthMm": 430 },
+            "weapon_toz_toz-106_20g":         { "Prototype": "TOZ-106", "LengthMm": 200 },
+            "weapon_aklys_defense_velociraptor_762x35": { "Prototype": "Velociraptor 9\"", "LengthMm": 229 }
           },
 
           // Blast anchor: Strength_i = Strength_anchor * (TntG_i / TntG_anchor)^(1/3)

@@ -273,28 +273,45 @@ namespace PLATE.Client.Patches
             var x = EffectiveX(shot); // accounts for armor-induced deformation in this hit
             var frag = (float)AmmoDataCache.GetFrag(shot.Ammo?.TemplateId);
 
-            // overpenetration OR fragmentation: in both cases the energy keeps moving
-            // beyond the chord (as a swarm of fragments) — the part receives the
-            // deposition along the chord. Full deposition only when the bullet stops
-            // (bone / lodged).
-            var exits = shot.IsForwardHit &&
-                        (shot.BulletState == EftBulletClass.EBulletState.DeviationHit ||
-                         shot.BulletState == EftBulletClass.EBulletState.FragmentationHit);
-            var chordMm = exits
-                ? ChordMm(bpc, __instance.HitPoint, __instance.Direction, dia)
-                : -1f; // stopped inside the part: full deposition over L
+            // the path through this part bounds everything: the cavity it can cut and
+            // the energy it can leave behind. Whether the projectile carries on past it
+            // is the drag law's answer, not the game's bullet state
+            var t = PerfTrace.Begin();
+            var chordMm = ChordMm(bpc, __instance.HitPoint, __instance.Direction, dia);
+            PerfTrace.End("wound.chord", t);
 
             var d = ClientWoundModel.Compute(mass, dia, v, x, frag, chordMm, wound);
             var vital = VitalMult(bpc.BodyPartColliderType);
             __instance.Damage = d.DamageHp * vital * DamageScale(bpc.Player as Player);
 
+            var ammo = AmmoLabel(shot);
             Overlay.HitFeed.PushHit(bpc.Player as Player, d.Contact
-                ? $"W {bpc.BodyPartType}: contact {v:0} m/s -> {__instance.Damage:0.#}"
-                : $"W {bpc.BodyPartColliderType}: {v:0} m/s, L {d.ChannelMm:0}" +
-                  (exits ? $"/T {chordMm:0}" : "") +
-                  $" mm, PC {d.Pc:0.#}+TC {d.Tc:0.#}" +
+                ? $"W {ammo} {bpc.BodyPartType}: contact {v:0} m/s -> {__instance.Damage:0.#}"
+                : $"W {ammo} {bpc.BodyPartColliderType}: {v:0}/{shot.InitialSpeed:0} m/s" +
+                  $", L {d.ChannelMm:0}" +
+                  $"/T {chordMm:0} mm, E {d.DepositFrac * 100f:0}%" +
+                  $", PC {d.Pc:0.#}+TC {d.Tc:0.#}" +
                   (vital > 1f ? $" x{vital:0.#}" : "") +
-                  $" -> {__instance.Damage:0.#}" + (exits ? " (through)" : ""));
+                  $" -> {__instance.Damage:0.#}" +
+                  (d.ChannelMm > chordMm ? " (through)" : ""));
+        }
+
+        /// <summary>
+        /// What was fired, for the journal. The template name carries both caliber and
+        /// load ("762x51_M80"); the "patron_" prefix every one of them shares is
+        /// dropped. Reading a hit without knowing the round tells you very little.
+        /// </summary>
+        private static string AmmoLabel(EftBulletClass shot)
+        {
+            var name = shot?.Ammo?.Template?.Name;
+            if (string.IsNullOrEmpty(name))
+            {
+                return "?";
+            }
+
+            return name.StartsWith("patron_", StringComparison.OrdinalIgnoreCase)
+                ? name.Substring("patron_".Length)
+                : name;
         }
 
         /// <summary>
@@ -382,6 +399,19 @@ namespace PLATE.Client.Patches
                 ? null
                 : _victimColliders.GetValue(p,
                     pl => pl.gameObject.GetComponentsInChildren<BodyPartCollider>());
+        }
+
+        /// <summary>
+        /// Builds the collider list for a player before anyone shoots them. The scan
+        /// walks a fully rigged character and is the one piece of per-victim work heavy
+        /// enough to be felt as a hitch, so it must not happen on the frame of a hit.
+        /// Called from the plugin's Update for one player at a time.
+        /// </summary>
+        internal static void WarmVictimColliders(Player p)
+        {
+            var t = PerfTrace.Begin();
+            GetVictimColliders(p);
+            PerfTrace.End("wound.warmColliders", t);
         }
 
         /// <summary>

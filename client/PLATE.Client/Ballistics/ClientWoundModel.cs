@@ -23,6 +23,9 @@ namespace PLATE.Client.Ballistics
             public float Pc;
             public float Tc;
 
+            /// <summary>Share of the projectile's energy left in this part, 0..1.</summary>
+            public float DepositFrac;
+
             /// <summary>Contact branch (v ≤ v_stop): a bruise without a channel.</summary>
             public bool Contact;
         }
@@ -48,9 +51,10 @@ namespace PLATE.Client.Ballistics
         }
 
         /// <summary>
-        /// Energy deposition in a body part. pathMm — the path inside the part
-        /// (collider chord); pathMm ≤ 0 — the projectile stayed in the part
-        /// (bone/stuck): full deposition over L, the chord does not limit it.
+        /// Energy deposition in a body part. pathMm — the path available inside the
+        /// part (collider chord). Whether the projectile leaves the part is not asked:
+        /// the drag law answers it. A channel that ends inside the part deposits
+        /// everything; one that runs past it leaves only what the tissue took.
         /// </summary>
         public static Deposit Compute(float massG, float diaMm, float v, float x,
             float frag, float pathMm, AmmoDataCache.WoundParams p)
@@ -65,10 +69,21 @@ namespace PLATE.Client.Ballistics
                 return new Deposit { DamageHp = budget, Contact = true };
             }
 
-            var path = pathMm > 0f ? Mathf.Min(pathMm, l) : l;
-            var phi = path / l; // share of the path (≈ energy) left in the part
-
             var area = Mathf.PI * diaMm * diaMm / 4f;
+
+            // the wound channel ends where the body ends: a bullet stopped by bone
+            // does not carve a metre of cavity through a 250 mm chest
+            var path = pathMm > 0f ? Mathf.Min(pathMm, l) : l;
+
+            // energy left behind: quadratic drag gives v(s) = v·exp(-s/lambda), so the
+            // tissue keeps 1-(v_out/v)² of the energy. No separate "it stopped" branch —
+            // when the channel ends inside the part, path is the whole channel and this
+            // already comes out at ~1. Asking the game whether a child bullet was
+            // spawned instead handed full muzzle energy to a part that was only clipped.
+            var lambda = Mathf.Max((float)p.GelDepthK * (massG / Mathf.Max(area, 1e-3f)) *
+                                   (1f - (float)p.ExpansionDepthFactor * x), 1e-3f);
+            var phi = 1f - Mathf.Exp(-2f * path / lambda);
+
             var areaEff = area * (1f + (float)p.ExpansionAreaFactor * x);
             var pc = areaEff * path / (float)p.WoundVolumePerHp;
 
@@ -83,6 +98,7 @@ namespace PLATE.Client.Ballistics
                 ChannelMm = l,
                 Pc = pc,
                 Tc = tc,
+                DepositFrac = phi,
             };
         }
     }

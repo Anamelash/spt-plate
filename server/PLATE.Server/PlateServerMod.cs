@@ -18,6 +18,7 @@ public class PlateServerMod(
     DatabaseServer databaseServer,
     ModHelper modHelper,
     Services.AmmoNormalizer ammoNormalizer,
+    Services.BarrelNormalizer barrelNormalizer,
     Services.GrenadePhysics grenadePhysics,
     Services.BloodGlobals bloodGlobals,
     Services.TransfusionItem transfusionItem,
@@ -34,6 +35,11 @@ public class PlateServerMod(
         if (config.Modules.AmmoNormalizer)
         {
             ammoNormalizer.Run(config, modPath); // ammo normalization (incl. mod-added rounds)
+        }
+
+        if (config.Modules.BarrelNormalizer)
+        {
+            barrelNormalizer.Run(config, modPath); // muzzle velocity from barrel length
         }
 
         if (config.Modules.GrenadePhysics)
@@ -58,6 +64,7 @@ public class PlateServerMod(
         var applied = new[]
             {
                 ammoNormalizer.Summary,
+                barrelNormalizer.Summary,
                 grenadePhysics.Summary,
                 bloodGlobals.Summary,
                 transfusionItem.Summary,
@@ -81,6 +88,10 @@ public class PlateServerMod(
             File.WriteAllText(path, DefaultConfigJsonc);
             logger.Debug($"[PLATE] Config not found, default written to {path}");
         }
+        else
+        {
+            MigrateConfigText(path);
+        }
 
         try
         {
@@ -100,6 +111,35 @@ public class PlateServerMod(
         }
     }
 
+    /// <summary>
+    /// Retired defaults in an existing config. A value is only rewritten when it still
+    /// holds the old default — a value the user picked is theirs. Surgical text edits
+    /// rather than a rewrite: the file is hand-edited jsonc and the comments in it are
+    /// the documentation.
+    /// </summary>
+    private void MigrateConfigText(string path)
+    {
+        try
+        {
+            var text = File.ReadAllText(path);
+            var before = text;
+
+            // the card's reference shot got a definition: a perpendicular hit into the
+            // chest of a gelatin manikin, 250 mm, instead of an unlabelled 350 mm
+            text = text.Replace("\"BodyDepthMm\": 350", "\"BodyDepthMm\": 250");
+
+            if (text != before)
+            {
+                File.WriteAllText(path, text);
+                logger.Debug($"[PLATE] {ConfigFileName}: retired defaults updated");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.Warning($"[PLATE] Could not update {ConfigFileName}: {ex.Message}");
+        }
+    }
+
     /// <summary>Config template with a comment on every parameter.</summary>
     private const string DefaultConfigJsonc =
         """
@@ -107,6 +147,10 @@ public class PlateServerMod(
           "Modules": {
             // Ammo normalization (including mod-added rounds)
             "AmmoNormalizer": true,
+            // Muzzle velocity recomputed from barrel length (Le Duc, calibrated against
+            // published barrel-length ladders). Weapon packs and live-values backports
+            // ship modifiers that are not physical, and they feed straight into damage.
+            "BarrelNormalizer": true,
             // Grenade fragments/blast brought to prototype specs (ammo-reference.jsonc)
             "GrenadePhysics": true,
             // Globals tweaks for the blood system: bleedings no longer damage HP
@@ -115,6 +159,20 @@ public class PlateServerMod(
             "BloodGlobals": true,
             // GOST armor classes (helmets >=4 -> 3). Low priority, disabled.
             "GostArmor": false
+          },
+
+          // ===== Barrels: v = v_inf*L/(L+C), Le Duc =====
+          // Reference barrels and C per caliber live in ammo-reference.jsonc; these are
+          // the guard rails. Anything the model cannot handle is left alone and listed
+          // in plate-barrel-report.md.
+          "BarrelNormalizer": {
+            // Range of name-derived lengths treated as a barrel, mm
+            "MinLengthMm": 100,
+            "MaxLengthMm": 900,
+            // The model does not produce modifiers past this; one means bad input
+            "MaxPercent": 45,
+            // Muzzle devices and suppressors: a brake shifts velocity by a hair
+            "DeviceClampPercent": 2
           },
 
           "AmmoNormalizer": {
@@ -128,8 +186,10 @@ public class PlateServerMod(
             // Expansion: shortens the channel (1−cX·X) and widens the cross-section A·(1+eX·X)
             "ExpansionDepthFactor": 0.4,
             "ExpansionAreaFactor": 1.35,
-            // Body (torso) thickness, mm — the channel deposits nothing beyond it
-            "BodyDepthMm": 350,
+            // Reference shot the card damage is quoted for: perpendicular hit into the
+            // centre of the chest of a gelatin manikin at 5 m. 250 mm is the chest depth
+            // of an adult male. In a raid the path is the real collider chord instead.
+            "BodyDepthMm": 250,
             // Permanent cavity: mm³ of channel volume per 1 HP. Anchor: 9x19 PST -> ~54
             "WoundVolumePerHp": 710,
             // Temporary pulsating cavity: eff = 1/(1+exp(−(v−center)/width)) —

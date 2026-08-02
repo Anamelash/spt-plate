@@ -246,6 +246,14 @@ namespace PLATE.Client.Patches
                 return;
             }
 
+            // bleedings still call ApplyDamage every tick with zero damage (their HP
+            // damage is disabled — the blood system drains volume instead), and logging
+            // those turned a third of the journal into unchanged repeats
+            if (damage > 0f)
+            {
+                LogHealthAfterHit(__instance);
+            }
+
             var dt = damageInfo.DamageType;
             if (dt == EDamageType.Explosion)
             {
@@ -301,6 +309,60 @@ namespace PLATE.Client.Patches
             {
                 LogError(nameof(GuaranteedBleedPostfix), ex);
             }
+        }
+
+        private static readonly Dictionary<string, int> LastHealthLogFrame =
+            new Dictionary<string, int>();
+
+        private static readonly EBodyPart[] HealthParts =
+        {
+            EBodyPart.Head, EBodyPart.Chest, EBodyPart.Stomach,
+            EBodyPart.LeftArm, EBodyPart.RightArm, EBodyPart.LeftLeg, EBodyPart.RightLeg,
+        };
+
+        /// <summary>
+        /// Where the target's health actually stands after a hit. Without it a report of
+        /// "he ate ten rounds" cannot be told apart from "the rounds landed somewhere
+        /// that does not kill" — the damage numbers alone do not say which. One line per
+        /// victim per frame: a single shot walks several colliders and would otherwise
+        /// print a wall.
+        /// </summary>
+        private static void LogHealthAfterHit(ActiveHealthController ahc)
+        {
+            var player = ahc?.Player;
+            if (player?.ProfileId == null)
+            {
+                return;
+            }
+
+            var frame = Time.frameCount;
+            if (LastHealthLogFrame.TryGetValue(player.ProfileId, out var last) && last == frame)
+            {
+                return;
+            }
+
+            LastHealthLogFrame[player.ProfileId] = frame;
+
+            var sb = new System.Text.StringBuilder();
+            sb.Append("  HP ").Append(Overlay.OverlayHud.NameOf(player)).Append(':');
+
+            var cur = 0f;
+            var max = 0f;
+            foreach (var part in HealthParts)
+            {
+                var h = ahc.GetBodyPartHealth(part);
+                cur += h.Current;
+                max += h.Maximum;
+                if (h.Current < h.Maximum)
+                {
+                    sb.Append(' ').Append(part).Append(' ')
+                        .Append(h.Current.ToString("0")).Append('/')
+                        .Append(h.Maximum.ToString("0"));
+                }
+            }
+
+            sb.Append("  = ").Append(cur.ToString("0")).Append('/').Append(max.ToString("0"));
+            Overlay.HitFeed.PushPanel(sb.ToString());
         }
 
         /// <summary>Timestamp of the last barotrauma roll per player (an explosion hits
@@ -721,12 +783,28 @@ namespace PLATE.Client.Patches
 
         // --- 5. Death — remove from tracking ---
 
-        private static void KillPostfix(ActiveHealthController __instance)
+        /// <summary>
+        /// Every death funnels through the health controller, including the ones our own
+        /// blood system causes. Player.OnDead looks like the more universal hook but
+        /// cannot be detoured — the patch self-test rejects it — and an unproven hook
+        /// that silently never fires is exactly how a release ships a dead feature.
+        ///
+        /// Without a death line the journal shows hit after hit and never says whether
+        /// the target went down, which is the whole question behind any "he tanked ten
+        /// rounds" report.
+        /// </summary>
+        private static void KillPostfix(ActiveHealthController __instance, EDamageType damageType)
         {
             PatchStats.Hit(nameof(KillPostfix));
             try
             {
-                PlateBloodManager.MarkDead(__instance.Player?.ProfileId);
+                var player = __instance.Player;
+                PlateBloodManager.MarkDead(player?.ProfileId);
+                if (player != null)
+                {
+                    Overlay.HitFeed.PushPanel(
+                        $"{Overlay.OverlayHud.NameOf(player)} DEAD ({damageType})");
+                }
             }
             catch
             {

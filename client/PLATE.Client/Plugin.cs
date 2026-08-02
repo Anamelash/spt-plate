@@ -105,16 +105,52 @@ namespace PLATE.Client
             HitFeed.FlushTick(UnityEngine.Time.time);
 
             // raid end: dump the hook telemetry while the session is still fresh
-            var inRaid = Comfort.Common.Singleton<EFT.GameWorld>.Instance != null;
+            var world = Comfort.Common.Singleton<EFT.GameWorld>.Instance;
+            var inRaid = world != null;
             if (_wasInRaid && !inRaid)
             {
                 HitFeed.WriteHookReport();
+                _warmed.Clear();
             }
 
             _wasInRaid = inRaid;
+
+            if (inRaid)
+            {
+                WarmOneVictim(world);
+            }
         }
 
         private bool _wasInRaid;
+
+        private readonly HashSet<string> _warmed = new HashSet<string>();
+
+        /// <summary>
+        /// A victim's hitbox list is built by walking their whole rig — the one piece of
+        /// per-target work heavy enough to be felt, and it used to land on the frame of
+        /// the first hit on them. Done here instead: one player per frame, so the scans
+        /// never bunch up and are finished long before anyone gets shot.
+        /// </summary>
+        private void WarmOneVictim(EFT.GameWorld world)
+        {
+            var players = world.AllAlivePlayersList;
+            if (players == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < players.Count; i++)
+            {
+                var p = players[i];
+                if (p == null || p.ProfileId == null || !_warmed.Add(p.ProfileId))
+                {
+                    continue;
+                }
+
+                BallisticsPatches.WarmVictimColliders(p);
+                return;
+            }
+        }
 
         private void OnDestroy()
         {

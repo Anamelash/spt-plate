@@ -343,11 +343,18 @@ public class AmmoNormalizer(
                           "the client-side physics model enabled, the actual damage and penetration " +
                           "are computed at the moment of impact from the projectile state.");
             sb.AppendLine();
+            sb.AppendLine($"**Reference shot for the Damage column:** perpendicular hit into the centre " +
+                          $"of the chest of a gelatin manikin at 5 m — {a.BodyDepthMm} mm of tissue " +
+                          "(anteroposterior chest depth of an adult male), muzzle velocity, no " +
+                          "obliquity. A real hit deposits along the collider chord it actually " +
+                          "crosses, so a graze does far less and a diagonal through the whole torso " +
+                          "does more.");
+            sb.AppendLine();
         }
 
         sb.AppendLine(a.WoundChannelModel
             ? $"Total: {recs.Count}. Wound channel model: depth K={a.GelDepthK}·(m/A)·ln(v/{a.GelStopVelocity})·(1−{a.ExpansionDepthFactor}X), " +
-              $"body {a.BodyDepthMm} mm, PC: A·(1+{a.ExpansionAreaFactor}X)·Lb/{a.WoundVolumePerHp} mm³/HP; " +
+              $"manikin {a.BodyDepthMm} mm, PC: A·(1+{a.ExpansionAreaFactor}X)·Lb/{a.WoundVolumePerHp} mm³/HP; " +
               $"TC: sigmoid(v; {a.TcVelocityCenter}±{a.TcVelocityWidth})·E·φ·(1+{a.TcFragBonus}·frag)/{a.TcEnergyPerHp} J/HP; " +
               $"budget E0/{a.EnergyCapPerHp}. blend(pen)={a.PenetrationBlend}, PdmMax={a.PdmMax}"
             : $"Total: {recs.Count}. EnergyPerHp={a.EnergyPerHp}, blend(pen)={a.PenetrationBlend}, " +

@@ -41,7 +41,14 @@ public static class WoundModel
             a.GelDepthK * sd * Math.Log(vRatio) * (1 - a.ExpansionDepthFactor * x), 1);
 
         var inBody = Math.Min(depth, a.BodyDepthMm);       // portion of the channel inside the body
-        var phi = inBody / depth;                          // ≈ fraction of energy left in the body
+
+        // Fraction of energy left in the body. The same quadratic drag that gives the
+        // log depth gives v(s) = v·exp(-s/lambda), so a projectile that exits leaves
+        // 1-(v_out/v)² behind; one that stops inside leaves all of it. The share of
+        // the PATH is not the share of the ENERGY — a rifle bullet loses most of its
+        // energy in the first hand's width of tissue.
+        var lambda = Math.Max(a.GelDepthK * sd * (1 - a.ExpansionDepthFactor * x), 1e-3);
+        var phi = 1 - Math.Exp(-2 * inBody / lambda);
 
         // Permanent cavity: channel volume including expansion/tumbling
         var areaEff = area * (1 + a.ExpansionAreaFactor * x);
