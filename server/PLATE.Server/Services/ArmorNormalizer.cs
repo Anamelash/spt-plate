@@ -112,7 +112,7 @@ public class ArmorNormalizer(
             // a plate the game invented has no product to look up, but there is a real
             // plate of the same rating doing the same job, and that is what it stands in
             // for. Mass only decides it when even that is missing
-            var byClass = spec == null ? ClassReference(reference, material, cls) : null;
+            var byClass = spec == null ? ClassReference(reference, itemName, material, cls) : null;
             var derived = spec == null && byClass == null
                 ? DeriveThickness(itemName, p, material, reference)
                 : 0;
@@ -218,11 +218,20 @@ public class ArmorNormalizer(
         return hardGrams / (densityGMm3 * areaMm2);
     }
 
-    /// <summary>The real plate of this rating, or null when we have not named one.</summary>
+    /// <summary>
+    /// The real armour of this rating, or null when we have not named one. A plate and
+    /// a soft package of the same rating are different objects — 20 mm of monolithic
+    /// polyethylene against 9 mm of helmet shell — so which table answers depends on
+    /// which the item is.
+    /// </summary>
     private static ReferenceBook.ArmorPlateRef? ClassReference(
-        ReferenceBook.AmmoReference reference, string material, int cls)
+        ReferenceBook.AmmoReference reference, string itemName, string material, int cls)
     {
-        return reference.ArmorByClass.TryGetValue($"{material}/{cls}", out var r) ? r : null;
+        var table = itemName.StartsWith("item_equipment_plate_", StringComparison.OrdinalIgnoreCase)
+            ? reference.ArmorByClass
+            : reference.SoftArmor;
+
+        return table.TryGetValue($"{material}/{cls}", out var r) ? r : null;
     }
 
     /// <summary>Drops the shared prefix so the report reads as plate names.</summary>

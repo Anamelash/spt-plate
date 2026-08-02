@@ -263,6 +263,57 @@ public class ReferenceBookTests
     }
 
     /// <summary>
+    /// A woven package is not a plate. Every rating the game gives soft armour and
+    /// helmet shells needs an entry in their own table, or those items fall through to
+    /// a plate's thickness — a class 3 polyethylene plate is 20 mm and a class 3
+    /// polyethylene helmet shell is nine, and handing the shell the plate's figure
+    /// would make a helmet twice the armour it is.
+    /// </summary>
+    [Fact]
+    public void Soft_armour_and_helmet_shells_have_their_own_reference()
+    {
+        var soft = Shipped().SoftArmor;
+        var plates = Shipped().ArmorByClass;
+
+        string[] shipped =
+        [
+            "Aramid/1", "Aramid/2", "Aramid/3", "Aramid/4", "Aramid/5", "Aramid/6",
+            "UHMWPE/1", "UHMWPE/2", "UHMWPE/3", "UHMWPE/4", "UHMWPE/5", "UHMWPE/6",
+            "ArmoredSteel/2", "ArmoredSteel/3", "ArmoredSteel/4", "ArmoredSteel/5", "ArmoredSteel/6",
+            "Titan/2", "Titan/3", "Titan/4", "Titan/5", "Titan/6",
+            "Combined/3", "Combined/4", "Combined/5", "Combined/6",
+            "Ceramic/4", "Ceramic/5", "Ceramic/6",
+            "Aluminium/3", "Aluminium/4",
+            "Glass/1", "Glass/2", "Glass/3", "Glass/4",
+        ];
+
+        foreach (var key in shipped)
+        {
+            Assert.True(soft.ContainsKey(key), $"no soft-armour reference for {key}");
+            Assert.InRange(soft[key].ThicknessMm, 2, 20);
+        }
+
+        // and it must actually differ from the plate table where both exist, otherwise
+        // splitting them bought nothing
+        Assert.True(soft["UHMWPE/3"].ThicknessMm < plates["UHMWPE/3"].ThicknessMm / 2);
+    }
+
+    /// <summary>
+    /// Woven aramid stops pistol rounds and fragments — the 6B5 chest package is 30
+    /// layers of TSVM-DZh, about 8 mm, and everything the game rates higher is the same
+    /// fabric a little thicker. The class number cannot lift that ceiling any more than
+    /// it can for a polycarbonate visor.
+    /// </summary>
+    [Fact]
+    public void A_woven_pack_never_gets_a_plate_thickness()
+    {
+        foreach (var (key, armour) in Shipped().SoftArmor.Where(kv => kv.Key.StartsWith("Aramid/")))
+        {
+            Assert.InRange(armour.ThicknessMm, 2, 13);
+        }
+    }
+
+    /// <summary>
     /// A visor is polycarbonate and triplex, and that material stops pistol rounds and
     /// fragments — no class number changes what it is made of. The heaviest one in the
     /// game is 1.8 kg, about 14 mm of laminate over a face; a rifle-proof visor would be

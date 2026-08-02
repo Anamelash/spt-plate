@@ -171,6 +171,13 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         public Dictionary<string, ArmorPlateRef> ArmorByClass { get; set; } = new();
 
         /// <summary>
+        /// Same key, for armour that is not a plate: the soft package sewn into a vest
+        /// and the shell of a helmet. A woven pack of a given rating is nothing like a
+        /// monolithic plate of it, so they cannot share one table.
+        /// </summary>
+        public Dictionary<string, ArmorPlateRef> SoftArmor { get; set; } = new();
+
+        /// <summary>
         /// Key — the weapon template's _name. Only for weapons whose barrel does not
         /// come off, so its length cannot be read from a barrel item.
         /// </summary>
@@ -284,6 +291,12 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         {
             loaded.ArmorByClass = Shipped().ArmorByClass;
             filled.Add(nameof(loaded.ArmorByClass));
+        }
+
+        if (loaded.SoftArmor.Count == 0)
+        {
+            loaded.SoftArmor = Shipped().SoftArmor;
+            filled.Add(nameof(loaded.SoftArmor));
         }
 
         return filled;
@@ -552,11 +565,60 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "Glass/2":        { "Prototype": "visor, pistol-rated",    "ThicknessMm": 8.0 },
             "Glass/3":        { "Prototype": "heavy visor",            "ThicknessMm": 11.0 },
             "Glass/4":        { "Prototype": "heaviest visor made",    "ThicknessMm": 14.0,
-                                "Source": "1.8 kg of laminate over a face" },
-            "Aramid/3":       { "Prototype": "aramid pack, Br3",       "ThicknessMm": 12.0 },
-            "Aramid/4":       { "Prototype": "aramid pack, Br4",       "ThicknessMm": 16.0 },
-            "Aramid/5":       { "Prototype": "aramid pack, Br5",       "ThicknessMm": 20.0 },
-            "Aramid/6":       { "Prototype": "aramid pack, Br6",       "ThicknessMm": 24.0 }
+                                "Source": "1.8 kg of laminate over a face" }
+          },
+
+          // ===== Soft armour and helmet shells =====
+          // Everything that is not a plate: the woven package sewn into a vest, and the
+          // shell of a helmet. Same key, separate table, because a pack of a given
+          // rating is nothing like a monolithic plate of it — a class 3 polyethylene
+          // plate is 20 mm, a class 3 polyethylene helmet shell is nine.
+          //
+          // These materials also have a ceiling the class number cannot lift. A woven
+          // pack stops pistol rounds and fragments; the 6B5 chest package is 30 layers
+          // of TSVM-DZh, about 8 mm, and everything the game rates higher is the same
+          // fabric a little thicker. That is why the numbers here stop climbing where
+          // real ones do, and let the model conclude the rest.
+          "SoftArmor": {
+            "Aramid/1":       { "Prototype": "light aramid pack",      "ThicknessMm": 3.0 },
+            "Aramid/2":       { "Prototype": "aramid pack, pistol",    "ThicknessMm": 5.0 },
+            "Aramid/3":       { "Prototype": "30-layer TSVM-DZh",      "ThicknessMm": 8.0,
+                                "Source": "the 6B5 chest package" },
+            "Aramid/4":       { "Prototype": "heavy aramid pack",      "ThicknessMm": 10.0 },
+            "Aramid/5":       { "Prototype": "aramid helmet shell",    "ThicknessMm": 11.0 },
+            "Aramid/6":       { "Prototype": "thickest aramid shell",  "ThicknessMm": 12.0 },
+
+            "UHMWPE/1":       { "Prototype": "light UHMWPE pack",      "ThicknessMm": 4.0 },
+            "UHMWPE/2":       { "Prototype": "UHMWPE pack, pistol",    "ThicknessMm": 6.0 },
+            "UHMWPE/3":       { "Prototype": "UHMWPE helmet shell",    "ThicknessMm": 9.0 },
+            "UHMWPE/4":       { "Prototype": "heavy UHMWPE shell",     "ThicknessMm": 11.0 },
+            "UHMWPE/5":       { "Prototype": "thick UHMWPE shell",     "ThicknessMm": 13.0 },
+            "UHMWPE/6":       { "Prototype": "thickest UHMWPE shell",  "ThicknessMm": 15.0 },
+
+            // hard shells worn as helmets rather than carried as plates
+            "ArmoredSteel/2": { "Prototype": "steel helmet shell",     "ThicknessMm": 3.0 },
+            "ArmoredSteel/3": { "Prototype": "steel helmet shell",     "ThicknessMm": 4.0 },
+            "ArmoredSteel/4": { "Prototype": "steel helmet shell",     "ThicknessMm": 5.0 },
+            "ArmoredSteel/5": { "Prototype": "heavy steel shell",      "ThicknessMm": 6.0 },
+            "ArmoredSteel/6": { "Prototype": "thickest steel shell",   "ThicknessMm": 7.0 },
+            "Titan/2":        { "Prototype": "titanium shell",         "ThicknessMm": 3.0 },
+            "Titan/3":        { "Prototype": "titanium shell",         "ThicknessMm": 4.5 },
+            "Titan/4":        { "Prototype": "titanium shell",         "ThicknessMm": 6.5 },
+            "Titan/5":        { "Prototype": "heavy titanium shell",   "ThicknessMm": 8.0 },
+            "Titan/6":        { "Prototype": "thickest titanium shell", "ThicknessMm": 10.0 },
+            "Aluminium/3":    { "Prototype": "aluminium shell",        "ThicknessMm": 12.0 },
+            "Aluminium/4":    { "Prototype": "aluminium shell",        "ThicknessMm": 15.0 },
+            "Combined/3":     { "Prototype": "composite shell",        "ThicknessMm": 8.0 },
+            "Combined/4":     { "Prototype": "composite shell",        "ThicknessMm": 10.0 },
+            "Combined/5":     { "Prototype": "heavy composite shell",  "ThicknessMm": 12.0 },
+            "Combined/6":     { "Prototype": "thickest composite shell", "ThicknessMm": 14.0 },
+            "Ceramic/4":      { "Prototype": "ceramic shell",          "ThicknessMm": 7.0 },
+            "Ceramic/5":      { "Prototype": "ceramic shell",          "ThicknessMm": 8.5 },
+            "Ceramic/6":      { "Prototype": "thickest ceramic shell", "ThicknessMm": 10.0 },
+            "Glass/1":        { "Prototype": "shooting glasses",       "ThicknessMm": 4.0 },
+            "Glass/2":        { "Prototype": "visor, pistol-rated",    "ThicknessMm": 8.0 },
+            "Glass/3":        { "Prototype": "heavy visor",            "ThicknessMm": 11.0 },
+            "Glass/4":        { "Prototype": "heaviest visor made",    "ThicknessMm": 14.0 }
           },
 
           // Blast anchor: Strength_i = Strength_anchor * (TntG_i / TntG_anchor)^(1/3)
