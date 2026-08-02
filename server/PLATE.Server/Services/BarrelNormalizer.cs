@@ -282,6 +282,30 @@ public class BarrelNormalizer(
             .ToDictionary(kv => kv.Key, kv => kv.Value.First());
     }
 
+    /// <summary>Most-voted caliber, or null on a dead heat — a tie teaches nothing.</summary>
+    private static string? Majority(Dictionary<string, int> votes)
+    {
+        string? best = null;
+        var bestCount = 0;
+        var tied = false;
+
+        foreach (var (caliber, count) in votes)
+        {
+            if (count > bestCount)
+            {
+                best = caliber;
+                bestCount = count;
+                tied = false;
+            }
+            else if (count == bestCount)
+            {
+                tied = true;
+            }
+        }
+
+        return tied ? null : best;
+    }
+
     private static double ParseLength(string name)
     {
         var m = LengthInName.Match(name);
@@ -290,13 +314,18 @@ public class BarrelNormalizer(
 
     /// <summary>
     /// Barrels carry no caliber of their own, so it comes from the weapons they fit:
-    /// every weapon declares one, and its slot tree reaches its barrels. A barrel that
-    /// somehow fits two calibers is left out rather than guessed at.
+    /// every weapon declares one, and its slot tree reaches its barrels.
+    ///
+    /// Fitting several calibers is the norm rather than an anomaly — an AR-15 upper
+    /// takes 5.56 and .300 BLK barrels alike, and the same 260 mm barrel is listed by
+    /// weapons of both. The item still carries a single velocity modifier whatever is
+    /// loaded into it, so one caliber has to be picked, and the defensible pick is
+    /// whichever most of the weapons that can mount it are chambered for.
     /// </summary>
     private static Dictionary<MongoId, string> MapBarrelsToCalibers(
         Dictionary<MongoId, TemplateItem> items, out HashSet<MongoId> weaponsWithBarrels)
     {
-        var found = new Dictionary<MongoId, HashSet<string>>();
+        var found = new Dictionary<MongoId, Dictionary<string, int>>();
         var withBarrels = new HashSet<MongoId>();
 
         foreach (var weapon in items.Values)
@@ -310,20 +339,21 @@ public class BarrelNormalizer(
             foreach (var id in BarrelsUnder(weapon, items))
             {
                 withBarrels.Add(weapon.Id);
-                if (!found.TryGetValue(id, out var set))
+                if (!found.TryGetValue(id, out var votes))
                 {
-                    set = new HashSet<string>();
-                    found[id] = set;
+                    votes = new Dictionary<string, int>();
+                    found[id] = votes;
                 }
 
-                set.Add(caliber);
+                votes[caliber] = votes.TryGetValue(caliber, out var n) ? n + 1 : 1;
             }
         }
 
         weaponsWithBarrels = withBarrels;
         return found
-            .Where(kv => kv.Value.Count == 1)
-            .ToDictionary(kv => kv.Key, kv => kv.Value.First());
+            .Select(kv => new { kv.Key, Best = Majority(kv.Value) })
+            .Where(x => x.Best != null)
+            .ToDictionary(x => x.Key, x => x.Best!);
     }
 
     /// <summary>

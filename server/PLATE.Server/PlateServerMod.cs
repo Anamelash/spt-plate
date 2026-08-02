@@ -166,9 +166,9 @@ public class PlateServerMod(
           // the guard rails. Anything the model cannot handle is left alone and listed
           // in plate-barrel-report.md.
           "BarrelNormalizer": {
-            // Range of name-derived lengths treated as a barrel, mm
-            "MinLengthMm": 100,
-            "MaxLengthMm": 900,
+            // Range of lengths treated as a barrel, mm (a PM is 93.5, an NSV is 1100)
+            "MinLengthMm": 80,
+            "MaxLengthMm": 1200,
             // The model does not produce modifiers past this; one means bad input
             "MaxPercent": 45,
             // Muzzle devices and suppressors: a brake shifts velocity by a hair

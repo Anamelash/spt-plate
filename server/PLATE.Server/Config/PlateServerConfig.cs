@@ -41,11 +41,11 @@ public class PlateServerConfig
     /// </summary>
     public class BarrelSection
     {
-        /// <summary>Shortest name-derived length treated as a barrel, mm.</summary>
-        public double MinLengthMm { get; set; } = 100;
+        /// <summary>Shortest length treated as a barrel, mm. A PM's is 93.5.</summary>
+        public double MinLengthMm { get; set; } = 80;
 
-        /// <summary>Longest, mm. Past this the number in the name is not a barrel length.</summary>
-        public double MaxLengthMm { get; set; } = 900;
+        /// <summary>Longest, mm. An NSV's is 1100; past this the number is not a length.</summary>
+        public double MaxLengthMm { get; set; } = 1200;
 
         /// <summary>
         /// Modifiers beyond this are not produced by the model, so one means the input
