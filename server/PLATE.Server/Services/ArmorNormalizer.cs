@@ -35,9 +35,13 @@ public class ArmorNormalizer(
 
     private readonly Dictionary<string, double> _thickness = new();
 
-    /// <summary>"6b5-16_level3_soft_armor_front" and "..._5class_back" both name a product.</summary>
+    /// <summary>
+    /// "6b5-16_level3_soft_armor_front" and "granit4_5class_back" both name a product.
+    /// No word boundary after the marker: what follows it is an underscore, which is a
+    /// word character, so \b never matches there and the cut silently never happens.
+    /// </summary>
     private static readonly Regex ProductCut =
-        new(@"_(level\d|\d+\s*class)\b.*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        new(@"_(level\d+|\d+\s*class).*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private sealed class Row
     {
@@ -127,7 +131,7 @@ public class ArmorNormalizer(
     /// vest's front, back, side and groin are the same plate, and naming them
     /// separately in the reference would be four ways to get the same figure wrong.
     /// </summary>
-    private static string Product(string name)
+    public static string Product(string name)
     {
         const string platePrefix = "item_equipment_plate_";
         if (name.StartsWith(platePrefix, StringComparison.OrdinalIgnoreCase))
