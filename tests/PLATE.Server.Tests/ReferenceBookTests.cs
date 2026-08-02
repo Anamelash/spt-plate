@@ -38,9 +38,111 @@ public class ReferenceBookTests
         var r = Shipped();
 
         Assert.NotEmpty(r.Shotshells);
+        Assert.NotEmpty(r.Bullets);
         Assert.NotEmpty(r.Grenades);
         Assert.NotEmpty(r.Barrels);
         Assert.NotEmpty(r.Weapons);
+    }
+
+    [Fact]
+    public void Every_bullet_is_a_fraction_of_itself()
+    {
+        foreach (var (name, b) in Shipped().Bullets)
+        {
+            Assert.True(b.X is >= 0 and <= 1,
+                $"{name}: X={b.X} is not a fraction of the bullet");
+            Assert.True(b.CoreAreaFrac is >= 0 and <= 1,
+                $"{name}: core area {b.CoreAreaFrac} is not a fraction of the bullet");
+            Assert.True(b.CoreMassFrac is >= 0 and <= 1,
+                $"{name}: core mass {b.CoreMassFrac} is not a fraction of the bullet");
+            Assert.False(string.IsNullOrWhiteSpace(b.Prototype),
+                $"{name}: an entry with no prototype says nothing the statistic would not");
+        }
+    }
+
+    /// <summary>
+    /// A core is a claim about the inside of a bullet, so it has to be sourced. The rule
+    /// the book states is stricter than "write something down": an area fraction below 1
+    /// means the core is hard enough to keep its shape against a plate, and that is the
+    /// line between the M855 and the M855A1.
+    /// </summary>
+    [Fact]
+    public void Every_published_core_says_where_it_came_from()
+    {
+        var cored = 0;
+        foreach (var (name, b) in Shipped().Bullets)
+        {
+            if (b.CoreAreaFrac <= 0 && b.CoreMassFrac <= 0)
+            {
+                continue;
+            }
+
+            cored++;
+            Assert.False(string.IsNullOrWhiteSpace(b.Source),
+                $"{name}: a core fraction with no source behind it");
+            Assert.True(b.X < 0.5,
+                $"{name}: X={b.X} says the bullet is soft, the core fractions say it is not");
+        }
+
+        Assert.True(cored >= 15, $"only {cored} bullets carry a published construction");
+    }
+
+    /// <summary>
+    /// The two tungsten-carbide cores whose geometry is published by different makers in
+    /// different calibres — M993 and 7N37 — should land on the same fraction of their
+    /// bullet's face. They do, and that is the only reason to trust the ones derived
+    /// from a mass and a length.
+    /// </summary>
+    [Fact]
+    public void The_two_carbide_cores_agree_with_each_other()
+    {
+        var bullets = Shipped().Bullets;
+        var m993 = bullets["patron_762x51_m993"].CoreAreaFrac;
+        var r7n37 = bullets["patron_762x54r_7n37"].CoreAreaFrac;
+
+        Assert.True(Math.Abs(m993 - r7n37) < 0.1,
+            $"the carbide cores disagree: M993 {m993:0.00} against 7N37 {r7n37:0.00}");
+    }
+
+    /// <summary>
+    /// The M855 and the M855A1 are the same cartridge, the same bullet weight and the
+    /// same calibre; the difference between them is that one core is 40 HRC and the
+    /// other 58. If the book ever stops saying so, the model has lost the distinction
+    /// that the whole core mechanic exists to carry.
+    /// </summary>
+    [Fact]
+    public void A_soft_penetrator_gets_no_concentration()
+    {
+        var bullets = Shipped().Bullets;
+
+        Assert.Equal(1.0, bullets["patron_556x45_M855"].CoreAreaFrac);
+        Assert.True(bullets["patron_556x45_M855"].CoreMassFrac > 0,
+            "the M855 still loses everything but its tip going through a plate");
+
+        Assert.True(bullets["patron_556x45_M855A1"].CoreAreaFrac is > 0.4 and < 0.7,
+            "the M855A1's hardened tip concentrates and the book should say by how much");
+    }
+
+    /// <summary>
+    /// Both fractions or neither, spelled out. The first run of this table left the area
+    /// off the soft-cored rounds meaning "no concentration", the loader read a missing
+    /// area as "same as the mass", and the M855 came out of the normalizer with a
+    /// sixfold concentration and the highest penetration in the game.
+    /// </summary>
+    [Fact]
+    public void A_core_mass_without_an_area_beside_it_is_an_invitation_to_guess()
+    {
+        foreach (var (name, b) in Shipped().Bullets)
+        {
+            if (b.CoreMassFrac <= 0)
+            {
+                continue;
+            }
+
+            Assert.True(b.CoreAreaFrac > 0,
+                $"{name}: a core mass with no area fraction next to it - say 1.0 if the " +
+                "core is too soft to concentrate, but say it");
+        }
     }
 
     [Fact]
@@ -144,7 +246,9 @@ public class ReferenceBookTests
         Assert.Contains(filled, f => f.StartsWith("Weapons "));
         Assert.Contains(filled, f => f.StartsWith("ArmorMaterials "));
         Assert.Contains(filled, f => f.StartsWith("ArmorPlates "));
+        Assert.Contains(filled, f => f.StartsWith("Bullets "));
         Assert.True(old.Barrels.ContainsKey("Caliber762x51"));
+        Assert.True(old.Bullets.ContainsKey("patron_762x51_m993"));
     }
 
     /// <summary>

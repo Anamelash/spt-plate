@@ -735,9 +735,10 @@ namespace PLATE.Client.Patches
         }
 
         /// <summary>
-        /// Physical armor decision: U_hit = (E/A)·shape versus U_limit = class·material·
+        /// Physical armor decision: U_hit = E/A_core versus U_limit = class·material·
         /// wear·(1/cos angle). Below the band — block (BABT); above — penetration with a
-        /// price: E_cost, deformation K_def (X grows), breakup K_frag (mass melts away).
+        /// price: E_cost, the jacket stripped off in the hole, and what is left eroded by
+        /// the barrier (K_frag) and blunted by it (K_def).
         /// A weakened projectile enters the body — the wound model takes it from there.
         /// </summary>
         private static bool PhysicalArmorDecision(ArmorComponent armor, EftBulletClass shot,
@@ -778,8 +779,12 @@ namespace PLATE.Client.Patches
                 }
             }
 
-            var uHit = (eForU / area) *
-                       (1f + (float)cfg.PenConstructionFactor * (0.5f - x));
+            // The armour meets the hard core, not the calibre. A 5.6 mm carbide core in
+            // a 7.85 mm bullet arrives at twice the energy density of the same energy
+            // spread over the full jacket — that is where armour piercing comes from,
+            // and it used to be imitated by a multiplier keyed off how soft the bullet was.
+            AmmoDataCache.GetCore(shot.Ammo?.TemplateId, out var coreArea, out var coreMass);
+            var uHit = ArmorExit.ImpactDensity(eForU, dia, coreArea);
 
             // threshold: class × material × wear × slanted (oblique) thickness
             var prof = cfg.Profile(armor.Template.ArmorMaterial.ToString());
@@ -823,8 +828,9 @@ namespace PLATE.Client.Patches
             var pierceChance = Mathf.Clamp01((ratio - (1f - band)) / (2f * band));
             var pierce = pierceChance > 0f && UnityEngine.Random.value < pierceChance;
 
-            // energy price of penetration: work ∝ strength × area × thickness
-            var eCost = (float)prof.ECostMult * uLimit * area;
+            // energy price of penetration: work ∝ strength × hole area × thickness, and
+            // the hole is the size of what makes it — a core punches a narrower one
+            var eCost = (float)prof.ECostMult * uLimit * area * coreArea;
             var eOut = e - eCost;
 
             if (!pierce || eOut < 1f)
@@ -845,13 +851,15 @@ namespace PLATE.Client.Patches
                 return false;
             }
 
-            var kDefEff = (float)prof.KDef * x;            // soft bullets deform, a hard core holds up
-            var kFragEff = (float)prof.KFrag * (1f - 0.5f * x); // a hard core crumbles more
-            var mOut = mass * (1f - kFragEff);
-            var xOut = Mathf.Min(1f, x + kDefEff);
-            var vOut = Mathf.Sqrt(2f * eOut / (mOut / 1000f));
+            var exit = ArmorExit.Compute(mass, dia, x, eOut, coreArea, coreMass,
+                (float)prof.KFrag, (float)prof.KDef);
+            var mOut = exit.MassG;
+            var dOut = exit.DiaMm;
+            var vOut = exit.V;
+            var xOut = exit.X;
 
             shot.BulletMassGram = mOut;
+            shot.BulletDiameterMilimeters = dOut;
             shot.Vector3_1 = dir * vOut;
             _xOvrFrame = Time.frameCount;
             _xOvrShot = shot;
@@ -862,13 +870,17 @@ namespace PLATE.Client.Patches
                 RecordArmorHit(armor, bpc, localPos); // a hole weakens the zone
             }
 
-            RecordAbsorbedEnergy(armor, eCost); // the armor absorbed the penetration work
+            // the penetration work plus whatever the shed jacket was still carrying
+            RecordAbsorbedEnergy(armor, eCost + exit.JacketEnergyJ);
 
             Overlay.HitFeed.PushHit(bpc?.Player as Player,
                 $"armor {armor.Template.ArmorMaterial} cl.{armor.ArmorClass}: " +
                 $"U {uHit:0.#}/{uLimit:0.#}" +
                 (localMult < 1f ? $" (segment x{localMult:0.00})" : "") +
-                $" -> pierce, -{eCost:0} J, v {v:0}->{vOut:0}, X {x:0.00}->{xOut:0.00}");
+                $" -> pierce, -{eCost:0} J, v {v:0}->{vOut:0}, X {x:0.00}->{xOut:0.00}" +
+                (mOut < mass * 0.995f
+                    ? $", core {mass:0.0}->{mOut:0.0} g / {dia:0.0}->{dOut:0.0} mm"
+                    : ""));
             return false; // vanilla does not roll
         }
 

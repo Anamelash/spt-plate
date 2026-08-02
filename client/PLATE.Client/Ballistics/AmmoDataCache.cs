@@ -19,6 +19,12 @@ namespace PLATE.Client.Ballistics
             public double E0 { get; set; }
             public double? Pdm { get; set; }
 
+            /// <summary>Hard core frontal area as a fraction of the bullet's; 1 = monolithic.</summary>
+            public double Ca { get; set; } = 1;
+
+            /// <summary>Hard core mass as a fraction of the bullet's; 1 = monolithic.</summary>
+            public double Cm { get; set; } = 1;
+
             /// <summary>Fragmentation chance (vanilla field) — temporary cavity bonus in the channel model.</summary>
             public double Frag { get; set; }
 
@@ -73,7 +79,6 @@ namespace PLATE.Client.Ballistics
             public double[] ClassULimitJmm2 { get; set; }
             public double DurabilityFloor { get; set; } = 0.4;
             public double DegradeFloor { get; set; } = 0.15;
-            public double PenConstructionFactor { get; set; } = 0.6;
             public Dictionary<string, ArmorMatProfile> Materials { get; set; }
 
             private static readonly ArmorMatProfile Default = new()
@@ -125,6 +130,31 @@ namespace PLATE.Client.Ballistics
             }
 
             return 0.5;
+        }
+
+        /// <summary>
+        /// Hard core geometry: frontal area fraction and mass fraction. (1, 1) — a
+        /// monolithic bullet, which is what an unknown cartridge is assumed to be.
+        /// </summary>
+        public static void GetCore(string ammoTemplateId, out float areaFrac, out float massFrac)
+        {
+            EnsureLoaded();
+            if (ammoTemplateId != null && _data != null &&
+                _data.TryGetValue(ammoTemplateId, out var e))
+            {
+                areaFrac = Clamp01Core(e.Ca);
+                massFrac = Clamp01Core(e.Cm);
+                return;
+            }
+
+            areaFrac = 1f;
+            massFrac = 1f;
+        }
+
+        /// <summary>A core fraction is a fraction; 0 would mean a bullet with no bullet in it.</summary>
+        private static float Clamp01Core(double v)
+        {
+            return v <= 0.05 ? 0.05f : v >= 1 ? 1f : (float)v;
         }
 
         /// <summary>Cartridge fragmentation chance; 0 when there is no data.</summary>

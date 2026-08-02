@@ -33,6 +33,41 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         public int PelletCount { get; set; }
     }
 
+    /// <summary>
+    /// Construction of a single bullet. Three numbers, because one cannot describe
+    /// both a lead ball and a tungsten dart: how much of the bullet can deform, how
+    /// much of its frontal area the hard core takes, and how much of its mass.
+    /// Nothing here is a game class or a game stat — it is what the bullet is made of.
+    /// </summary>
+    public class BulletRef
+    {
+        /// <summary>Prototype name (for the report).</summary>
+        public string Prototype { get; set; } = "";
+
+        /// <summary>
+        /// Deformable fraction 0..1: the share of the projectile that flows on impact.
+        /// Not the same as "soft metal by mass" — a lead core inside a closed jacket
+        /// upsets and no more, the same core behind an open nose peels back. -1 leaves
+        /// the statistical estimate in place.
+        /// </summary>
+        public double X { get; set; } = -1;
+
+        /// <summary>
+        /// Core frontal area / bullet frontal area. The armour sees this, not the
+        /// calibre: a 5.6 mm core in a 7.85 mm bullet meets the plate at twice the
+        /// energy density. 0 = no separable core, the whole bullet strikes.
+        /// </summary>
+        public double CoreAreaFrac { get; set; }
+
+        /// <summary>
+        /// Core mass / bullet mass. What carries on after the plate; the jacket stays
+        /// in the hole. 0 = no separable core.
+        /// </summary>
+        public double CoreMassFrac { get; set; }
+
+        public string Source { get; set; } = "";
+    }
+
     public class GrenadeRef
     {
         public string Prototype { get; set; } = "";
@@ -170,6 +205,13 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
     {
         /// <summary>Key — the cartridge template's _name in the DB.</summary>
         public Dictionary<string, ShotshellRef> Shotshells { get; set; } = new();
+
+        /// <summary>
+        /// Key — the cartridge template's _name in the DB. A table by name is the whole
+        /// point: six packs of M61 are one bullet, and a statistic run over whatever
+        /// cohort a mod happens to install gave them six different characters.
+        /// </summary>
+        public Dictionary<string, BulletRef> Bullets { get; set; } = new();
 
         /// <summary>Key — the grenade template's _name in the DB.</summary>
         public Dictionary<string, GrenadeRef> Grenades { get; set; } = new();
@@ -352,6 +394,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         }
 
         Fill(nameof(loaded.Shotshells), loaded.Shotshells, s => s.Shotshells);
+        Fill(nameof(loaded.Bullets), loaded.Bullets, s => s.Bullets);
         Fill(nameof(loaded.Grenades), loaded.Grenades, s => s.Grenades);
         Fill(nameof(loaded.Barrels), loaded.Barrels, s => s.Barrels);
         Fill(nameof(loaded.Weapons), loaded.Weapons, s => s.Weapons);
@@ -391,6 +434,257 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "patron_20x70_flechette":      { "Prototype": "20/70 flechette (steel)", "PelletMassG": 0.65, "V0": 520, "X": 0.05, "PelletCount": 14 },
             "patron_23x75_shrapnel_10":    { "Prototype": "23x75 Shrapnel-10",    "PelletMassG": 3.40, "V0": 270, "X": 0.7, "PelletCount": 14 },
             "patron_23x75_shrapnel_25":    { "Prototype": "23x75 Shrapnel-25",    "PelletMassG": 3.40, "V0": 375, "X": 0.7, "PelletCount": 18 }
+          },
+
+          // ===== Bullets: what the projectile is made of =====
+          //
+          // X is the deformable fraction. It is not "how much lead is in there": the
+          // same lead core behind a closed gilding jacket upsets and stops, and behind
+          // an open nose peels back to twice the calibre. Read as construction:
+          // hard core 0.05-0.10, FMJ rifle 0.25-0.30, pistol round-nose 0.35,
+          // soft point 0.70, hollow point 0.90, prefragmented 0.95.
+          //
+          // CoreAreaFrac / CoreMassFrac describe the hard core: its frontal area and its
+          // mass as fractions of the whole bullet. Area is what the plate meets, mass is
+          // what carries on out the back once the jacket has been stripped in the hole.
+          //
+          // TWO RULES DECIDE WHETHER A ROUND GETS THEM AT ALL.
+          //
+          // 1. A core softer than about 55 HRC does not survive the face of a plate — it
+          //    upsets and spreads to full calibre. So M855's 40-45 HRC tip and the mild
+          //    steel of 7N6 and PS are recorded with their mass fraction and an AREA
+          //    fraction of 1: no concentration. M855A1's 58-60 HRC tip in the same
+          //    cartridge case does concentrate. That single line is the difference
+          //    between a round that bounces off AR500 and one that goes through it.
+          // 2. No core is entered without a published core mass or diameter. Lead-cored
+          //    ball is one piece of metal and says so by having no entry.
+          //
+          // Core diameters come from the Adept Armor threat survey, which publishes them
+          // alongside core weight and hardness for the standard-issue rounds. Where only
+          // a mass and a length are published, the area is that mass over the core alloy's
+          // density over 0.78 of the length — the 0.78 is read off the one core with all
+          // three published, the 7N26 BP at 5.55 g of tool steel, 30.5 mm long and 6.14 mm
+          // across. Cross-check: the two tungsten-carbide cores of different calibre and
+          // different maker, M993 and 7N37, land at 0.49 and 0.53 of their bullet's area.
+          "Bullets": {
+            // --- 5.45x39. Core masses: ru.wikipedia, sourced to the GRAU indices;
+            // core diameters and hardness: Adept Armor threat survey ---
+            "patron_545x39_PS":   { "Prototype": "7N6 PS",        "X": 0.25, "CoreAreaFrac": 1.0, "CoreMassFrac": 0.42,
+                                    "Source": "core 1.43 g of Steel 10 in a 3.4 g bullet, 4.0 mm, 40-45 HRC - mild, so the area fraction stays 1: it upsets against a plate rather than punching through it" },
+            "patron_545x39_PP":   { "Prototype": "7N10 PP",       "X": 0.15, "CoreAreaFrac": 0.532, "CoreMassFrac": 0.478,
+                                    "Source": "core 1.72-1.80 g of Steel 70/75 in a 3.62-3.74 g bullet, 4.1 mm, 60 HRC" },
+            "patron_545x39_BP":   { "Prototype": "7N22 BP",       "X": 0.08, "CoreAreaFrac": 0.507, "CoreMassFrac": 0.477,
+                                    "Source": "core 1.75 g of U12A tool steel in a 3.67 g bullet, 4.0 mm, 60-65 HRC" },
+            "patron_545x39_BS":   { "Prototype": "7N24 BS",       "X": 0.05, "CoreAreaFrac": 0.507, "CoreMassFrac": 0.512,
+                                    "Source": "core 2.1 g of VK-8 tungsten-cobalt in a 4.1 g bullet, 4.0 mm (Adept read the core at 1.8 g)" },
+            "patron_545x39_7n39": { "Prototype": "7N39 Igolnik",  "X": 0.05, "CoreAreaFrac": 0.507, "CoreMassFrac": 0.463,
+                                    "Source": "core 1.9 g of 92% tungsten carbide on cobalt in a 4.1 g bullet, 4.0 mm, pressed and sintered" },
+            "patron_545x39_7n40": { "Prototype": "7N40",          "X": 0.12,
+                                    "Source": "the enhanced-penetration development of the PP; no core figures published" },
+            "patron_545x39_BT":   { "Prototype": "7T3M tracer",   "X": 0.25 },
+            "patron_545x39_T":    { "Prototype": "7T3 tracer",    "X": 0.25 },
+            "patron_545x39_FMJ":  { "Prototype": "5.45 FMJ",      "X": 0.30 },
+            "patron_545x39_SP":   { "Prototype": "5.45 soft point","X": 0.70 },
+            "patron_545x39_HP":   { "Prototype": "5.45 hollow point","X": 0.90 },
+            "patron_545x39_PRS":  { "Prototype": "7N40 PRS reduced ricochet","X": 0.80 },
+            "patron_545x39_US":   { "Prototype": "7U1 US subsonic","X": 0.20,
+                                    "Source": "heavy subsonic on a blunt VK8 core; too slow to do anything with it" },
+
+            // --- 5.56x45 ---
+            "patron_556x45_M855":     { "Prototype": "M855 / SS109", "X": 0.25, "CoreAreaFrac": 1.0, "CoreMassFrac": 0.162,
+                                        "Source": "10 gr steel tip over a 32 gr lead rear in a 62 gr bullet, 4.6 mm, 40-45 HRC - the tip is not hard enough to hold its shape, so the area fraction stays 1. It still arrives on the far side as 0.65 g of steel" },
+            "patron_556x45_M855A1":   { "Prototype": "M855A1 EPR",   "X": 0.10, "CoreAreaFrac": 0.569, "CoreMassFrac": 0.306,
+                                        "Source": "19 gr exposed hardened steel over a copper slug, 4.3 mm, 58-60 HRC - the same 62 gr as the M855 and a different weapon against steel" },
+            "patron_556x45_M856A1":   { "Prototype": "M856A1 tracer EPR", "X": 0.10, "CoreAreaFrac": 0.569, "CoreMassFrac": 0.306,
+                                        "Source": "the tracer built on the M855A1's penetrator" },
+            "patron_556x45_M995":     { "Prototype": "M995 AP",      "X": 0.05, "CoreAreaFrac": 0.492, "CoreMassFrac": 0.615,
+                                        "Source": "32 gr WC-Co core in an aluminium cup, 4.0 mm, in a 52 gr bullet. Two sources agree on the core: 2.07 g and 2.08 g" },
+            "patron_556x45_ssa_ap":   { "Prototype": "SSA AP",       "X": 0.05,
+                                        "Source": "same mass and velocity as the M995 in the game; nobody publishes a construction for it" },
+            "patron_556x45_M856":     { "Prototype": "M856 tracer",  "X": 0.25 },
+            "patron_556x45_55_FMJ":   { "Prototype": "M193",         "X": 0.30 },
+            "patron_556x45_55_HP":    { "Prototype": "55 gr HP",     "X": 0.90 },
+            "patron_556x45_mk_318_mod_0": { "Prototype": "Mk318 SOST", "X": 0.60,
+                                        "Source": "open-tip barrier round: a lead front over a solid copper rear, meant to upset without coming apart" },
+            "patron_556x45_MK_255_Mod_0": { "Prototype": "Mk255 reduced ricochet", "X": 0.85 },
+            "patron_556x45_varmageddon":  { "Prototype": "Varmageddon", "X": 0.95 },
+
+            // --- 7.62x39 ---
+            "patron_762x39_PS":     { "Prototype": "57-N-231 PS",  "X": 0.25, "CoreAreaFrac": 1.0, "CoreMassFrac": 0.468,
+                                      "Source": "55-60 gr steel slug in a lead sheath, 5.6 mm, 35-45 HRC - a lead substitute, not a penetrator, so the area fraction stays 1" },
+            "patron_762x39_BP":     { "Prototype": "7N23 BP",      "X": 0.07, "CoreAreaFrac": 0.399, "CoreMassFrac": 0.492,
+                                      "Source": "60 gr hardened core, 5.0 mm, 60 HRC, in the same 123 gr bullet as the PS" },
+            "patron_762x39_pp":     { "Prototype": "7N27 PP",      "X": 0.15 },
+            "patron_762x39_mai_ap": { "Prototype": "MAI AP",       "X": 0.05 },
+            "patron_762x39_T45M":   { "Prototype": "T-45M tracer", "X": 0.25 },
+            "patron_762x39_fmj":    { "Prototype": "7.62x39 FMJ",  "X": 0.30 },
+            "patron_762x39_sp":     { "Prototype": "7.62x39 SP",   "X": 0.70 },
+            "patron_762x39_HP":     { "Prototype": "7.62x39 HP",   "X": 0.90 },
+            "patron_762x39_US":     { "Prototype": "57-N-231U US", "X": 0.25 },
+
+            // --- 7.62x51 ---
+            "patron_762x51_M80":    { "Prototype": "M80 ball",     "X": 0.25,
+                                      "Source": "147 gr of lead alloy in a jacket; one piece of metal" },
+            "patron_762x51_m80a1":  { "Prototype": "M80A1 EPR",    "X": 0.12, "CoreAreaFrac": 0.491, "CoreMassFrac": 0.347,
+                                      "Source": "45 gr hardened steel tip over a copper slug, 5.5 mm, 50-55 HRC, in a 130 gr bullet" },
+            "patron_762x51_M61":    { "Prototype": "M61 AP",       "X": 0.10, "CoreAreaFrac": 0.491, "CoreMassFrac": 0.365,
+                                      "Source": "55 gr hardened core at 60-63 HRC with a lead filler, in a 150.5 gr bullet. Core diameter is not published; read at the M80A1's 5.5 mm, the same calibre and the same kind of core" },
+            "patron_762x51_m993":   { "Prototype": "M993 AP",      "X": 0.05, "CoreAreaFrac": 0.491, "CoreMassFrac": 0.712,
+                                      "Source": "91 gr WC-Co core in an aluminium cup under a tombac-clad steel jacket, 5.5 mm, in a 128 gr bullet. Bofors FFV design, 58-degree tip" },
+            "patron_762x51_M62":    { "Prototype": "M62 tracer",   "X": 0.25 },
+            "patron_762x51_bpz_fmj":{ "Prototype": "BPZ FMJ",      "X": 0.28 },
+            "patron_762x51_tpz_sp": { "Prototype": "TPZ soft point","X": 0.70 },
+            "patron_762x51_ultra_nosler": { "Prototype": "Nosler Ballistic Tip", "X": 0.90 },
+
+            // --- 7.62x54R ---
+            "patron_762x54R_LPS_Gzh": { "Prototype": "57-N-323S LPS", "X": 0.25,
+                                        "Source": "mild steel core; a lead substitute, no hard element" },
+            "patron_762x54R_7N1":     { "Prototype": "7N1 sniper",    "X": 0.30,
+                                        "Source": "steel nose and lead base with an air cavity at the tip - an open tip that is not there to expand" },
+            "patron_762x54R_SNB":     { "Prototype": "7N14 SNB",      "X": 0.08, "CoreAreaFrac": 0.673, "CoreMassFrac": 0.463,
+                                        "Source": "pointed U12A core over 60 HRC. Dimensions are not published for the 7N14 itself; read at the 7N13 BP's 70 gr and 6.5 mm, the same U12A core in the same case" },
+            "patron_762x54r_7n37":    { "Prototype": "7N37",          "X": 0.05, "CoreAreaFrac": 0.531, "CoreMassFrac": 0.510,
+                                        "Source": "core 6.22 g of VK8, 20.9 mm long, in a 12.2 g bullet; 426 mm3 over 0.78 of that length is 26 mm2, or 5.8 mm across" },
+            "patron_762x54r_7bt1":    { "Prototype": "7BT1 AP-tracer","X": 0.10 },
+            "patron_762x54r_bthp":    { "Prototype": "BTHP match",    "X": 0.35 },
+            "patron_762x54r_spbt":    { "Prototype": "SPBT hunting",  "X": 0.70 },
+            "patron_762x54r_fmj":     { "Prototype": "7.62x54R FMJ",  "X": 0.28 },
+            "patron_762x54r_t46m":    { "Prototype": "T-46M tracer",  "X": 0.25 },
+
+            // --- 6.8x51 ---
+            "patron_68x51":     { "Prototype": "XM1186 GP", "X": 0.12, "CoreAreaFrac": 0.675, "CoreMassFrac": 0.26,
+                                  "Source": "30-40 gr hardened steel penetrator over a copper slug, 5.5-6.0 mm, 58-62 HRC, in a 135 gr bullet" },
+            "patron_68x51_fmj": { "Prototype": "6.8x51 FMJ", "X": 0.28 },
+
+            // --- .338 Lapua Magnum ---
+            "patron_86x70_lapua_ap":          { "Prototype": ".338 AP (AP485/AP529)", "X": 0.05, "CoreAreaFrac": 0.666, "CoreMassFrac": 0.587,
+                                                "Source": "WC-Co core 7.0 mm across, 120-200 gr, in a 248-300 gr bullet" },
+            "patron_86x70_lapua_magnum":      { "Prototype": "Lock Base B408",  "X": 0.35 },
+            "patron_86x70_lapua_magnum_upz":  { "Prototype": ".338 UPZ",        "X": 0.40 },
+            "patron_86x70_lapua_tac_x":       { "Prototype": "Barnes TAC-X",    "X": 0.80,
+                                                "Source": "solid copper hollow point, made to open into petals" },
+
+            // --- 9x19 ---
+            "patron_9x19_7n31":       { "Prototype": "7N31 PBP",  "X": 0.08, "CoreAreaFrac": 0.563, "CoreMassFrac": 0.687,
+                                        "Source": "hardened carbon steel core 2.7-3.0 g in a 4.1-4.2 g bullet, exposed at the tip under an aluminium alloy jacket. Diameter is not published: 363 mm3 of steel over 0.78 of the bullet's own 13 mm gives 6.8 mm" },
+            "patron_9x19_ap_63":      { "Prototype": "AP 6.3",     "X": 0.15 },
+            "patron_9x19_PST_gzh":    { "Prototype": "7N21 PST",   "X": 0.20,
+                                        "Source": "hardened steel core; core figures not published" },
+            "patron_9x19_m882":       { "Prototype": "M882 ball",  "X": 0.30 },
+            "patron_9x19_PSO_gzh":    { "Prototype": "PSO subsonic","X": 0.35 },
+            "patron_9x19_luger_cci":  { "Prototype": "CCI Luger FMJ","X": 0.35 },
+            "patron_9x19_GT":         { "Prototype": "Green Tracer","X": 0.35 },
+            "patron_9x19_quakemaker": { "Prototype": "QuakeMaker JHP","X": 0.90 },
+            "patron_9x19_rip":        { "Prototype": "G2 RIP",     "X": 0.95 },
+
+            // --- 9x21 ---
+            "patron_9x21_7n42":  { "Prototype": "7N42 BP",   "X": 0.08 },
+            "patron_9x21_sp10":  { "Prototype": "SP-10",     "X": 0.10,
+                                   "Source": "hardened steel core exposed at the tip; core figures not published" },
+            "patron_9x21_sp13":  { "Prototype": "SP-13 tracer AP", "X": 0.12 },
+            "patron_9x21_7u4":   { "Prototype": "7U4 subsonic",    "X": 0.30 },
+            "patron_9x21_sp11":  { "Prototype": "SP-11 ball",      "X": 0.30 },
+            "patron_9x21_sp12":  { "Prototype": "SP-12 expanding", "X": 0.85 },
+
+            // --- 9x39 ---
+            "patron_9x39_sp6":  { "Prototype": "SP-6",  "X": 0.08,
+                                  "Source": "heat-treated steel core protruding from the jacket, filling its whole cavity so that the core's energy is not spent breaking the jacket. Core mass and diameter are not published" },
+            "patron_9x39_bp":   { "Prototype": "BP 7N12", "X": 0.07,
+                                  "Source": "the SP-6 core reworked for 10% more penetration" },
+            "patron_9x39_pab9": { "Prototype": "PAB-9", "X": 0.10 },
+            "patron_9x39_sp5":  { "Prototype": "SP-5",  "X": 0.30,
+                                  "Source": "steel nose over a lead base - the sniper load, not the armour one" },
+            "patron_9x39_spp":  { "Prototype": "SPP 7N9", "X": 0.25 },
+            "patron_9x39_fmj":  { "Prototype": "9x39 FMJ", "X": 0.30 },
+
+            // --- 9x18 PM ---
+            "patron_9x18pm_PST_gzh":  { "Prototype": "57-N-181S PST", "X": 0.30 },
+            "patron_9x18pm_PBM":      { "Prototype": "PBM 7N25",      "X": 0.15,
+                                        "Source": "hardened steel core in a light bullet driven fast; core figures not published" },
+            "patron_9x18pm_PMM":      { "Prototype": "PMM 57-N-181SM","X": 0.25 },
+            "patron_9x18pm_BZT_gzh":  { "Prototype": "BZT AP-tracer",  "X": 0.20 },
+            "patron_9x18pm_RG028_gzh":{ "Prototype": "RG028",          "X": 0.20 },
+            "patron_9x18pm_P_gzh":    { "Prototype": "P gzh",          "X": 0.35 },
+            "patron_9x18pm_PSO_gzh":  { "Prototype": "PSO",            "X": 0.35 },
+            "patron_9x18pm_PPT_gzh":  { "Prototype": "PPT tracer",     "X": 0.35 },
+            "patron_9x18pm_PPE_gzh":  { "Prototype": "PPE",            "X": 0.35 },
+            "patron_9x18pm_PRS_gs":   { "Prototype": "PRS reduced ricochet", "X": 0.80 },
+            "patron_9x18pm_PS_gs_PPO":{ "Prototype": "PS gs PPO",      "X": 0.35 },
+            "patron_9x18pm_PSV":      { "Prototype": "PSV",            "X": 0.90 },
+            "patron_9x18pm_SP7_gzh":  { "Prototype": "SP-7",           "X": 0.90 },
+            "patron_9x18pm_SP8_gzh":  { "Prototype": "SP-8",           "X": 0.95 },
+
+            // --- 5.7x28 ---
+            "patron_57x28_ss190":   { "Prototype": "SS190",   "X": 0.10,
+                                      "Source": "steel penetrator over an aluminium core in a reinforced copper jacket; neither the penetrator's mass nor its diameter is published" },
+            "patron_57x28_l191":    { "Prototype": "L191 AP", "X": 0.08 },
+            "patron_57x28_sb193":   { "Prototype": "SB193 subsonic", "X": 0.30 },
+            "patron_57x28_ss197sr": { "Prototype": "SS197SR V-Max",  "X": 0.85 },
+            "patron_57x28_ss198lf": { "Prototype": "SS198LF",        "X": 0.80 },
+            "patron_57x28_r37f":    { "Prototype": "R37.F",          "X": 0.95 },
+            "patron_57x28_r37x":    { "Prototype": "R37.X",          "X": 0.90 },
+
+            // --- 4.6x30 ---
+            "patron_46x30_ap_sx":       { "Prototype": "4.6x30 AP SX", "X": 0.05, "CoreAreaFrac": 0.85, "CoreMassFrac": 0.92,
+                                          "Source": "the bullet IS the core: 2 g of hardened steel with a copper plating and nothing else. Fractions are the plating's share, which is why this one punches so far above its energy" },
+            "patron_46x30_fmj_sx":      { "Prototype": "4.6x30 FMJ SX", "X": 0.20 },
+            "patron_46x30_subsonic_sx": { "Prototype": "4.6x30 subsonic","X": 0.25 },
+            "patron_46x30_jsp":         { "Prototype": "4.6x30 JSP",     "X": 0.70 },
+            "patron_46x30_action_sx":   { "Prototype": "4.6x30 Action SX","X": 0.90 },
+
+            // --- .45 ACP, 7.62x25, .357 ---
+            "patron_1143x23_acp_ap":         { "Prototype": ".45 ACP AP", "X": 0.10 },
+            "patron_1143x23_acp":            { "Prototype": ".45 ACP ball", "X": 0.30 },
+            "patron_1143x23_acp_lasermatch_fmj": { "Prototype": ".45 Lasermatch FMJ", "X": 0.30 },
+            "patron_1143x23_acp_hydra_shok": { "Prototype": ".45 Hydra-Shok", "X": 0.90 },
+            "patron_1143x23_rip":            { "Prototype": ".45 RIP",     "X": 0.95 },
+            "patron_762x25tt_Pst_gzh":       { "Prototype": "7.62x25 Pst", "X": 0.20 },
+            "patron_762x25tt_P_Gl":          { "Prototype": "7.62x25 P gl","X": 0.30 },
+            "patron_762x25tt_T_Gzh":         { "Prototype": "7.62x25 tracer","X": 0.30 },
+            "patron_762x25tt_FMJ43":         { "Prototype": "7.62x25 FMJ43", "X": 0.30 },
+            "patron_762x25tt_akbs":          { "Prototype": "7.62x25 AKBS",  "X": 0.30 },
+            "patron_762x25tt_LRN":           { "Prototype": "7.62x25 LRN",   "X": 0.60 },
+            "patron_762x25tt_LRNPC":         { "Prototype": "7.62x25 LRNPC", "X": 0.50 },
+            "patron_9x33r_fmj":  { "Prototype": ".357 FMJ", "X": 0.30 },
+            "patron_9x33r_sp":   { "Prototype": ".357 SP",  "X": 0.70 },
+            "patron_9x33r_hp":   { "Prototype": ".357 HP",  "X": 0.90 },
+            "patron_9x33r_jhp":  { "Prototype": ".357 JHP", "X": 0.90 },
+
+            // --- .300 BLK, .366 TKM ---
+            "patron_762x35_blackout_ap": { "Prototype": ".300 BLK AP", "X": 0.10 },
+            "patron_762x35_cbj":         { "Prototype": ".300 BLK CBJ", "X": 0.05,
+                                           "Source": "a tungsten sub-projectile in a discarding sabot; CBJ do not publish the penetrator's dimensions" },
+            "patron_762x35_m62":         { "Prototype": ".300 BLK M62 tracer", "X": 0.25 },
+            "patron_762x35_blackout":    { "Prototype": ".300 BLK ball", "X": 0.30 },
+            "patron_762x35_whisper":     { "Prototype": ".300 Whisper",  "X": 0.35 },
+            "patron_762x35_vmax":        { "Prototype": ".300 BLK V-Max","X": 0.95 },
+            "patron_366_custom_ap":      { "Prototype": ".366 AP-M",     "X": 0.10 },
+            "patron_366_TKM_EKO":        { "Prototype": ".366 EKO",      "X": 0.25,
+                                           "Source": "a solid copper bullet - light, fast and lead-free, which is not the same as expanding" },
+            "patron_366_TKM_FMJ":        { "Prototype": ".366 FMJ",      "X": 0.30 },
+            "patron_366_TKM_Geksa":      { "Prototype": ".366 Geksa",    "X": 0.80 },
+
+            // --- 12.7 ---
+            "patron_127x55_ps12b": { "Prototype": "PS12B",  "X": 0.08,
+                                     "Source": "the armour-piercing load of the ASh-12; core figures not published" },
+            "patron_127x55_ps12":  { "Prototype": "PS12",   "X": 0.30 },
+            "patron_127x55_ps12a": { "Prototype": "PS12A",  "X": 0.20 },
+            "patron_127x108":      { "Prototype": "B-32 API", "X": 0.10 },
+            "patron_127x108_bzt":  { "Prototype": "BZT-44 API-T", "X": 0.10 },
+            "patron_127x99_m903":  { "Prototype": "M903 SLAP", "X": 0.05, "CoreAreaFrac": 0.55, "CoreMassFrac": 1.0,
+                                     "Source": "the sabot is gone by the time it arrives: a .223 in tungsten penetrator, 5.66 mm, and the game already gives the round that penetrator's 7.62 mm as a calibre, so the area fraction is against that" },
+            "patron_127x99_m33":   { "Prototype": "M33 ball", "X": 0.25 },
+            "patron_127x99_m21":   { "Prototype": "M21 tracer","X": 0.20 },
+            "patron_127x99_hp":    { "Prototype": ".50 BMG HP","X": 0.90 },
+
+            // --- shotgun slugs ---
+            "patron_12x70_slug_ap_20":  { "Prototype": "AP-20 slug", "X": 0.10,
+                                          "Source": "a hardened steel slug; no jacket to strip and no separate core" },
+            "patron_20x70_slug_ap":     { "Prototype": "20/70 AP slug", "X": 0.10 },
+            "patron_12x70_slug_poleva_3": { "Prototype": "Poleva-3",  "X": 0.60 },
+            "patron_12x70_slug_poleva_6u":{ "Prototype": "Poleva-6u", "X": 0.55 },
+            "patron_12x70_rip":         { "Prototype": "12/70 RIP",   "X": 0.95 },
+            "patron_12x70_slug_hp_copper": { "Prototype": "copper HP slug", "X": 0.90 }
           },
 
           // ===== Grenades: fragment (g, m/s) and explosive charge in TNT equivalent (g) =====

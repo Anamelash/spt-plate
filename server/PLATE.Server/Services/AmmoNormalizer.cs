@@ -38,6 +38,13 @@ public class AmmoNormalizer(
         public double OldPdm, NewPdm;
         public bool EnergyOutlier;
         public double? RefX; // X from the spec reference book (buckshot/flechette)
+
+        /// <summary>Core frontal area and mass as fractions of the whole bullet; 1 = monolithic.</summary>
+        public double CoreArea = 1, CoreMass = 1;
+
+        /// <summary>The core geometry above is published rather than inferred from the cohort.</summary>
+        public bool CoreFromBook;
+
         public readonly List<string> Notes = new();
     }
 
@@ -87,9 +94,34 @@ public class AmmoNormalizer(
         // --- Prototype spec reference book: forced masses/velocities (anchors) ---
         var reference = referenceBook.Load(modPath);
         var refApplied = 0;
+        var coreApplied = 0;
         foreach (var r in recs)
         {
             var key = r.Item.Name ?? "";
+            if (reference.Bullets.TryGetValue(key, out var bf))
+            {
+                if (bf.X >= 0)
+                {
+                    r.RefX = Math.Clamp(bf.X, 0, 1);
+                }
+
+                if (bf.CoreAreaFrac > 0 || bf.CoreMassFrac > 0)
+                {
+                    // The two fields are independent and each falls back to the whole
+                    // bullet on its own. That is not pedantry: the M855 publishes a core
+                    // mass of 0.16 and no area fraction, because its tip is too soft to
+                    // hold a shape against a plate. Mirroring the mass onto the area
+                    // would have handed the round a sixfold concentration and made it
+                    // the best armour-piercer in the game.
+                    r.CoreArea = bf.CoreAreaFrac > 0 ? Math.Clamp(bf.CoreAreaFrac, 0.05, 1) : 1;
+                    r.CoreMass = bf.CoreMassFrac > 0 ? Math.Clamp(bf.CoreMassFrac, 0.05, 1) : 1;
+                    r.CoreFromBook = true;
+                    coreApplied++;
+                }
+
+                r.Notes.Add($"book: {bf.Prototype}");
+            }
+
             if (!reference.Shotshells.TryGetValue(key, out var rf))
             {
                 continue;
@@ -187,10 +219,30 @@ public class AmmoNormalizer(
                 r.Notes.Add("small cohort -> global regression");
             }
 
-            var xRaw = a.WeightSpecificDamage * pctSd
-                       - a.WeightSpecificPenetration * pctSp
-                       + a.WeightFragmentation * Math.Clamp(r.FragChance / a.FragChanceNormalizer, 0, 1);
-            r.X = Math.Clamp(0.5 + xRaw, 0, 1);
+            if (r.RefX.HasValue)
+            {
+                // a bullet is the same bullet in every pack it ships in: the book wins
+                // over a statistic taken across whatever cohort the install happens to have
+                r.X = r.RefX.Value;
+            }
+            else
+            {
+                var xRaw = a.WeightSpecificDamage * pctSd
+                           - a.WeightSpecificPenetration * pctSp
+                           + a.WeightFragmentation *
+                           Math.Clamp(r.FragChance / a.FragChanceNormalizer, 0, 1);
+                r.X = Math.Clamp(0.5 + xRaw, 0, 1);
+            }
+
+            if (!r.CoreFromBook)
+            {
+                r.CoreArea = InferredCore(pctSp, a.CoreFallbackDepth);
+                r.CoreMass = r.CoreArea;
+                if (r.CoreArea < 0.98)
+                {
+                    r.Notes.Add($"core {r.CoreArea:0.00} inferred from pen residual");
+                }
+            }
 
             ValidateSuffix(r);
         }
@@ -216,8 +268,7 @@ public class AmmoNormalizer(
                 r.P.Damage = r.NewDamage;
                 ApplyBleedDeltas(r, a, pellet: (r.P.ProjectileCount ?? 1) > 1);
 
-                var penEnergy = a.PenPerEnergyDensity * (r.E0 / r.Area)
-                                * (1 + a.PenConstructionFactor * (0.5 - r.X));
+                var penEnergy = a.PenPerEnergyDensity * (r.E0 / (r.Area * r.CoreArea));
                 r.NewPen = (int)Math.Clamp(
                     Math.Round(a.PenetrationBlend * penEnergy + (1 - a.PenetrationBlend) * r.OldPen),
                     1, 120);
@@ -238,8 +289,8 @@ public class AmmoNormalizer(
                 r.NewDamage = Math.Clamp(ComputeDamage(r, a), a.MinPelletDamage, a.DamageCap);
                 r.P.Damage = r.NewDamage;
 
-                var penEnergy = a.PenPerEnergyDensity * (r.E0 / r.Area)
-                                * (1 + a.PenConstructionFactor * (0.5 - r.X));
+                // a pellet or a dart is one piece of metal — no core, no jacket
+                var penEnergy = a.PenPerEnergyDensity * (r.E0 / r.Area);
                 r.NewPen = (int)Math.Clamp(
                     Math.Round(a.PenetrationBlend * penEnergy + (1 - a.PenetrationBlend) * r.OldPen),
                     1, 120);
@@ -259,6 +310,7 @@ public class AmmoNormalizer(
         Summary = $"{recs.Count} ammo ({bullets.Count} bullets, {recs.Count - bullets.Count} buckshot)";
         logger.Debug($"[PLATE] AmmoNormalizer: {recs.Count} ammo ({bullets.Count} bullets, " +
                      $"{recs.Count - bullets.Count} buckshot), reference hits: {refApplied}, " +
+                     $"published bullet construction: {coreApplied}, " +
                      $"field fills: {fills}, PDM computed: {pdmFills}, " +
                      $"rescaled: {rescaled} bullets + {buckshotRescaled} buckshot");
 
@@ -314,14 +366,41 @@ public class AmmoNormalizer(
             Math.Clamp(a.BleedLightBase + a.BleedLightPerMm * r.DiaMm, 0, a.LightDeltaMax), 3);
     }
 
+    /// <summary>
+    /// Core frontal area for a cartridge the reference book does not name.
+    ///
+    /// Nobody publishes the inside of a modded round, but a penetrator leaves a signature
+    /// the game data already carries: penetration well above what the round's energy
+    /// density buys. Read the core off that excess and off nothing else. At the cohort
+    /// median the bullet comes out monolithic, which is the truth for most of them —
+    /// a blanket discount would hand every FMJ in the game a penetrator it does not have.
+    ///
+    /// The mass fraction follows: a core of the same material running the bullet's length
+    /// takes the same share of its mass as of its face.
+    /// </summary>
+    /// <param name="penPercentile">Where the round's specific penetration sits in its cohort, 0..1.</param>
+    /// <param name="depth">Smallest core to infer, as 1 − depth. 0 assumes everything is monolithic.</param>
+    public static double InferredCore(double penPercentile, double depth)
+    {
+        var excess = Math.Clamp((penPercentile - 0.5) * 2, 0, 1);
+        return Math.Clamp(1 - depth * excess, 0.05, 1);
+    }
+
     private void ValidateSuffix(Rec r)
     {
-        var name = (r.P.Name ?? r.Item.Name ?? "").ToLowerInvariant();
+        // the item _name, not the properties Name: BSG left every .357 in the game
+        // carrying "patron_366_custom_ap" in that field, so the check was reading a
+        // different cartridge's name and calling four hollow points armour-piercing
+        var name = (r.Item.Name ?? r.P.Name ?? "").ToLowerInvariant();
         var apLike = name.EndsWith("_ap") || name.Contains("_ap_") || name.Contains("_bs") ||
                      name.Contains("_bp") || name.Contains("m995") || name.Contains("m61") ||
                      name.Contains("igolnik");
-        var hpLike = name.Contains("_hp") || name.Contains("_sp") || name.Contains("rip") ||
-                     name.Contains("hollow");
+        // "_sp" has to end the name or be a whole word: patron_9x39_sp6 is SP-6, a
+        // hardened steel core, and reading it as a soft point flagged every 9x39 and
+        // 9x21 armour round in the report as a mismatch
+        var hpLike = name.EndsWith("_hp") || name.Contains("_hp_") ||
+                     name.EndsWith("_sp") || name.Contains("_sp_") ||
+                     name.EndsWith("_rip") || name.Contains("hollow");
         if (apLike && r.X > 0.5)
         {
             r.Notes.Add($"SUFFIX MISMATCH: name looks AP, but X={r.X:0.00}");
@@ -361,9 +440,15 @@ public class AmmoNormalizer(
               $"PdmMax={a.PdmMax}, X weights: dmg {a.WeightSpecificDamage} / pen {a.WeightSpecificPenetration} / " +
               $"frag {a.WeightFragmentation}");
         sb.AppendLine();
-        sb.AppendLine("| Cartridge | Caliber | E0, J | X | Damage | Pen | PDM | Notes |");
-        sb.AppendLine("|---|---|---|---|---|---|---|---|");
-        foreach (var r in recs.OrderBy(r => r.Caliber).ThenBy(r => r.P.Name))
+        sb.AppendLine("**Core** is the frontal area of the hard core as a fraction of the whole " +
+                      "bullet, and the mass fraction behind it. `1.00` is a bullet that strikes " +
+                      "as one piece. **book** marks the ones whose construction is published; " +
+                      "everything else is read off how far the round's penetration sits above " +
+                      "what its energy density buys, and `X` off its cohort.");
+        sb.AppendLine();
+        sb.AppendLine("| Cartridge | Caliber | E0, J | X | Core A/m | Damage | Pen | PDM | Notes |");
+        sb.AppendLine("|---|---|---|---|---|---|---|---|---|");
+        foreach (var r in recs.OrderBy(r => r.Caliber).ThenBy(r => r.Item.Name))
         {
             var dmg = r.NewDamage > 0 && Math.Abs(r.NewDamage - r.OldDamage) > 0.5
                 ? $"{r.OldDamage:0} -> **{r.NewDamage:0}**"
@@ -375,8 +460,14 @@ public class AmmoNormalizer(
                 ? $"0 -> **{r.NewPdm:0.###}**"
                 : $"{r.OldPdm:0.###}";
             var buck = r.IsBuckshot ? (r.NewDamage > 0 ? "buckshot " : "buckshot (skip) ") : "";
-            sb.AppendLine($"| {r.P.Name ?? r.Item.Name} | {r.Caliber.Replace("Caliber", "")} | " +
-                          $"{r.E0:0} | {r.X:0.00} | {dmg} | {pen} | {pdm} | {buck}{string.Join("; ", r.Notes)} |");
+            var core = r.CoreArea > 0.995 && r.CoreMass > 0.995
+                ? "—"
+                : $"{r.CoreArea:0.00}/{r.CoreMass:0.00}" + (r.CoreFromBook ? " **book**" : "");
+            // the item _name, not the properties Name: the reference book is keyed by
+            // the former and BSG copy-pasted the latter across whole calibers
+            sb.AppendLine($"| {r.Item.Name} | {r.Caliber.Replace("Caliber", "")} | " +
+                          $"{r.E0:0} | {r.X:0.00} | {core} | {dmg} | {pen} | {pdm} | " +
+                          $"{buck}{string.Join("; ", r.Notes)} |");
         }
 
         File.WriteAllText(System.IO.Path.Combine(modPath, "plate-ammo-report.md"), sb.ToString());
@@ -396,6 +487,8 @@ public class AmmoNormalizer(
                 E0 = Math.Round(r.E0),
                 Pdm = r.P.PenetrationDamageMod,
                 Frag = Math.Round(r.FragChance, 4),
+                Ca = Math.Round(r.CoreArea, 4),
+                Cm = Math.Round(r.CoreMass, 4),
             });
         data["__wound"] = new
         {
@@ -420,7 +513,6 @@ public class AmmoNormalizer(
             cfg.Armor.ClassULimitJmm2,
             cfg.Armor.DurabilityFloor,
             cfg.Armor.DegradeFloor,
-            PenConstructionFactor = a.PenConstructionFactor,
             cfg.Armor.Materials,
         };
         return JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });

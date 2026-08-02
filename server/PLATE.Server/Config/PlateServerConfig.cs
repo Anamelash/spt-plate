@@ -174,8 +174,13 @@ public class PlateServerConfig
             /// squashed, a hard core keeps its shape).</summary>
             public double KDef { get; set; }
 
-            /// <summary>Bullet break-up: mass loss K_frag·(1−0.5X)
-            /// (a hard core shatters against the barrier more than a soft one).</summary>
+            /// <summary>
+            /// Erosion of what comes through: m_out = m·CoreMassFrac·(1−K_frag). A
+            /// property of the barrier, not of the bullet — ceramic is in the business
+            /// of grinding a core down, aramid is not. It used to carry a (1−0.5X)
+            /// factor reading "a hard core shatters more", which is the wrong way round;
+            /// the jacket coming off is CoreMassFrac's job now.
+            /// </summary>
             public double KFrag { get; set; }
 
             /// <summary>Radius of local degradation around the hit, mm
@@ -279,9 +284,14 @@ public class PlateServerConfig
         /// M995 (64 -> 53), PS 7.62x39 (44.6 -> 35).</summary>
         public double PenPerEnergyDensity { get; set; } = 0.85;
 
-        /// <summary>Bullet construction effect on penetration: multiplier (1 + this*(0.5-X)).
-        /// AP (X=0) concentrates energy in the core, HP (X=1) spreads it out.</summary>
-        public double PenConstructionFactor { get; set; } = 0.6;
+        /// <summary>
+        /// How small a core to assume for a cartridge the reference book does not name.
+        /// The book carries the real geometry; for anything else the only evidence of a
+        /// penetrator is that the round out-penetrates what its energy density explains,
+        /// so the core area is read off that residual: 1.0 at the cohort median, down to
+        /// (1 − this) at the top of it. 0 assumes every unlisted bullet is monolithic.
+        /// </summary>
+        public double CoreFallbackDepth { get; set; } = 0.5;
 
         /// <summary>Upper damage limit after the rescale (technical cap).</summary>
         public double DamageCap { get; set; } = 999;

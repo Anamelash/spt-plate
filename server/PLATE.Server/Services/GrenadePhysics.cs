@@ -104,10 +104,9 @@ public class GrenadePhysics(
                 p.Damage = Math.Clamp(Math.Round(
                     a.WoundChannelModel ? wound.Damage : e / a.EnergyPerHp),
                     a.MinPelletDamage, a.DamageCap);
+                // a fragment is a lump of casing: no core to concentrate anything
                 p.PenetrationPower = (int)Math.Clamp(
-                    Math.Round(a.PenPerEnergyDensity * (e / area)
-                               * (1 + a.PenConstructionFactor * (0.5 - cfg.Grenades.FragmentX))),
-                    1, 60);
+                    Math.Round(a.PenPerEnergyDensity * (e / area)), 1, 60);
                 // ragged fragment wounds bleed almost always (on penetration the
                 // client additionally guarantees a light bleed)
                 p.LightBleedingDelta = cfg.Grenades.FragLightDelta;

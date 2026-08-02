@@ -34,9 +34,9 @@ that matters is derived, at the moment of impact, from the projectile's physical
 state and the geometry of what it hits.
 
 The state carried through the whole pipeline is four values: mass `m`, diameter
-`d`, velocity at impact `v`, and an expansiveness index `X`. Armor does not
-"reduce damage" — it consumes energy, deforms the projectile and lowers its mass,
-and hands a modified state to the flesh model. The same four values then decide
+`d`, velocity at impact `v`, and a deformable fraction `X`. Armor does not
+"reduce damage" — it consumes energy, strips the projectile down to its core and
+hands a modified state to the flesh model. The same four values then decide
 the wound, the penetration, and what continues out the far side.
 
 This is why the mod is sensitive to distance, barrel length and armor in ways
@@ -51,10 +51,12 @@ vanilla is not: they all act on the state rather than on a lookup.
 | `A` | cross-section, `πd²/4` | mm² |
 | `v` | velocity at impact | m/s |
 | `E` | kinetic energy, `½mv²` | J |
-| `X` | expansiveness index, 0 = solid AP, 1 = fully expanding | — |
+| `X` | deformable fraction, 0 = solid AP, 1 = fully expanding | — |
 | `L` | full wound channel length the projectile could cut | mm |
 | `T` | path actually available inside the body part (the chord) | mm |
 | `U` | specific energy on the impact area, `E/A` | J/mm² |
+| `CoreAreaFrac` | hard core's frontal area as a fraction of the bullet's | — |
+| `CoreMassFrac` | hard core's mass as a fraction of the bullet's | — |
 
 ## Wound channel
 
@@ -207,13 +209,18 @@ with specific energy.
 ### Threshold
 
 ```
-U_hit   = (E/A) · (1 + PenConstructionFactor · (0.5 − X))
+U_hit   = E / (A · CoreAreaFrac)
 U_limit = ClassULimit(class) · ULimitMult(material) · durability / max(cos θ, AngleMinCos)
 ```
 
-`U_hit` is raised for pointed solid rounds and lowered for blunt expanding ones at
-equal energy — the same energy on the same area does not do the same work. Class
-thresholds are anchored to the GOST protection classes: each class is rated
+The plate meets the hard core, not the calibre. A 5.5 mm tungsten-carbide core in a
+7.85 mm bullet arrives at twice the energy density that the same energy spread over
+the full jacket would — that is where armor piercing comes from, and it is read from
+the round's published construction rather than from a multiplier keyed off how soft
+the bullet is. A bullet with no separable core takes the whole area, so for most
+ammunition this is plain `E/A`.
+
+Class thresholds are anchored to the GOST protection classes: each class is rated
 against a specific test cartridge, so the threshold is that cartridge's specific
 energy rather than an invented number.
 
@@ -245,17 +252,24 @@ Outside the band the outcome is deterministic.
 A projectile that defeats the panel pays for it:
 
 ```
-E_cost = ECostMult · U_limit · A          work ∝ strength × area × thickness
-m_out  = m · (1 − KFrag · (1 − 0.5X))     core erosion
-X_out  = min(1, X + KDef · X)             flattening
-v_out  = √(2·(E − E_cost) / m_out)
+E_cost = ECostMult · U_limit · A · CoreAreaFrac   work ∝ strength × hole × thickness
+v_out  = √(2·(E − E_cost) / m)                   the whole bullet decelerated as one
+m_out  = m · CoreMassFrac · (1 − KFrag)          jacket stripped, then eroded
+d_out  = d · √CoreAreaFrac                       what carries on is the core
+X_base = clamp01((X − (1 − CoreMassFrac)) / CoreMassFrac)
+X_out  = min(1, X_base · (1 + KDef))             flattening of what is left
 ```
 
-What enters the body is slower, blunter and lighter, and the flesh model works
+What enters the body is slower, narrower and lighter, and the flesh model works
 from that state. There is no separate "mitigation percentage" anywhere.
 
-`KDef` scales with `X` because soft bullets deform and hard cores do not; `KFrag`
-scales inversely because a hard core is the thing that shatters.
+Three things follow from the core being what carries on. The hole is core-sized, so
+it costs less to make. The jacket stops in that hole, and the energy it was still
+carrying stays in the panel rather than disappearing. And the deformable material
+goes with the jacket first, so a round that sheds one comes out **harder** than it
+went in — an M855 that arrives as 0.65 g of steel penetrator is not a soft bullet
+any more. `KDef` and `KFrag` are properties of the barrier: ceramic grinds a core
+down and aramid does not.
 
 ### Local damage and wear
 
@@ -392,13 +406,32 @@ The depth is `BodyDepthMm` in the server config. It only ever affects the
 displayed value and the fallback damage when the physics model is off; a real hit
 deposits along the collider chord it actually crosses.
 
-### Expansiveness index
+### Bullet construction
 
-`X` is not in the game data, so it is inferred as a percentile blend within each
-caliber cohort: specific damage (positive), specific penetration (negative), and
-fragmentation chance. A round that does a lot of damage per joule and penetrates
-poorly is expanding; the reverse is solid. Cohorts smaller than a threshold fall
-back to a global regression.
+Three numbers describe what a projectile is made of, because one cannot describe
+both a jacketed lead ball and a tungsten dart:
+
+| | meaning | example |
+|---|---|---|
+| `X` | deformable fraction | M80 FMJ 0.25, soft point 0.70, hollow point 0.90 |
+| `CoreAreaFrac` | core frontal area / bullet frontal area | M993: 5.5 mm in 7.85 → 0.49 |
+| `CoreMassFrac` | core mass / bullet mass | M993: 91 gr of 128 → 0.71 |
+
+They come from the reference book, keyed by the cartridge's own name — a bullet is
+the same bullet in every pack it ships in, and a statistic taken over whatever
+cohort an install happens to have gave clones of one cartridge different physics.
+
+A core is only recorded when its mass or diameter is published, and an **area**
+fraction only when the core is hard enough to keep its shape against a plate. That
+line runs between the M855 and the M855A1: same case, same 62 grains, same calibre,
+but 40 HRC of steel tip upsets on the face of the panel and 58 HRC does not.
+
+For cartridges the book does not name — modded ammunition, mostly — `X` is inferred
+as a percentile blend within the caliber cohort (specific damage positive, specific
+penetration negative, fragmentation chance), and the core is read off how far the
+round's penetration sits above what its energy density buys. At the cohort median
+that comes out monolithic, which is the truth for most of them. Cohorts smaller
+than a threshold fall back to a global regression.
 
 ### Buckshot
 

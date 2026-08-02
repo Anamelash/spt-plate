@@ -76,10 +76,20 @@ the projectile has to defeat it with specific energy:
   for sharp-nosed AP to slip through; aramid behaves similarly as soft armor.
   Titanium is viscous and bleeds off an exceptional amount of energy even when
   defeated.
-- **A penetrating bullet pays for the hole.** It loses energy, may lose mass
-  (core erosion), and deforms — what enters the body is a slower, blunter,
-  lighter projectile, and the flesh model works from that state. There is no
-  separate "mitigation percent".
+- **Armor piercing comes from the core, not from a bonus.** A plate meets the
+  hard core of a bullet, not its calibre. The tungsten-carbide core of an M993 is
+  5.5 mm across in a 7.85 mm bullet, so it arrives at twice the energy density of
+  the same energy spread over the full jacket — and that is the whole of its
+  advantage, taken from the round's published construction. Rounds whose "steel
+  core" is too soft to hold its shape against a plate get nothing: an M855 and an
+  M855A1 are the same weight in the same case, and the difference between them is
+  40 HRC against 58.
+- **A penetrating bullet pays for the hole, and leaves its jacket in it.** What
+  goes on through is the core — lighter, narrower, and *harder* than the bullet
+  was, because the deformable material was the part that stayed behind. An M855
+  that defeats a plate arrives on the far side as 0.65 g of steel penetrator.
+  Ceramic then grinds down what is left; aramid does not. There is no separate
+  "mitigation percent".
 - **Angle matters.** An oblique hit faces more effective material; steep angles
   push the interaction toward ricochet mechanics.
 - **Worn armor protects worse,** and durability loss itself is now driven by
@@ -107,6 +117,14 @@ limits used in armor certification.
 
 ## Ammunition and grenade data: normalized against real prototypes
 
+- **Bullet construction comes from a table of real cartridges,** keyed by the
+  round's own name: how much of it can deform, and the frontal area and mass of
+  its hard core where one is published. A cartridge is the same cartridge in every
+  pack it ships in, which was not true before — the character of a round used to
+  be inferred from where it sat among whatever other ammunition an install
+  happened to have, so clones of one bullet could come out with different physics
+  and a plain M80 could be read as an expanding round. Ammunition the table does
+  not name still falls back to that inference.
 - Every round in the database — including rounds added by other mods — is
   normalized from its physical data. Shotgun shells receive real pellet counts,
   pellet masses and velocities of their prototypes (vanilla systematically
@@ -120,9 +138,16 @@ limits used in armor certification.
   average fragment, while the rare large fragment (base plate, fuze body) can
   defeat low protection classes near the epicenter.
 
-*What this is based on:* shell and grenade figures come from open-source
-prototype specifications — service manuals and public reference works — for
-charge weights, pellet counts, fragment mass and fragment initial velocity.
+*What this is based on:* bullet cores come from published construction — core
+weight, core diameter and core hardness where a maker or a standard publishes
+them, and a core is only entered when one of those exists. Where a core's mass
+and length are published but not its diameter, the area follows from the alloy's
+density; the two tungsten-carbide cores that different makers publish in
+different calibres, the M993 and the 7N37, land within four percent of each other
+on that arithmetic, which is the only reason to trust the rest of it. Shell and
+grenade figures come from open-source prototype specifications — service manuals
+and public reference works — for charge weights, pellet counts, fragment mass and
+fragment initial velocity.
 Pellet masses are not invented but derived from the density of lead and the
 nominal pellet diameter, which is what exposes vanilla's systematic
 under-loading of small buckshot. Blast strength scales from the actual explosive

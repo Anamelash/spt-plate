@@ -230,8 +230,10 @@ public class PlateServerMod(
             "MinCaliberCohort": 4,
             // Penetration: pen units per J/mm² of cross-section. Anchors: M61 75->64, M995 64->53, PS 44.6->35
             "PenPerEnergyDensity": 0.85,
-            // Bullet construction effect on penetration: multiplier (1 + this*(0.5-X))
-            "PenConstructionFactor": 0.6,
+            // How small a core to assume for a cartridge ammo-reference.jsonc does not
+            // name: 1.0 at the cohort median of specific penetration, down to (1 - this)
+            // at the top of it. 0 = every unlisted bullet strikes as one piece
+            "CoreFallbackDepth": 0.5,
             // Technical damage ceiling after the rescale
             "DamageCap": 999,
             // Buckshot: pellet masses from the spec reference book (ammo-reference.jsonc),
@@ -273,9 +275,10 @@ public class PlateServerMod(
             // Floor of local degradation (a shattered segment holds at least this fraction)
             "DegradeFloor": 0.15,
             // Material profiles: ULimitMult/ECostMult — threshold and energy-cost
-            // multipliers (E_cost = ECostMult·U_eff·A_bullet); KDef — deformation
-            // (X_out = X + KDef·X); KFrag — mass loss (·(1-0.5X): a hard core
-            // shatters harder); DAreaMm/DegradeMult — local degradation
+            // multipliers (E_cost = ECostMult·U_eff·A_core); KDef — deformation
+            // (X_out = X + KDef·X); KFrag — erosion of whatever comes through, a
+            // property of the barrier (ceramic grinds a core down, aramid does not);
+            // DAreaMm/DegradeMult — local degradation
             // around the hit (ceramic cracks tile by tile, "gong" steel stays local);
             // SharpVulnMult — fiber vulnerability to sharp-nosed bullets
             // (U × (1 - this·clamp01((0.5-X)·2))); JPerDurability — J of absorbed
