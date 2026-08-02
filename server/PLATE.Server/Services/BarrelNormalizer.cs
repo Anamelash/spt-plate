@@ -109,7 +109,13 @@ public class BarrelNormalizer(
                 // the rest have a fixed barrel, and its length exists nowhere in the data
                 // - only in the prototype the weapon is modelled on
                 var length = reference.Weapons.TryGetValue(name, out var w) ? w.LengthMm : 0;
-                var row = Normalize(item, p, p.AmmoCaliber, length, reference, b, changed, skipped);
+
+                // the declared caliber is not always the truth either: one pack ships the
+                // NSV, a 12.7x108 heavy machine gun, declaring 5.45x39, and normalizing a
+                // 1100 mm barrel against an AK's reference hands it a fat velocity bonus.
+                // Where the name says otherwise, the name wins
+                var declared = CaliberFromName(name, reference) ?? p.AmmoCaliber;
+                var row = Normalize(item, p, declared, length, reference, b, changed, skipped);
 
                 // a fixed-barrel weapon sitting at 0% and unknown to the reference book is
                 // simply neutral; saying so every time would bury the entries worth acting on
