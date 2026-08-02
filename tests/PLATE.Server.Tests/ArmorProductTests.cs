@@ -52,4 +52,71 @@ public class ArmorProductTests
     {
         Assert.Equal("some_modded_vest", ArmorNormalizer.Product("some_modded_vest"));
     }
+
+    [Theory]
+    [InlineData("item_equipment_plate_granit4_5class_back", ArmorNormalizer.Kind.Plate)]
+    [InlineData("ratnik_6b47_level3_helmet_armor_top", ArmorNormalizer.Kind.Helmet)]
+    [InlineData("helmet_ops_core_fast_visor", ArmorNormalizer.Kind.Helmet)]
+    [InlineData("item_equipment_helmet_vulkan_shield", ArmorNormalizer.Kind.Helmet)]
+    [InlineData("6b43_6a_level3_soft_armor_front", ArmorNormalizer.Kind.VestComponent)]
+    [InlineData("item_equipment_facecover_ballistic_mask", ArmorNormalizer.Kind.Other)]
+    [InlineData("item_equipment_glasses_npp", ArmorNormalizer.Kind.Other)]
+    [InlineData("balaclava", ArmorNormalizer.Kind.Other)]
+    public void An_item_lands_in_the_right_section(string item, ArmorNormalizer.Kind expected)
+    {
+        Assert.Equal(expected, ArmorNormalizer.Classify(item));
+    }
+
+    /// <summary>
+    /// UNTAR is a helmet and a vest under one name, differing only in case. Whichever
+    /// way the classifier reads the name, the zone suffix has to decide.
+    /// </summary>
+    [Fact]
+    public void One_name_shared_by_a_helmet_and_a_vest_still_splits()
+    {
+        Assert.Equal(ArmorNormalizer.Kind.Helmet,
+            ArmorNormalizer.Classify("Untar_level3_helmet_armor_top"));
+        Assert.Equal(ArmorNormalizer.Kind.VestComponent,
+            ArmorNormalizer.Classify("untar_level3_soft_armor_front"));
+    }
+
+    /// <summary>
+    /// A product name is not always one plate. "granit4" covers a class 5 ceramic front,
+    /// a class 4 steel one and a class 3 polyethylene insert, so the item's own name has
+    /// to be able to overrule the product it belongs to.
+    /// </summary>
+    [Fact]
+    public void The_items_own_name_beats_its_product()
+    {
+        var reference = new ReferenceBook.AmmoReference
+        {
+            ArmorPlates =
+            {
+                ["granit4"] = new ReferenceBook.ArmorPlateRef { Prototype = "the whole family" },
+                ["granit4_5class_front"] = new ReferenceBook.ArmorPlateRef { Prototype = "this one plate" },
+            },
+        };
+
+        const string front = "item_equipment_plate_granit4_5class_front";
+        var spec = ArmorNormalizer.ProductSpec(reference, front, ArmorNormalizer.Product(front), out var key);
+
+        Assert.Equal("this one plate", spec?.Prototype);
+        Assert.Equal("granit4_5class_front", key);
+    }
+
+    /// <summary>And with no entry of its own it still falls back to the product.</summary>
+    [Fact]
+    public void Without_one_it_falls_back_to_the_product()
+    {
+        var reference = new ReferenceBook.AmmoReference
+        {
+            ArmorPlates = { ["granit4"] = new ReferenceBook.ArmorPlateRef { Prototype = "the whole family" } },
+        };
+
+        const string back = "item_equipment_plate_granit4_5class_back";
+        var spec = ArmorNormalizer.ProductSpec(reference, back, ArmorNormalizer.Product(back), out var key);
+
+        Assert.Equal("the whole family", spec?.Prototype);
+        Assert.Equal("granit4", key);
+    }
 }

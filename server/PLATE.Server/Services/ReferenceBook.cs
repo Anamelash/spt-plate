@@ -504,11 +504,23 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           },
 
           // ===== Armour construction =====
-          // Keyed by the product — the item name up to "_level" — so one entry covers
-          // every zone of it. Thickness is the number the game has nowhere and the whole
-          // reason this table exists. Material is only set where the game has it wrong.
-          // Anything absent keeps the game's own material and falls back to the class.
+          // Keyed by the item name first and by the product — the item name up to
+          // "_level" — second, so one entry covers every zone of a product but a product
+          // whose zones really do differ can name them one at a time. Thickness is the
+          // number the game has nowhere and the whole reason this table exists. Material
+          // is only set where the game has it wrong. Anything absent keeps the game's own
+          // material and falls back to the class.
+          //
+          // Where a manufacturer publishes a thickness it is used as published. Where one
+          // publishes a mass instead — which is the usual case for helmets — the hard
+          // element is t = m / (rho * A): the shell mass over the material's density and
+          // the area it covers, 11 dm2 for a full cut, 9 dm2 for a high cut, or whatever
+          // area the manufacturer quotes. That reproduces the published areal density
+          // exactly, which is the quantity the penetration model actually consumes. The
+          // check on it is the PASGT: 11.2 kg/m2 of Kevlar 29 gives 7.8 mm against a
+          // shell that measures 7.3 +/- 0.8.
           "ArmorPlates": {
+            // --- vests ---
             "6b5-16":     { "Prototype": "6B5-16, ADU 605T-83", "ThicknessMm": 6.5, "BackingMm": 8,
                             "Source": "titanium 6.5 mm + 30-layer TSVM-DZh package" },
             "6b5-15":     { "Prototype": "6B5-15, ADU 14.20.00.000", "ThicknessMm": 13, "BackingMm": 8,
@@ -516,7 +528,97 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "6b3TM":      { "Prototype": "6B3TM, ADU 605-80", "ThicknessMm": 1.25, "BackingMm": 8,
                             "Source": "titanium 1.25 mm anti-fragmentation element" },
             "kora_kulon": { "Prototype": "Kora-Kulon", "ThicknessMm": 4.3, "BackingMm": 6,
-                            "Source": "steel plate, Br3" }
+                            "Source": "steel plate, Br3" },
+
+            // --- plates ---
+            "sapi_6_frontback":         { "Prototype": "ESAPI", "Material": "Ceramic", "ThicknessMm": 10, "BackingMm": 12,
+                                          "Source": "boron carbide 10 mm on a UHMWPE backer, 5.5 lb in medium" },
+            "SSAPI_ESBI_6_side":        { "Prototype": "ESBI side insert", "Material": "Ceramic", "ThicknessMm": 10, "BackingMm": 10,
+                                          "Source": "the ESAPI construction in a side cut" },
+            "granit4_5class_front":     { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 7.6, "BackingMm": 10,
+                                          "Source": "3.4 kg ceramic panel in size 2" },
+            "granit4_5class_back":      { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 7.6, "BackingMm": 10,
+                                          "Source": "3.4 kg ceramic panel in size 2" },
+            "korund_vmk_6class_front":  { "Prototype": "Korund-VM-K", "Material": "Ceramic", "ThicknessMm": 6.7, "BackingMm": 10,
+                                          "Source": "25x25 cm ceramic panel, about 2.5 kg" },
+            "korund_vm_k_6class_back":  { "Prototype": "Korund-VM-K", "Material": "Ceramic", "ThicknessMm": 6.7, "BackingMm": 10,
+                                          "Source": "25x25 cm ceramic panel, about 2.5 kg" },
+            "korund_back_6b23_2":       { "Prototype": "6B23 steel panel, 44S", "Material": "ArmoredSteel", "ThicknessMm": 6.3,
+                                          "Source": "6.3 mm of 44S steel, rated against the heat-hardened AKM core" },
+
+            // --- helmets: aramid shells ---
+            "Untar":            { "Prototype": "PASGT", "Material": "Aramid", "ThicknessMm": 7.8,
+                                  "Source": "11.2 kg/m2, 19 layers of Kevlar 29; the shell measures 7.3 +/- 0.8 mm" },
+            "ratnik_6b47":      { "Prototype": "6B47 Ratnik", "Material": "Aramid", "ThicknessMm": 5.4,
+                                  "Source": "up to 1 kg of aramid over 11 dm2; fragment V50 above 650 m/s, 9x18 at 5 m" },
+            "msa_tc2001":       { "Prototype": "MSA ACH TC-2001", "Material": "Aramid", "ThicknessMm": 7.9,
+                                  "Source": "ACH shell, 3.25 lb in large, over 11 dm2" },
+            "msa_tc2002":       { "Prototype": "MSA ACH TC-2002", "Material": "Aramid", "ThicknessMm": 7.9,
+                                  "Source": "ACH shell, 3.25 lb in large, over 11 dm2" },
+            "msa_gallet_tc800": { "Prototype": "MSA Gallet TC800", "Material": "Aramid", "ThicknessMm": 7.9,
+                                  "Source": "ACH-family aramid shell over 11 dm2" },
+            "ulach":            { "Prototype": "ULACH", "Material": "Aramid", "ThicknessMm": 7.3,
+                                  "Source": "lightweight ACH, 1.36 kg of Kevlar over 11 dm2" },
+            "ops_core_fastMT":  { "Prototype": "Ops-Core FAST MT", "Material": "Aramid", "ThicknessMm": 8.5,
+                                  "Source": "1.04-1.18 kg aramid shell over a 9 dm2 high cut" },
+            "helmet_ops_core_fast_tan": { "Prototype": "Ops-Core FAST MT", "Material": "Aramid", "ThicknessMm": 8.5,
+                                  "Source": "the same shell as the FAST MT" },
+            "crye_precision_airframe":  { "Prototype": "Crye AirFrame", "Material": "Aramid", "ThicknessMm": 6.9,
+                                  "Source": "2.30 lb complete in medium; the shell over a 9 dm2 high cut" },
+            "item_equipment_helmet_crye_airframe_chops": { "Prototype": "Crye AirFrame chops", "Material": "Aramid", "ThicknessMm": 6.9,
+                                  "Source": "the same laminate as the AirFrame shell" },
+            "item_equipment_helmet_crye_airframe_ears":  { "Prototype": "Crye AirFrame ears", "Material": "Aramid", "ThicknessMm": 6.9,
+                                  "Source": "the same laminate as the AirFrame shell" },
+            "bnti_lshz_2dtm":   { "Prototype": "LShZ-2DTM", "Material": "Aramid", "ThicknessMm": 8.8,
+                                  "Source": "discrete aramid fabric, GOST class 2; 4.45 kg for the whole set" },
+            "item_equipment_helmet_lshz2dtm_aventail": { "Prototype": "LShZ-2DTM aventail", "Material": "Aramid", "ThicknessMm": 7,
+                                  "Source": "aramid mail, 5.5 dm2, class 2" },
+
+            // --- helmets: polyethylene shells ---
+            "exfil":            { "Prototype": "Team Wendy EXFIL Ballistic", "Material": "UHMWPE", "ThicknessMm": 10.9,
+                                  "Source": "0.95 kg polyethylene composite shell over a 9 dm2 high cut" },
+            "helmet_team_wendy_exfil_ear_covers":        { "Prototype": "EXFIL ear covers", "Material": "UHMWPE", "ThicknessMm": 10.9,
+                                  "Source": "the same laminate as the EXFIL shell" },
+            "helmet_team_wendy_exfil_ear_covers_coyote": { "Prototype": "EXFIL ear covers", "Material": "UHMWPE", "ThicknessMm": 10.9,
+                                  "Source": "the same laminate as the EXFIL shell" },
+            "item_equipment_helmet_gentex_slaap_gray":   { "Prototype": "Ops-Core SLAAP", "Material": "UHMWPE", "ThicknessMm": 23.5,
+                                  "Source": "1.25 lb applique that defeats 7.62x39 mild steel core - a rifle plate, not a shell" },
+            "item_equipment_helmet_gentex_slaap_green":  { "Prototype": "Ops-Core SLAAP", "Material": "UHMWPE", "ThicknessMm": 23.5,
+                                  "Source": "1.25 lb applique that defeats 7.62x39 mild steel core - a rifle plate, not a shell" },
+            "item_equipment_helmet_gentex_slaap_tan":    { "Prototype": "Ops-Core SLAAP", "Material": "UHMWPE", "ThicknessMm": 23.5,
+                                  "Source": "1.25 lb applique that defeats 7.62x39 mild steel core - a rifle plate, not a shell" },
+
+            // --- helmets: metal shells ---
+            "altin":            { "Prototype": "Altyn", "Material": "Titan", "ThicknessMm": 3, "BackingMm": 8,
+                                  "Source": "3 mm titanium on a 15-30 layer TSVM-DZh backing; 4.1 kg with the visor" },
+            "helmet_altyn_face_shield": { "Prototype": "Altyn visor", "Material": "Titan", "ThicknessMm": 3,
+                                  "Source": "3 mm titanium, as the shell" },
+            "maska1sha":        { "Prototype": "Maska-1Sch", "Material": "ArmoredSteel", "ThicknessMm": 3,
+                                  "Source": "4.3 kg of armour steel over 13 dm2, GOST class 2" },
+            "item_equipment_helmet_maska_1sh_shield":       { "Prototype": "Maska-1Sch visor", "Material": "ArmoredSteel", "ThicknessMm": 3.5,
+                                  "Source": "steel plate with a vision slit, class 2" },
+            "item_equipment_helmet_maska_1sh_shield_killa": { "Prototype": "Maska-1Sch visor", "Material": "ArmoredSteel", "ThicknessMm": 3.5,
+                                  "Source": "steel plate with a vision slit, class 2" },
+            "sferaS_SSSh94":    { "Prototype": "Sfera SSSh-94", "Material": "ArmoredSteel", "ThicknessMm": 2.5,
+                                  "Source": "steel plates replacing the STSh-81's 3 mm titanium; 3.3 kg against 2.3" },
+            "ssh68":            { "Prototype": "SSh-68", "Material": "ArmoredSteel", "ThicknessMm": 1.6,
+                                  "Source": "1.3 kg of steel; rated for a 1 g fragment at 250 m/s, not for bullets" },
+            "Rys_T":            { "Prototype": "Rys-T", "Material": "Titan", "ThicknessMm": 3.6,
+                                  "Source": "NII Stali titanium, 2.5 kg without the visor over 13 dm2, GOST class 2" },
+
+            // --- visors ---
+            "item_equipment_helmet_rys_t_shield":   { "Prototype": "Rys-T visor", "Material": "Glass", "ThicknessMm": 10,
+                                  "Source": "glass visor, GOST class 1 - Nagant and 9x18, not rifle" },
+            "item_equipment_helmet_lshz2dtm_shield": { "Prototype": "LShZ-2DTM visor", "Material": "Glass", "ThicknessMm": 10,
+                                  "Source": "polycarbonate combination, GOST class 1, 1.5 dm2 transparent" },
+
+            // --- helmets with no ballistic rating at all ---
+            // Both are sold against blunt and edged attack. The game gives them a class
+            // anyway; what the manufacturer certifies is a 30 J strike and a knife
+            "kolpak_1s_4ml":    { "Prototype": "Kolpak-1S", "ThicknessMm": 3,
+                                  "Source": "impact helmet: the GOST special class is edged weapons, there is no ballistic rating" },
+            "djeta_psh97":      { "Prototype": "PSh-97 Djeta", "ThicknessMm": 3,
+                                  "Source": "police impact helmet, 30 J blunt strike; no ballistic rating" }
           },
 
           // ===== Reference plate per material and class =====

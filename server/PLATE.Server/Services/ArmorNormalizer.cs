@@ -74,10 +74,25 @@ public class ArmorNormalizer(
         None,
     }
 
+    /// <summary>
+    /// What kind of armour an item is. The four are made by different people out of
+    /// different things — a helmet shell, a rifle plate, the package sewn into a
+    /// carrier, and a mask or a pair of glasses — and reading them apart is the only
+    /// way to see which of them the reference book still has nothing real to say about.
+    /// </summary>
+    public enum Kind
+    {
+        Helmet,
+        Plate,
+        VestComponent,
+        Other,
+    }
+
     private sealed class Row
     {
         public required string Product;
         public required string Material;
+        public Kind Kind;
         public int Class;
         public int Zones;
         public double ThicknessMm;
@@ -124,14 +139,13 @@ public class ArmorNormalizer(
                 continue;
             }
 
-            var product = Product(item.Name ?? "");
-            reference.ArmorPlates.TryGetValue(product, out var spec);
-
             // no documented product, but a plate carries its own mass, and mass over
             // density over face area is a thickness. Most of the armour here is invented
             // for the game and has no specification to look up — this is the only honest
             // number available for it, and it is still physics rather than a guess
             var itemName = item.Name ?? "";
+            var product = Product(itemName);
+            var spec = ProductSpec(reference, itemName, product, out var specKey);
             var cls = (int)(p.ArmorClass ?? 0);
 
             // a plate the game invented has no product to look up, but there is a real
@@ -149,14 +163,15 @@ public class ArmorNormalizer(
             // front and a side of different mass, and collapsing them keeps whichever
             // was read last
             var perItem = derived > 0 || byClass != null;
-            var rowKey = perItem ? itemName : product;
+            var rowKey = perItem ? itemName : spec != null ? specKey : product;
 
             if (!target.TryGetValue(rowKey, out var row))
             {
                 row = new Row
                 {
-                    Product = perItem ? Shorten(itemName) : product,
+                    Product = perItem ? Shorten(itemName) : rowKey,
                     Material = material,
+                    Kind = Classify(itemName),
                     Class = cls,
                 };
                 target[rowKey] = row;
@@ -243,6 +258,48 @@ public class ArmorNormalizer(
         var hardGrams = kg * 1000.0 * m.HardMassFraction;
         var densityGMm3 = m.DensityGCm3 / 1000.0;
         return hardGrams / (densityGMm3 * areaMm2);
+    }
+
+    /// <summary>
+    /// The documented product for an item, and the key that found it. The item's own
+    /// name answers first so that a product whose zones really do differ can name them
+    /// one at a time — "granit4" is a class 5 ceramic front, a class 4 steel one and a
+    /// class 3 polyethylene Zhuk insert, all under the one name — while the product key
+    /// still covers everything that is genuinely one plate worn in four places.
+    /// </summary>
+    public static ReferenceBook.ArmorPlateRef? ProductSpec(ReferenceBook.AmmoReference reference,
+        string itemName, string product, out string key)
+    {
+        key = Shorten(itemName);
+        if (reference.ArmorPlates.TryGetValue(key, out var byName))
+        {
+            return byName;
+        }
+
+        key = product;
+        return reference.ArmorPlates.TryGetValue(product, out var byProduct) ? byProduct : null;
+    }
+
+    /// <summary>
+    /// Which of the four things an item is. Order matters: a vest and a helmet can
+    /// share a product name — UNTAR is both — and the zone suffix is what tells them
+    /// apart.
+    /// </summary>
+    public static Kind Classify(string itemName)
+    {
+        const StringComparison ic = StringComparison.OrdinalIgnoreCase;
+
+        if (itemName.StartsWith("item_equipment_plate_", ic))
+        {
+            return Kind.Plate;
+        }
+
+        if (itemName.Contains("helmet", ic) || itemName.Contains("visor", ic))
+        {
+            return Kind.Helmet;
+        }
+
+        return itemName.Contains("soft_armor", ic) ? Kind.VestComponent : Kind.Other;
     }
 
     /// <summary>
@@ -350,48 +407,38 @@ public class ArmorNormalizer(
         sb.AppendLine();
         sb.AppendLine("## Where each figure came from");
         sb.AppendLine();
-        sb.AppendLine("| Source | Items | Trust |");
-        sb.AppendLine("|---|---|---|");
-        sb.AppendLine($"| The real product | {all.Count(r => r.From == Origin.Product)} | "
-                      + "published specifications for the thing it is modelled on |");
-        sb.AppendLine($"| A reference construction | {all.Count(r => r.From == Origin.Reference)} | "
-                      + "the real armour of that material and rating |");
-        sb.AppendLine($"| Its own mass | {all.Count(r => r.From == Origin.Mass)} | "
-                      + "physics, but from a weight other mods can rewrite |");
-        sb.AppendLine($"| Nothing | {all.Count(r => r.From == Origin.None)} | "
-                      + "behaves exactly as the game shipped it |");
-
-        Section(sb, "From the real product", all.Where(r => r.From == Origin.Product),
-            "Published specifications for the product the item is modelled on. These are the "
-            + "figures to trust, and the ones worth growing.",
-            withReference: false);
-
-        Section(sb, "From a reference construction", all.Where(r => r.From == Origin.Reference),
-            "No documented product, so the item takes the real armour of its material and "
-            + "rating. Most of the armour in the game is invented for it — there is no "
-            + "specification for a \"Cult Termite\" — but there is always a real one doing the "
-            + "same job. `Reference` names exactly which entry answered; where the material has "
-            + "a ceiling its rating cannot lift, the rating it was read at is shown too.",
-            withReference: true);
-
-        Section(sb, "From its own mass", all.Where(r => r.From == Origin.Mass),
-            "Neither a documented product nor a reference, but the item carries a mass, and "
-            + "mass over density over face area is a thickness. Weakest of the three: any mod "
-            + "that scales item weight moves these figures with it.",
-            withReference: false);
-
-        sb.AppendLine();
-        sb.AppendLine($"## Not normalized ({all.Count(r => r.From == Origin.None)})");
-        sb.AppendLine();
-        sb.AppendLine("Nothing was applied; these behave exactly as the game shipped them. Each is "
-                      + "an invitation to add its material and thickness to `ammo-reference.jsonc`.");
-        sb.AppendLine();
-        sb.AppendLine("| Item | Class | Material | Zones |");
-        sb.AppendLine("|---|---|---|---|");
-        foreach (var r in all.Where(r => r.From == Origin.None)
-                     .OrderByDescending(r => r.Class).ThenBy(r => r.Product))
+        sb.AppendLine("| | The real product | A reference construction | Its own mass | Nothing |");
+        sb.AppendLine("|---|---|---|---|---|");
+        foreach (var kind in Kinds)
         {
-            sb.AppendLine($"| {r.Product} | {r.Class} | {r.Material} | {r.Zones} |");
+            var of = all.Where(r => r.Kind == kind).ToList();
+            sb.AppendLine($"| {Title(kind)} | {of.Count(r => r.From == Origin.Product)} | "
+                          + $"{of.Count(r => r.From == Origin.Reference)} | "
+                          + $"{of.Count(r => r.From == Origin.Mass)} | "
+                          + $"{of.Count(r => r.From == Origin.None)} |");
+        }
+
+        sb.AppendLine($"| **All {all.Count}** | **{all.Count(r => r.From == Origin.Product)}** | "
+                      + $"**{all.Count(r => r.From == Origin.Reference)}** | "
+                      + $"**{all.Count(r => r.From == Origin.Mass)}** | "
+                      + $"**{all.Count(r => r.From == Origin.None)}** |");
+        sb.AppendLine();
+        sb.AppendLine("Left to right is descending trust: published specifications for the thing "
+                      + "the item is modelled on, then the real armour of its material and rating, "
+                      + "then physics off a weight other mods can rewrite, then nothing at all.");
+
+        foreach (var kind in Kinds)
+        {
+            var of = all.Where(r => r.Kind == kind).ToList();
+            sb.AppendLine();
+            sb.AppendLine($"## {Title(kind)} ({of.Count})");
+            sb.AppendLine();
+            sb.AppendLine(Blurb(kind));
+
+            foreach (var origin in Origins)
+            {
+                Section(sb, origin, of.Where(r => r.From == origin));
+            }
         }
 
         try
@@ -404,28 +451,98 @@ public class ArmorNormalizer(
         }
     }
 
-    private static void Section(StringBuilder sb, string title, IEnumerable<Row> rows,
-        string blurb, bool withReference)
+    private static readonly Kind[] Kinds =
+        [Kind.Helmet, Kind.Plate, Kind.VestComponent, Kind.Other];
+
+    private static readonly Origin[] Origins =
+        [Origin.Product, Origin.Reference, Origin.Mass, Origin.None];
+
+    private static string Title(Kind kind) => kind switch
+    {
+        Kind.Helmet => "Helmets",
+        Kind.Plate => "Plates",
+        Kind.VestComponent => "Vest components",
+        _ => "Other",
+    };
+
+    private static string Blurb(Kind kind) => kind switch
+    {
+        Kind.Helmet =>
+            "Shells, visors, mandibles and appliques. Manufacturers publish a mass and a "
+            + "rating rather than a thickness, so a documented helmet is its shell mass over "
+            + "the area it covers — which reproduces the published areal density, the "
+            + "quantity that actually decides what gets through.",
+        Kind.Plate =>
+            "The hard inserts. The only armour in the game that carries a mass of its own, "
+            + "so the only kind that can fall back on physics when nothing else is known.",
+        Kind.VestComponent =>
+            "The woven package sewn into a carrier. A vest without plates is certified as "
+            + "class 2 whatever the game prints on it, and the package is the same fabric at "
+            + "every rating above that.",
+        _ =>
+            "Masks, glasses, balaclavas and headgear that is armour only by the game's "
+            + "reckoning.",
+    };
+
+    private static string Heading(Origin origin) => origin switch
+    {
+        Origin.Product => "From the real product",
+        Origin.Reference => "From a reference construction",
+        Origin.Mass => "From its own mass",
+        _ => "Not normalized",
+    };
+
+    private static string Blurb(Origin origin) => origin switch
+    {
+        Origin.Product =>
+            "Published specifications for the product the item is modelled on. These are the "
+            + "figures to trust, and the ones worth growing.",
+        Origin.Reference =>
+            "No documented product, so the item takes the real armour of its material and "
+            + "rating. `Reference` names exactly which entry answered; where the material has "
+            + "a ceiling its rating cannot lift, the rating it was read at is shown too.",
+        Origin.Mass =>
+            "Neither a documented product nor a reference, but the item carries a mass, and "
+            + "mass over density over face area is a thickness. Weakest of the three: any mod "
+            + "that scales item weight moves these figures with it.",
+        _ =>
+            "Nothing was applied; these behave exactly as the game shipped them. Each is an "
+            + "invitation to add its material and thickness to `ammo-reference.jsonc`.",
+    };
+
+    private static void Section(StringBuilder sb, Origin origin, IEnumerable<Row> rows)
     {
         var list = rows.OrderBy(r => r.Material).ThenByDescending(r => r.Class)
             .ThenBy(r => r.Product).ToList();
 
-        sb.AppendLine();
-        sb.AppendLine($"## {title} ({list.Count})");
-        sb.AppendLine();
-        sb.AppendLine(blurb);
-        sb.AppendLine();
-
         if (list.Count == 0)
         {
-            sb.AppendLine("*(none)*");
             return;
         }
 
+        sb.AppendLine();
+        sb.AppendLine($"### {Heading(origin)} ({list.Count})");
+        sb.AppendLine();
+        sb.AppendLine(Blurb(origin));
+        sb.AppendLine();
+
+        if (origin == Origin.None)
+        {
+            sb.AppendLine("| Item | Material | Class | Zones |");
+            sb.AppendLine("|---|---|---|---|");
+            foreach (var r in list)
+            {
+                sb.AppendLine($"| {r.Product} | {r.Material} | {r.Class} | {r.Zones} |");
+            }
+
+            return;
+        }
+
+        var withReference = origin == Origin.Reference;
         sb.AppendLine(withReference
             ? "| Item | Material | Class | Reference | Construction | Thickness | Zones |"
             : "| Item | Material | Class | Construction | Thickness | Zones | Source |");
-        sb.AppendLine(withReference ? "|---|---|---|---|---|---|---|" : "|---|---|---|---|---|---|---|");
+        sb.AppendLine("|---|---|---|---|---|---|---|");
 
         foreach (var r in list)
         {
