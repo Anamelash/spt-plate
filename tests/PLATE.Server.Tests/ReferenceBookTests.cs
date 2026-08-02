@@ -213,15 +213,22 @@ public class ReferenceBookTests
 
         foreach (var (name, plate) in Shipped().ArmorPlates)
         {
-            // a thickness, or failing that the rating the maker certifies — an entry
-            // with neither says nothing the game did not already know
-            if (plate.Rating > 0)
+            // a thickness, or failing that the rating the maker certifies, or failing
+            // that what it is made of — an entry with none of the three says nothing
+            // the game did not already know
+            if (plate.ThicknessMm > 0)
             {
-                Assert.InRange(plate.Rating, 1, 6);
+                Assert.InRange(plate.ThicknessMm, 0.5, 60);
             }
             else
             {
-                Assert.InRange(plate.ThicknessMm, 0.5, 60);
+                Assert.True(plate.Rating > 0 || plate.Material.Length > 0,
+                    $"{name}: no thickness, no rating and no material");
+            }
+
+            if (plate.Rating > 0)
+            {
+                Assert.InRange(plate.Rating, 1, 6);
             }
 
             Assert.False(string.IsNullOrWhiteSpace(plate.Source), $"{name}: no source for the figures");
@@ -425,11 +432,10 @@ public class ReferenceBookTests
         {
             Assert.False(string.IsNullOrWhiteSpace(why), $"{key}: no reason given");
 
-            // an entry that states a rating has not been written off — it gave us that
+            // an entry that gave up a rating or a material has not been written off
             if (book.ArmorPlates.TryGetValue(key, out var documented))
             {
-                Assert.True(documented.ThicknessMm <= 0 && documented.Rating <= 0,
-                    $"{key}: written off, but the product table has its construction");
+                Assert.Fail($"{key}: written off, but the product table has {documented.Prototype}");
             }
         }
     }

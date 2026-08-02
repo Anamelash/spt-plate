@@ -151,12 +151,22 @@ public class ArmorNormalizer(
             var spec = ProductSpec(reference, itemName, product, out var specKey);
             var cls = (int)(p.ArmorClass ?? 0);
 
-            // an entry that names a rating and no construction is not a documented
-            // product — the maker says what it stops and nothing about what it is made
-            // of. It still beats the game's class, so the reference is read at theirs
+            // an entry with no thickness is not a documented product — the maker says
+            // what it stops, or what it is made of, and nothing about how much of it
+            // there is. Both are still worth more than the game's own answer: the
+            // reference is read at their rating, and out of their material
             var stated = spec is { ThicknessMm: <= 0 } ? spec : null;
             spec = stated == null ? spec : null;
             var rating = stated is { Rating: > 0 } ? stated.Rating : cls;
+
+            var was = "";
+            if (stated != null && stated.Material.Length > 0 && stated.Material != material)
+            {
+                was = material;
+                material = stated.Material;
+                p.ArmorMaterial = Enum.TryParse<SPTarkov.Server.Core.Models.Enums.ArmorMaterial>(
+                    material, out var known2) ? known2 : p.ArmorMaterial;
+            }
 
             // a plate the game invented has no product to look up, but there is a real
             // plate of the same rating doing the same job, and that is what it stands in
@@ -183,6 +193,7 @@ public class ArmorNormalizer(
                 {
                     Product = perItem ? Shorten(itemName) : rowKey,
                     Material = material,
+                    MaterialWas = was,
                     Kind = Classify(itemName),
                     Class = cls,
                     Note = Note(reference, itemName, product),
@@ -508,11 +519,18 @@ public class ArmorNormalizer(
 
         var onReference = all.Where(r => r.From == Origin.Reference).ToList();
         var searched = onReference.Count(r => r.Note.Length > 0);
+        var untouched = onReference.Where(r => r.Note.Length == 0)
+            .GroupBy(r => r.Kind)
+            .OrderByDescending(g => g.Count())
+            .Select(g => $"{g.Count()} {Title(g.Key).ToLowerInvariant()}")
+            .ToList();
+
         sb.AppendLine();
         sb.AppendLine($"Of the {onReference.Count} on a reference, {searched} have been looked into "
-                      + $"and had nothing to give — `Looked up` says what was found instead — and "
-                      + $"{onReference.Count - searched} nobody has searched for yet. Those are the "
-                      + "ones worth an afternoon.");
+                      + "and had nothing to give — `Looked up` says what was found instead. Nobody "
+                      + "has gone looking for: "
+                      + (untouched.Count > 0 ? string.Join(", ", untouched) + "." : "nothing, "
+                          + "every one of them has been searched for."));
 
         foreach (var kind in Kinds)
         {

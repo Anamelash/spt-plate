@@ -544,14 +544,20 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                           "Source": "boron carbide 10 mm on a UHMWPE backer, 5.5 lb in medium" },
             "SSAPI_ESBI_6_side":        { "Prototype": "ESBI side insert", "Material": "Ceramic", "ThicknessMm": 10, "BackingMm": 10,
                                           "Source": "the ESAPI construction in a side cut" },
-            "granit4_5class_front":     { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 7.6, "BackingMm": 10,
-                                          "Source": "3.4 kg ceramic panel in size 2" },
-            "granit4_5class_back":      { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 7.6, "BackingMm": 10,
-                                          "Source": "3.4 kg ceramic panel in size 2" },
-            "korund_vmk_6class_front":  { "Prototype": "Korund-VM-K", "Material": "Ceramic", "ThicknessMm": 6.7, "BackingMm": 10,
-                                          "Source": "25x25 cm ceramic panel, about 2.5 kg" },
-            "korund_vm_k_6class_back":  { "Prototype": "Korund-VM-K", "Material": "Ceramic", "ThicknessMm": 6.7, "BackingMm": 10,
-                                          "Source": "25x25 cm ceramic panel, about 2.5 kg" },
+            // the one panel in the series anybody has measured and published: 365x290x20
+            // and 3.8 kg, alumina tile on a UHMWPE composite. 3.59 g/cm2, of which the
+            // tile is 6 mm and the backer the other 13 - which comes to the 20 quoted.
+            // Its face is what the rest of the Granit masses are read over
+            "granit4rs":                { "Prototype": "Granit-4RS", "Material": "Ceramic", "ThicknessMm": 6, "BackingMm": 13,
+                                          "Source": "365x290x20 mm chest panel, 3.8 kg; alumina on UHMWPE" },
+            "granit4_5class_front":     { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 5.4, "BackingMm": 12,
+                                          "Source": "3.4 kg Br5 panel over the face the 4RS measures" },
+            "granit4_5class_back":      { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 5.4, "BackingMm": 12,
+                                          "Source": "3.4 kg Br5 panel over the face the 4RS measures" },
+            "korund_vmk_6class_front":  { "Prototype": "Korund-VM-K", "Material": "Ceramic", "ThicknessMm": 6.2, "BackingMm": 17,
+                                          "Source": "260x260x23 mm ceramic panel, 2.5 kg" },
+            "korund_vm_k_6class_back":  { "Prototype": "Korund-VM-K", "Material": "Ceramic", "ThicknessMm": 6.2, "BackingMm": 17,
+                                          "Source": "260x260x23 mm ceramic panel, 2.5 kg" },
             "korund_back_6b23_2":       { "Prototype": "6B23 steel panel, 44S", "Material": "ArmoredSteel", "ThicknessMm": 6.3,
                                           "Source": "6.3 mm of 44S steel, rated against the heat-hardened AKM core" },
 
@@ -627,6 +633,23 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                   "Source": "NII Stali titanium, 2.5 kg without the visor over 13 dm2, GOST class 2" },
             "zsh_1_2m":         { "Prototype": "ZSh-1-2M", "Material": "Aluminium", "ThicknessMm": 6.1,
                                   "Source": "aluminium alloy lined with aramid, Br2, V50 750 m/s; 3.5-4 kg with visor and aventail" },
+            "lshz5_vulkan5":    { "Prototype": "Vulkan-5 (LShZ-5)", "Material": "Combined", "ThicknessMm": 6, "BackingMm": 10,
+                                  "Source": "4.5 kg over 13 dm2 - a ceramic screen on a composite shell, and the heaviest helmet worn" },
+
+            // --- visors, mandibles and appliques ---
+            "item_equipment_glasses_6B34": { "Prototype": "6B34 goggles", "Material": "Glass", "ThicknessMm": 6,
+                                  "Source": "6 mm polycarbonate; V50 350 m/s against a 1 g, 6 mm ball" },
+            "item_equipment_helmet_galvion_mandible": { "Prototype": "Batlskin Viper mandible", "Material": "Aramid", "ThicknessMm": 9.7,
+                                  "Source": "0.42 kg in medium over the roughly 3 dm2 a mandible covers" },
+
+            // rating without construction: the maker says what it stops and no more
+            "helmet_zsh_1-2m_v1_face_shield": { "Prototype": "ZSh-1-2M visor", "Material": "Glass", "Rating": 2,
+                                  "Source": "stops 9x18 PM at 5 m; no construction published" },
+
+            // material without construction: the game has the wrong one and nobody
+            // publishes the right amount of it
+            "helmet_ops_core_fast_side_armor": { "Prototype": "Ops-Core FAST side armour", "Material": "UHMWPE",
+                                  "Source": "polyethylene, not the aluminium the game has; no weight published" },
 
             // --- visors ---
             "item_equipment_helmet_rys_t_shield":   { "Prototype": "Rys-T visor", "Material": "Glass", "ThicknessMm": 10,
@@ -701,6 +724,46 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "item_equipment_helmet_diamond_age_bastion_shield": "no mass published for the shield",
             "class_tor2":             "NPP KlASS publish a rating and no construction",
             "lshz":                   "Armocom publish a rating and no construction",
+
+            // visors, mandibles and appliques: sold by what they stop, never by mass
+            "item_equipment_helmet_tor_2_faceshield": "NPP KlASS publish nothing about the visor",
+            "item_equipment_helmet_kiverm_shield": "Fort publish nothing about the visor",
+            "item_equipment_helmet_vulkan_shield": "no mass published for the Vulkan-5 visor",
+            "helmet_ops_core_fast_visor": "Ops-Core publish a fragmentation rating and no mass",
+            "helmet_ops_core_handgun_face_shield": "Ops-Core publish a handgun rating and no mass",
+            "helmet_ops_core_fast_gunsight_mandible": "no mass published for the Ops-Core mandible",
+            "item_equipment_helmet_galvion_fixed_arm_visor": "no mass published for the Batlskin visor",
+            "item_equipment_helmet_galvion_applique": "no mass published for the applique",
+            "item_equipment_helmet_team_wendy_exfil_face_shield": "no mass published for the EXFIL visor",
+            "item_equipment_helmet_team_wendy_exfil_face_shield_coyote": "no mass published for the EXFIL visor",
+            "item_equipment_helmet_k1c_shield": "no construction published",
+
+            // plates: the makers publish a class and a price, and a mass only sometimes
+            "korund":                 "no thickness published for the Korund steel panel",
+            "korund_vm":              "no thickness published for the Korund-VM steel panel",
+            "korund_6b12":            "no thickness published for the 6B12 panel",
+            "granit":                 "Tekhinkom publish no mass for the side panel",
+            "granitBr4":              "Tekhinkom publish no mass for the Br4 panel",
+            "granitBr5":              "Tekhinkom publish no mass for the Br5+ panel",
+            "granit4_4class_diy_back": "a cut-down panel, not a product",
+            "granit4_6b33_4class_front": "no thickness published for the 6B33 steel panel",
+            "granit4_zhukBr3_3class_front": "no thickness published for the Zhuk insert",
+            "SSAPI_5_side":           "sources disagree on whether the plain SAPI side is alumina or boron carbide",
+
+            // eyewear and masks
+            "item_equipment_glasses_npp": "a polycarbonate shooting lens; no thickness published",
+            "Item_equipment_glasses_oakley": "Oakley certify to MIL-PRF-31013 and publish no lens thickness",
+            "tactical_glass":         "a polycarbonate shooting lens; no thickness published",
+            "item_equipment_facecover_ballistic_mask": "invented for the game",
+            "item_equipment_facecover_ballistic_mask_arena_bp_01": "a reskin of the ballistic mask",
+            "item_equipment_facecover_ballistic_mask_arena_bp_02": "a reskin of the ballistic mask",
+            "item_equipment_facecover_ballistic_mask_arena_bp_03": "a reskin of the ballistic mask",
+            "item_equipment_facecover_ballistic_mask_arena_bp_04": "a reskin of the ballistic mask",
+            "item_equipment_facecover_ballistic_mask_arena_bp_05": "a reskin of the ballistic mask",
+            "item_equipment_facecover_ballistic_mask_arena_bp_06": "a reskin of the ballistic mask",
+            "item_equipment_facecover_ballistic_mask_arena_bp_07": "a reskin of the ballistic mask",
+            "item_equipment_facecover_strikeball_mask": "an airsoft mask; no ballistic rating to work from",
+            "item_equipment_facecover_strikeball_mask_leshiy": "an airsoft mask; no ballistic rating to work from",
             "shlemofon_tsh_4ml":       "a tanker's padded helmet - no ballistic element to specify",
             "firefighter_shpm":       "a fire helmet - no ballistic rating to work from",
 
