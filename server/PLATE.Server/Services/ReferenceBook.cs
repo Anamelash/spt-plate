@@ -220,7 +220,22 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         public Dictionary<string, WeaponBarrelRef> Weapons { get; set; } = new();
 
         public BlastAnchorRef BlastAnchor { get; set; } = new();
+
+        /// <summary>
+        /// Bumped when a shipped figure CHANGES rather than when one is added. Adding is
+        /// handled by the per-entry merge, which never writes over what is already
+        /// there; correcting is not, and a correction that reaches nobody is not a
+        /// correction. On a bump the old file is renamed aside and rewritten.
+        /// </summary>
+        public int Version { get; set; }
     }
+
+    /// <summary>
+    /// The version the mod ships. Raise it when an existing figure is corrected.
+    /// 2: armour read at the density of its form rather than of its fibre, and over
+    ///    rated areas rather than outer rectangles. Moved most of the armour.
+    /// </summary>
+    private const int ShippedVersion = 2;
 
     private AmmoReference _cached;
 
@@ -248,8 +263,37 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             _cached = new AmmoReference();
         }
 
+        if (_cached.Version < ShippedVersion)
+        {
+            _cached = Refresh(path, _cached.Version);
+        }
+
         FillMissingSections(_cached);
         return _cached;
+    }
+
+    /// <summary>
+    /// Replaces a reference book written by an older version of the mod, keeping the old
+    /// one alongside it. The per-entry merge cannot do this: it deliberately never
+    /// overwrites, so a figure that was wrong stays wrong for everyone who has already
+    /// run the mod once.
+    /// </summary>
+    private AmmoReference Refresh(string path, int was)
+    {
+        try
+        {
+            var kept = path + $".v{was}.bak";
+            File.Copy(path, kept, overwrite: true);
+            File.WriteAllText(path, DefaultReferenceJsonc);
+            logger.Info($"[PLATE] {FileName} was version {was}, the mod ships {ShippedVersion}. " +
+                        $"Rewritten; your previous copy is at {System.IO.Path.GetFileName(kept)}");
+        }
+        catch (Exception ex)
+        {
+            logger.Warning($"[PLATE] Could not refresh {FileName}: {ex.Message}");
+        }
+
+        return Parse(DefaultReferenceJsonc) ?? new AmmoReference();
     }
 
     private static AmmoReference? Parse(string json)
@@ -531,17 +575,42 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // material and falls back to the class.
           //
           // Where a manufacturer publishes a thickness it is used as published. Where one
-          // publishes a mass instead — which is the usual case for helmets — the hard
-          // element is t = m / (rho * A): the shell mass over the material's density and
-          // the area it covers, 11 dm2 for a full cut, 9 dm2 for a high cut, or whatever
-          // area the manufacturer quotes. That reproduces the published areal density
-          // exactly, which is the quantity the penetration model actually consumes. The
-          // check on it is the PASGT: 11.2 kg/m2 of Kevlar 29 gives 7.8 mm against a
-          // shell that measures 7.3 +/- 0.8.
+          // publishes a mass instead — the usual case for helmets and for every Russian
+          // maker — the hard element is t = m / (rho * A): the mass over the density of
+          // the form it is in and the area it covers.
+          //
+          // TWO THINGS DECIDE WHETHER THAT ARITHMETIC IS RIGHT.
+          //
+          // The area must be the RATED area, not the outer rectangle. Russian plates
+          // carry a frame the certificate does not count, and the makers publish both
+          // side by side: Tekhinkom rate 7.14 / 7.56 / 8.46 dm2 where the outer
+          // dimensions suggest 8.3, and Kora-1MK lists 40-50 dm2 of vest against 15.0 of
+          // certified plate. Read over the rated areas the whole Granit line collapses
+          // onto one areal density per class; read over the rectangles it does not.
+          //
+          // The density must be the density of the FORM, not of the fibre. Four makers
+          // publish thickness and areal density for the same object, and they line up by
+          // how hard the thing was pressed:
+          //     sewn package        630 kg/m3   IOTV, 7.6 mm at 4.79 kg/m2
+          //     UD laminate panel   870         HighCom Trooper SA3920
+          //     pressed PE shell   1050         Galvion Caiman TL, 6.00 mm at 6.35
+          //     pressed aramid     1350         ACH patent, 8.13 mm at 10.94
+          // Set DensityGCm3 wherever the form differs from the material table's fibre
+          // figure. The check on all of it is the PASGT, the one helmet with both numbers
+          // published: 11.2 kg/m2 at 1350 gives 8.3 mm against a measured 7.3 +/- 0.8.
           "ArmorPlates": {
             // --- vests ---
+            // 6B5-16 is differential like the 6B3TM-01: a rifle-class front and a
+            // fragment-class back. Eight 6.5 mm tiles in front plus three to five thin
+            // ones, seven 1.25 mm tiles behind
             "6b5-16":     { "Prototype": "6B5-16, ADU 605T-83", "Material": "Titan", "ThicknessMm": 6.5, "BackingMm": 8,
-                            "Source": "titanium 6.5 mm + 30-layer TSVM-DZh package" },
+                            "Source": "8 tiles of 6.5 mm titanium in front plus 3-5 of 1.25; 30-layer TSVM-DZh; 7.5 kg" },
+            "6b5-16_level3_soft_armor_back": { "Prototype": "6B5-16 back, ADU 605-80", "Material": "Titan", "ThicknessMm": 1.25, "BackingMm": 8,
+                            "Source": "the back is 7 tiles of 1.25 mm, a class below the front" },
+
+            // 6B2 / Zh-81: nineteen thin titanium tiles, doubled over the heart
+            "6b2":        { "Prototype": "6B2 / Zh-81, ADU-605-80", "Material": "Titan", "ThicknessMm": 1.25, "BackingMm": 8,
+                            "Source": "VT-14 titanium 1.25 mm (to 1.4 with tolerance), 19 tiles in three rows of three with the heart area DOUBLED to two layers. 4.2-4.8 kg over a published 28-30 dm2, class 2" },
             "6b5-15":     { "Prototype": "6B5-15, ADU 14.20.00.000", "Material": "Ceramic", "ThicknessMm": 13, "BackingMm": 8,
                             "DensityGCm3": 2.52,
                             "Source": "boron carbide 13 mm, 17-20 tiles a side, on a fabric package" },
@@ -603,58 +672,158 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "korund_6b12":              { "Prototype": "6B12 chest plate", "Material": "ArmoredSteel", "ThicknessMm": 6,
                                           "Source": "the 6B12 chest and abdomen plates are 6 mm of steel; the back one is 2" },
 
+            // --- Western plates, nearly all with a published thickness ---
+            // Several in-game brands are lightly disguised real makers: NESCO is HESCO,
+            // TallCom is HighCom, SPRTN is Spartan, GAC is HighCom's Guardian line,
+            // Monoclete is Paraclete, PRTCTR is DFNDR, Cult Locust is the Adept Mantis
+            "SAPI_SPRTN_Elaphros":      { "Prototype": "Spartan Elaphros", "Material": "UHMWPE", "ThicknessMm": 30.48,
+                                          "Source": "1.2 in published; a monolithic UHMWPE hybrid with NO ceramic face at all. 1.45 kg, 10x12 shooters. NIJ III certified - the game's class 4 does not match" },
+            "SAPI_Monoclete_PE":        { "Prototype": "Paraclete 10260", "Material": "UHMWPE", "ThicknessMm": 25.4,
+                                          "Source": "1 in published, 1.36 kg, 10x12 shooters cut, NIJ III standalone. The game's 1.35 kg is a near-exact match" },
+            // NOTE on the ceramic composites below: what these makers publish is the
+            // TOTAL plate thickness, ceramic face plus polyethylene backer together, and
+            // the split between the two is not published for any plate anywhere - that
+            // was hunted specifically, including patent search and sectioned-plate
+            // photographs, and came back empty. So the figure is the whole plate and the
+            // density is the whole plate's average, which keeps rho*t equal to the real
+            // areal density even though it is not the density of the ceramic alone.
+            "SAPI_GAC_4sss2":           { "Prototype": "HighCom Guardian 4sss2", "Material": "Ceramic", "ThicknessMm": 24.6,
+                                          "DensityGCm3": 1.85,
+                                          "Source": "0.97 in published, whole plate. SILICON CARBIDE on a UHMWPE backer - the game tags it plain UHMWPE and omits the ceramic. NIJ IV to the older 0101.04. Mass not published; density is the Level IV band of 4.2-4.7 g/cm2" },
+            "SAPI_GAC_3s15m":           { "Prototype": "HighCom Guardian 3s15m", "Material": "UHMWPE", "ThicknessMm": 21,
+                                          "Source": "0.83 in published, 100% Dyneema, XTclave-consolidated, NIJ III standalone" },
+            "SAPI_NESCO_4400":          { "Prototype": "HESCO 4400SA-MC", "Material": "Ceramic", "ThicknessMm": 21,
+                                          "DensityGCm3": 2.24,
+                                          "Source": "0.83 in published, whole plate; 3.6 kg over a 9.5x12.5 SAPI cut is 4.70 g/cm2, and the density follows from those two. Ceramic type not published. NIJ IV, but the 4400 is the NON-certified variant - the 4401 is the listed one" },
+            "SAPI_TallCom_Guardian":    { "Prototype": "HighCom Guardian 4sas4", "Material": "Ceramic", "ThicknessMm": 19.05,
+                                          "DensityGCm3": 2.36,
+                                          "Source": "0.75 in published, whole plate. Ceramic type not published; mass not published either - HighCom pulled the page - so the density is the Level IV band" },
+            "SAPI_Cult_Locust":         { "Prototype": "Adept Mantis", "Material": "Titan", "ThicknessMm": 17.8,
+                                          "DensityGCm3": 1.88,
+                                          "Source": "0.7 in published, whole plate, 2.47 kg - forged multi-curve titanium bonded to a polyethylene backer, so the average is far below titanium's own. III+ / Adept 'RF2'. The game's 2.56 kg nearly matches" },
+            "SAPI_AR500_legacy":        { "Prototype": "AR500 Armor Heritage", "Material": "ArmoredSteel", "ThicknessMm": 6.35,
+                                          "Source": "0.34 in total published including the FragLock coat; the steel core is the industry-standard 0.25 in and the rest is non-ballistic. 'Legacy' was never a SKU - the 3.85 kg in game matches the Heritage's 8.5 lb" },
+            "SAPI_SPRTN_Omega":         { "Prototype": "Spartan Omega AR500", "Material": "ArmoredSteel", "ThicknessMm": 6.35,
+                                          "Source": "0.25 in of AR500 published. Full Coat takes the OVERALL thickness to 0.5 in but the extra is polyurea, not armour" },
+            "sapi":                     { "Prototype": "SAPI", "Material": "Ceramic", "ThicknessMm": 6.1, "BackingMm": 10,
+                                          "DensityGCm3": 2.52,
+                                          "Source": "medium 1.82 kg over a published 241x318 mm = 7.66 dm2. Boron or silicon carbide on Spectra. The game's 1.82 kg is exact. DoD protocol, not NIJ" },
+            "SSAPI_5_side":             { "Prototype": "SAPI side insert", "Material": "Ceramic", "ThicknessMm": 5.6, "BackingMm": 8,
+                                          "Source": "~1 kg over the 6x8 in cut = 3 dm². Not a disguise - SSAPI is the real DoD designation for the plain-family side plate" },
+
+            // material corrections where nobody publishes an amount
+            "SAPI_NewSphereTech":       { "Prototype": "invented, but its own description says aluminium OXIDE", "Material": "Ceramic",
+                                          "Source": "the game's material field reads 'Aluminium' out of the phrase 'An Aluminum Oxide ballistic plate' - alumina is a ceramic, not a metal" },
+            "SAPI_PRTCTR_Lightweight":  { "Prototype": "DFNDR Level IIIA", "Material": "UHMWPE",
+                                          "Source": "0.44 kg in medium, thickness never published. The real donor is IIIA - HANDGUN ONLY, no rifle rating at all, where the game puts it on the rifle scale" },
+
             // --- helmets: aramid shells ---
             "Untar":            { "Prototype": "PASGT", "Material": "Aramid", "ThicknessMm": 7.8,
                                   "Source": "11.2 kg/m2, 19 layers of Kevlar 29; the shell measures 7.3 +/- 0.8 mm" },
-            "ratnik_6b47":      { "Prototype": "6B47 Ratnik", "Material": "Aramid", "ThicknessMm": 5.4,
-                                  "Source": "up to 1 kg of aramid over 11 dm2; fragment V50 above 650 m/s, 9x18 at 5 m" },
-            "msa_tc2001":       { "Prototype": "MSA ACH TC-2001", "Material": "Aramid", "ThicknessMm": 7.9,
-                                  "Source": "ACH shell, 3.25 lb in large, over 11 dm2" },
-            "msa_tc2002":       { "Prototype": "MSA ACH TC-2002", "Material": "Aramid", "ThicknessMm": 7.9,
-                                  "Source": "ACH shell, 3.25 lb in large, over 11 dm2" },
-            "msa_gallet_tc800": { "Prototype": "MSA Gallet TC800", "Material": "Aramid", "ThicknessMm": 7.9,
-                                  "Source": "ACH-family aramid shell over 11 dm2" },
-            "ulach":            { "Prototype": "ULACH", "Material": "Aramid", "ThicknessMm": 7.3,
-                                  "Source": "lightweight ACH, 1.36 kg of Kevlar over 11 dm2" },
-            "ops_core_fastMT":  { "Prototype": "Ops-Core FAST MT", "Material": "Aramid", "ThicknessMm": 8.5,
-                                  "Source": "1.04-1.18 kg aramid shell over a 9 dm2 high cut" },
-            "helmet_ops_core_fast_tan": { "Prototype": "Ops-Core FAST MT", "Material": "Aramid", "ThicknessMm": 8.5,
-                                  "Source": "the same shell as the FAST MT" },
-            "crye_precision_airframe":  { "Prototype": "Crye AirFrame", "Material": "Aramid", "ThicknessMm": 6.9,
-                                  "Source": "2.30 lb complete in medium; the shell over a 9 dm2 high cut" },
-            "item_equipment_helmet_crye_airframe_chops": { "Prototype": "Crye AirFrame chops", "Material": "Aramid", "ThicknessMm": 6.9,
-                                  "Source": "the same laminate as the AirFrame shell" },
-            "item_equipment_helmet_crye_airframe_ears":  { "Prototype": "Crye AirFrame ears", "Material": "Aramid", "ThicknessMm": 6.9,
-                                  "Source": "the same laminate as the AirFrame shell" },
-            "bnti_lshz_2dtm":   { "Prototype": "LShZ-2DTM", "Material": "Aramid", "ThicknessMm": 8.8,
-                                  "Source": "discrete aramid fabric, GOST class 2; 4.45 kg for the whole set" },
-            "highcom_striker_achhc": { "Prototype": "HighCom Striker ACHHC", "Material": "Aramid", "ThicknessMm": 5.9,
-                                  "Source": "hybrid Kevlar and Spectra shell, 1.7 lb over a 9 dm2 high cut" },
-
-            // Fort publish what it stops and nothing about what it is made of. The
-            // rating is still worth having: the game rates it 3, they certify 1+
-            "fort_kiver_m":     { "Prototype": "Fort Kiver-M", "Rating": 2,
-                                  "Source": "class 1+ - Stechkin, 9x19 and fragments at 570 m/s; no construction published" },
-            "item_equipment_helmet_lshz2dtm_aventail": { "Prototype": "LShZ-2DTM aventail", "Material": "Aramid", "ThicknessMm": 7,
-                                  "Source": "aramid mail, 5.5 dm2, class 2" },
+            "msa_tc2001":       { "Prototype": "MSA ACH TC-2001, full ear cutout", "Material": "Aramid", "ThicknessMm": 8.13,
+                                  "DensityGCm3": 1.35,
+                                  "Source": "8.13 mm at 10.94 kg/m2, both published - patent US10448695. Kevlar 129 or Twaron T2000, 25-27 plies, 12-14% PVB-phenolic" },
+            "msa_tc2002":       { "Prototype": "MSA ACH TC-2002, partial ear cutout", "Material": "Aramid", "ThicknessMm": 8.13,
+                                  "DensityGCm3": 1.35,
+                                  "Source": "the same TC-2000 shell as the 2001, cut differently" },
+            "msa_gallet_tc800": { "Prototype": "MSA Gallet TC 801, high cut", "Material": "Aramid", "ThicknessMm": 8.3,
+                                  "DensityGCm3": 1.35,
+                                  "Source": "1129 g over a published 1005 cm2 = 11.23 kg/m2; the series holds 11.1 across all three cuts" },
+            "Untar":            { "Prototype": "PASGT", "Material": "Aramid", "ThicknessMm": 8.3,
+                                  "DensityGCm3": 1.35,
+                                  "Source": "11.2 kg/m2, 19 plies of Kevlar 29 at 16-18% resin; the shell measures 7.3 +/- 0.8 mm" },
+            "ronin":            { "Prototype": "DevTac Ronin", "Material": "Aramid", "ThicknessMm": 7,
+                                  "DensityGCm3": 1.35,
+                                  "Source": "7 mm of ballistic Kevlar, published; 2.2-2.7 kg against the 1.6 the game gives it" },
+            "ratnik_6b47":      { "Prototype": "6B47 Ratnik", "Material": "Aramid", "ThicknessMm": 6.8,
+                                  "DensityGCm3": 1.10,
+                                  "Source": "1 kg over a published 11.0-11.5 dm2. Read at 1.10 not 1.35: the shell is two resin-bonded skins around a DRY, unimpregnated aramid pack, not one laminate" },
+            "highcom_striker_achhc": { "Prototype": "HighCom Striker ACHHC", "Material": "Aramid", "ThicknessMm": 7.3,
+                                  "DensityGCm3": 1.20,
+                                  "Source": "842 g shell in medium, published; hybrid Kevlar and Spectra, so between the aramid and PE densities" },
+            "crye_precision_airframe":  { "Prototype": "Crye AirFrame", "Material": "Aramid", "ThicknessMm": 7,
+                                  "DensityGCm3": 1.35,
+                                  "Source": "2.30 lb complete in medium less pads and retention; Crye publish no material and no thickness" },
+            "item_equipment_helmet_crye_airframe_chops": { "Prototype": "Crye AirFrame chops", "Material": "Aramid", "ThicknessMm": 6,
+                                  "DensityGCm3": 1.20,
+                                  "Source": "~165 g each; certified to full NIJ IIIA including .44 Magnum, which the game under-rates at class 3" },
+            "item_equipment_helmet_crye_airframe_ears":  { "Prototype": "Crye AirFrame ears", "Material": "Aramid", "ThicknessMm": 6,
+                                  "DensityGCm3": 1.20,
+                                  "Source": "same ballistic table as the chops; Crye publish no weight for the ears" },
+            "bnti_lshz_2dtm":   { "Prototype": "LShZ-2DTM, Armocom (not BNTI)", "Material": "Aramid", "ThicknessMm": 10.2,
+                                  "DensityGCm3": 1.25,
+                                  "Source": "corpus 1.9 kg over a published 15.0 dm2; the LShZ-2 independently gives the same 10.6-11.2" },
+            "class_tor2":       { "Prototype": "TOR-2, NPP KlASS", "Material": "Aramid", "ThicknessMm": 11,
+                                  "DensityGCm3": 1.25,
+                                  "Source": "2.2-2.55 kg over a published 11.2-13.5 dm2; Br2, fragment V50 >= 720 m/s" },
+            "lshz":             { "Prototype": "LShZ, Armocom", "Material": "Aramid", "ThicknessMm": 5,
+                                  "DensityGCm3": 1.25,
+                                  "Source": "0.7-1.3 kg over a published 9.5-14.5 dm2; Br1 S per GOST R 57560-2017" },
+            "fort_kiver_m":     { "Prototype": "Fort Kiver-M", "Material": "Aramid", "ThicknessMm": 6.4,
+                                  "DensityGCm3": 1.25,
+                                  "Source": "1.6 kg over a published 16 dm2, BNTI catalogue. Fort certify class 1+ - Stechkin, 9x19 and fragments at 570 m/s - where the game says 3" },
+            "ballisticarmorco_bastion": { "Prototype": "Ballistic Armor Co Bastion", "Material": "Aramid", "ThicknessMm": 8,
+                                  "DensityGCm3": 1.35,
+                                  "Source": "epoxy-impregnated Kevlar, 3 lb 4 oz complete, NIJ IIIA. A DIFFERENT product from the Adept Bastion despite the name" },
+            "item_equipment_helmet_lshz2dtm_aventail": { "Prototype": "LShZ-2DTM aventail", "Material": "Aramid", "ThicknessMm": 12,
+                                  "DensityGCm3": 0.90,
+                                  "Source": "0.6 kg over a published 5.5 dm2, Br2. Discrete fabric, so read between a sewn pack and a pressed shell" },
 
             // --- helmets: polyethylene shells ---
-            "exfil":            { "Prototype": "Team Wendy EXFIL Ballistic", "Material": "UHMWPE", "ThicknessMm": 10.9,
-                                  "Source": "0.95 kg polyethylene composite shell over a 9 dm2 high cut" },
-            "galvion_caiman":   { "Prototype": "Galvion Caiman", "Material": "UHMWPE", "ThicknessMm": 6.5,
-                                  "Source": "6.35 kg/m2 of UHMWPE, 0.69 kg in medium; the shell measures 6 mm" },
-            "mtek_flux":        { "Prototype": "MTEK FLUX", "Material": "UHMWPE", "ThicknessMm": 5.7,
-                                  "Source": "0.5 kg of polyethylene and carbon over a 9 dm2 high cut" },
-            "helmet_team_wendy_exfil_ear_covers":        { "Prototype": "EXFIL ear covers", "Material": "UHMWPE", "ThicknessMm": 10.9,
-                                  "Source": "the same laminate as the EXFIL shell" },
-            "helmet_team_wendy_exfil_ear_covers_coyote": { "Prototype": "EXFIL ear covers", "Material": "UHMWPE", "ThicknessMm": 10.9,
-                                  "Source": "the same laminate as the EXFIL shell" },
-            "item_equipment_helmet_gentex_slaap_gray":   { "Prototype": "Ops-Core SLAAP", "Material": "UHMWPE", "ThicknessMm": 23.5,
-                                  "Source": "1.25 lb applique that defeats 7.62x39 mild steel core - a rifle plate, not a shell" },
-            "item_equipment_helmet_gentex_slaap_green":  { "Prototype": "Ops-Core SLAAP", "Material": "UHMWPE", "ThicknessMm": 23.5,
-                                  "Source": "1.25 lb applique that defeats 7.62x39 mild steel core - a rifle plate, not a shell" },
-            "item_equipment_helmet_gentex_slaap_tan":    { "Prototype": "Ops-Core SLAAP", "Material": "UHMWPE", "ThicknessMm": 23.5,
-                                  "Source": "1.25 lb applique that defeats 7.62x39 mild steel core - a rifle plate, not a shell" },
+            "exfil":            { "Prototype": "Team Wendy EXFIL Ballistic", "Material": "UHMWPE", "ThicknessMm": 7.3,
+                                  "DensityGCm3": 1.05,
+                                  "Source": "0.79 kg shell over 10.25 dm2, both from Team Wendy's own arithmetic. Cross-checked: the SL is 6.3 mm and they call it 15% lighter at the same geometry" },
+            "mtek_flux":        { "Prototype": "MTEK FLUX", "Material": "UHMWPE", "ThicknessMm": 4.6,
+                                  "DensityGCm3": 1.05,
+                                  "Source": "0.5 kg shell over a published 164 in2; satisfies MTEK's own 'less than 0.25 in'. NOTE 4.73 kg/m2 is light for a .44 Mag IIIA claim - the outlier of the set" },
+            "mtek_strike":      { "Prototype": "MTEK Strike", "Material": "UHMWPE", "ThicknessMm": 5.4,
+                                  "DensityGCm3": 1.05,
+                                  "Source": "0.5 kg seamless shell, no darts or bolt holes anywhere; coverage not published" },
+            "nfm_hjelm":        { "Prototype": "NFM HJELM HC 160F", "Material": "UHMWPE", "ThicknessMm": 4.8,
+                                  "DensityGCm3": 1.02,
+                                  "Source": "4.8 mm at 4.9 kg/m2, both published. NFM never name the fibre; the density is what identifies it as polyethylene" },
+            "diamond_age_bastion": { "Prototype": "Diamond Age / Adept Bastion", "Material": "Aramid", "ThicknessMm": 8.55,
+                                  "DensityGCm3": 1.20,
+                                  "Source": "MEASURED at four points - 8.48/8.56/8.51/8.64 mm, 1.075 kg in XL. Chesapeake Testing CD01-2018-R04BRT-135172" },
+
+            // the game's parent item is the Caiman HYBRID, not the TL. Its shell is
+            // carbon and carries no ballistic rating at all - only AR/PD 10-02 blunt
+            // impact. The polyethylene is in the applique, which the game models
+            // separately as item_equipment_helmet_galvion_applique
+            "galvion_caiman":   { "Prototype": "Galvion Caiman Hybrid, carbon bump shell", "Material": "Aramid", "ThicknessMm": 2.1,
+                                  "DensityGCm3": 1.55,
+                                  "Source": "3.37 kg/m2 of carbon; NO ballistic rating, blunt impact only" },
+            "item_equipment_helmet_galvion_applique": { "Prototype": "Caiman Hybrid ballistic applique", "Material": "UHMWPE", "ThicknessMm": 6.2,
+                                  "DensityGCm3": 1.05,
+                                  "Source": "6.59 kg/m2 confirmed from two carriers of Galvion's sheet; 0.59 kg in medium" },
+
+            "helmet_team_wendy_exfil_ear_covers":        { "Prototype": "EXFIL ear covers", "Material": "UHMWPE", "ThicknessMm": 7.3,
+                                  "DensityGCm3": 1.05,
+                                  "Source": "68 cm2 each, published. The 318 g/pair on retail pages is the whole assembly with housings - the panels are ~105 g" },
+            "helmet_team_wendy_exfil_ear_covers_coyote": { "Prototype": "EXFIL ear covers", "Material": "UHMWPE", "ThicknessMm": 7.3,
+                                  "DensityGCm3": 1.05,
+                                  "Source": "identical item in the database, only the prefab differs" },
+
+            // a rifle-rated applique, not a shell - and lighter than the figure I first
+            // used, which included the hook-and-loop hardware
+            "item_equipment_helmet_gentex_slaap_gray":   { "Prototype": "Velocity SLAAP", "Material": "UHMWPE", "ThicknessMm": 18,
+                                  "DensityGCm3": 1.00,
+                                  "Source": "0.45 kg in large, 0.39 in small. Defeats 7.62x39 mild steel core at 2400 fps. Gentex's sheet has no thickness and no area field at all" },
+            "item_equipment_helmet_gentex_slaap_green":  { "Prototype": "Velocity SLAAP", "Material": "UHMWPE", "ThicknessMm": 18,
+                                  "DensityGCm3": 1.00, "Source": "as the gray" },
+            "item_equipment_helmet_gentex_slaap_tan":    { "Prototype": "Velocity SLAAP", "Material": "UHMWPE", "ThicknessMm": 18,
+                                  "DensityGCm3": 1.00, "Source": "as the gray" },
+            "ulach":            { "Prototype": "HighCom Striker ULACH", "Material": "UHMWPE", "ThicknessMm": 5.4,
+                                  "DensityGCm3": 1.05,
+                                  "Source": "950 g as configured in medium. UHMWPE Spectra by HighCom's own words - the game's aramid is wrong" },
+
+            // the FAST MT shell is a hybrid of carbon, unidirectional polyethylene and
+            // woven aramid - not the plain aramid the game and Wikipedia both give it
+            "ops_core_fastMT":  { "Prototype": "Ops-Core FAST MT Super High Cut", "Material": "Aramid", "ThicknessMm": 6.43,
+                                  "DensityGCm3": 1.055,
+                                  "Source": "6.43 mm at 1.39 lb/ft2, both published by Gentex. Certified to SOCOM Maritime, not NIJ IIIA" },
+            "helmet_ops_core_fast_tan": { "Prototype": "Ops-Core FAST MT Super High Cut", "Material": "Aramid", "ThicknessMm": 6.43,
+                                  "DensityGCm3": 1.055, "Source": "the same shell" },
 
             // --- helmets: metal shells ---
             "altin":            { "Prototype": "Altyn", "Material": "Titan", "ThicknessMm": 3, "BackingMm": 8,
@@ -667,53 +836,112 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                   "Source": "steel plate with a vision slit, class 2" },
             "item_equipment_helmet_maska_1sh_shield_killa": { "Prototype": "Maska-1Sch visor", "Material": "ArmoredSteel", "ThicknessMm": 3.5,
                                   "Source": "steel plate with a vision slit, class 2" },
-            "sferaS_SSSh94":    { "Prototype": "Sfera SSSh-94", "Material": "ArmoredSteel", "ThicknessMm": 2.5,
-                                  "Source": "steel plates replacing the STSh-81's 3 mm titanium; 3.3 kg against 2.3" },
-            "ssh68":            { "Prototype": "SSh-68", "Material": "ArmoredSteel", "ThicknessMm": 1.6,
-                                  "Source": "1.3 kg of steel; rated for a 1 g fragment at 250 m/s, not for bullets" },
-            "Rys_T":            { "Prototype": "Rys-T", "Material": "Titan", "ThicknessMm": 3.6,
-                                  "Source": "NII Stali titanium, 2.5 kg without the visor over 13 dm2, GOST class 2" },
-            "zsh_1_2m":         { "Prototype": "ZSh-1-2M", "Material": "Aluminium", "ThicknessMm": 6.1,
-                                  "Source": "aluminium alloy lined with aramid, Br2, V50 750 m/s; 3.5-4 kg with visor and aventail" },
+            "sferaS_SSSh94":    { "Prototype": "Sfera SSSh-94", "Material": "ArmoredSteel", "ThicknessMm": 2.0,
+                                  "Source": "PUBLISHED - manufacturer passport, 'листов стали толщиной 2.0+0.3 мм', three plates. 3.5 kg over 10 dm2, class 2" },
+            "ssh68":            { "Prototype": "SSh-68", "Material": "ArmoredSteel", "ThicknessMm": 1.8,
+                                  "Source": "1.3 kg over 8 dm2. Steel 38KhS3NMFA, factory code K-1. Rated for a 1 g fragment at 250 m/s, not for bullets" },
+            "Rys_T":            { "Prototype": "Rys-T, NII Stali", "Material": "Titan", "ThicknessMm": 3.6,
+                                  "Source": "2.5 kg without the visor over a published 13 dm2, GOST class 2. Alloy grade not published - VT-23 belongs to the K6-3, not to this" },
+            "adept_neosteel":   { "Prototype": "Adept NovaSteel", "Material": "ArmoredSteel", "ThicknessMm": 1.7,
+                                  "Source": "1293 g over a published >7.10 dm2. 'Carapace' is a non-martensitic UHSS that work-hardens, not a quenched armour plate. VPAM 3 - handgun and PDW, not the rifle class the game gives it" },
+            "item_equipment_helmet_neosteel_mandible": { "Prototype": "Adept NovaSteel mandible", "Material": "ArmoredSteel", "ThicknessMm": 2,
+                                  "Source": "same alloy; the NovaSteel Buckler measured 2.79-2.90 mm for flat-plate NIJ IIIA and is the upper bound. Rated 9 mm at >1400 fps" },
+            "zsh_1_2m":         { "Prototype": "ZSh-1-2M", "Material": "Aluminium", "ThicknessMm": 3.8, "BackingMm": 2,
+                                  "Source": "shell 2.2 kg over a published 13.6 dm2, less its aramid backer. Br2, V50 750 m/s - the game says class 4" },
             "lshz5_vulkan5":    { "Prototype": "Vulkan-5 (LShZ-5)", "Material": "Combined", "ThicknessMm": 6, "BackingMm": 10,
                                   "Source": "4.5 kg over 13 dm2 - a ceramic screen on a composite shell, and the heaviest helmet worn" },
 
             // --- visors, mandibles and appliques ---
-            "item_equipment_glasses_6B34": { "Prototype": "6B34 goggles", "Material": "Glass", "ThicknessMm": 6,
-                                  "Source": "6 mm polycarbonate; V50 350 m/s against a 1 g, 6 mm ball" },
-            "item_equipment_helmet_galvion_mandible": { "Prototype": "Batlskin Viper mandible", "Material": "Aramid", "ThicknessMm": 9.7,
-                                  "Source": "0.42 kg in medium over the roughly 3 dm2 a mandible covers" },
-            // both read over the 3 dm2 a face shield covers, so the six-to-one in their
-            // masses is the six-to-one in what they stop
-            "helmet_ops_core_handgun_face_shield": { "Prototype": "Ops-Core multi-hit handgun shield", "Material": "Glass", "ThicknessMm": 17.8,
-                                  "Source": "2.95 lb over 3 dm2 - the heaviest thing in this table, and it is a face shield" },
-            "item_equipment_helmet_team_wendy_exfil_face_shield": { "Prototype": "EXFIL face shield", "Material": "Glass", "ThicknessMm": 3.1,
-                                  "Source": "230 g in size 1 - a fragmentation visor, not a handgun one" },
-            "item_equipment_helmet_team_wendy_exfil_face_shield_coyote": { "Prototype": "EXFIL face shield", "Material": "Glass", "ThicknessMm": 3.1,
-                                  "Source": "230 g in size 1 - a fragmentation visor, not a handgun one" },
+            "item_equipment_glasses_6B34": { "Prototype": "6B34 Permyachka goggles", "Material": "Glass", "ThicknessMm": 6,
+                                  "DensityGCm3": 1.20,
+                                  "Source": "6 mm lens and 1.3 dm2 of coverage, both published by three retailers; V50 350 m/s against a 1 g, 6 mm ball. Every Russian source says only 'steklo' - polycarbonate is not confirmed" },
+            "item_equipment_helmet_galvion_mandible": { "Prototype": "Batlskin Viper mandible", "Material": "UHMWPE", "ThicknessMm": 16,
+                                  "DensityGCm3": 1.05,
+                                  "Source": "0.42 kg in medium over the ~2.5 dm2 a mandible wraps. UHMWPE per Galvion - the wire version is the steel one. NIJ IIIA level, V50 671 m/s vs 1.1 g FSP" },
+            "helmet_ops_core_fast_gunsight_mandible": { "Prototype": "Ops-Core FAST ballistic mandible", "Material": "Aramid", "ThicknessMm": 7,
+                                  "DensityGCm3": 0.90,
+                                  "Source": "567 g. Gentex split the functions explicitly: the carbon frame is blunt impact, the ballistic element is a FLEXIBLE aramid pack. 9 mm V0 at 1195 fps - below IIIA, and they quote no NIJ level" },
 
-            // rating without construction: the maker says what it stops and no more
-            "helmet_zsh_1-2m_v1_face_shield": { "Prototype": "ZSh-1-2M visor", "Material": "Glass", "Rating": 2,
-                                  "Source": "stops 9x18 PM at 5 m; no construction published" },
+            // published thickness, and the areas turn out to differ by 40%
+            "helmet_ops_core_handgun_face_shield": { "Prototype": "Ops-Core multi-hit handgun shield", "Material": "Glass", "ThicknessMm": 20.3,
+                                  "DensityGCm3": 1.19,
+                                  "Source": "PUBLISHED 0.8 in viewport over a published 4.51 dm2, 1315 g, acrylic and polycarbonate. NIJ 0108.01 IIIA. The mass closes on the thickness to the gram" },
+            "item_equipment_helmet_team_wendy_exfil_face_shield": { "Prototype": "EXFIL face shield", "Material": "Glass", "ThicknessMm": 3,
+                                  "DensityGCm3": 1.20,
+                                  "Source": "263 g over a published 3.24 dm2. Rated BS EN 166 class 2B - a 0.86 g ball at 120 m/s. NOT ballistic, and the game's class 3 is fiction" },
+            "item_equipment_helmet_team_wendy_exfil_face_shield_coyote": { "Prototype": "EXFIL face shield", "Material": "Glass", "ThicknessMm": 3,
+                                  "DensityGCm3": 1.20, "Source": "identical item, only the colour differs" },
 
-            // material without construction: the game has the wrong one and nobody
-            // publishes the right amount of it
-            "helmet_ops_core_fast_side_armor": { "Prototype": "Ops-Core FAST side armour", "Material": "UHMWPE",
-                                  "Source": "polyethylene, not the aluminium the game has; no weight published" },
+            // Russian Br1 visors. None of the makers publish a thickness, but the
+            // construction is standardised and patented: patent RU209135U1 specifies
+            // three polycarbonate panels of 5.5-6.1 mm bonded with 0.9-1.0 mm of
+            // polyurethane. Every one of these certifies a class BELOW its own shell
+            "helmet_zsh_1-2m_v1_face_shield": { "Prototype": "ZSh-1-2M visor", "Material": "Glass", "ThicknessMm": 19,
+                                  "DensityGCm3": 1.20,
+                                  "Source": "two bonded polycarbonate layers over a published 3.5 dm2; Br1 against the shell's Br2" },
+            "item_equipment_helmet_rys_t_shield":   { "Prototype": "Rys-T visor", "Material": "Glass", "ThicknessMm": 19.2,
+                                  "DensityGCm3": 1.20,
+                                  "Source": "quartz armour glass in a titanium frame, ~1.2 kg. The Altyn block of the same family is published layer by layer: PC 1.2 + triplex 6 + PC 12. Br1" },
+            "item_equipment_helmet_lshz2dtm_shield": { "Prototype": "LShZ-2DTM visor, Br2", "Material": "Glass", "ThicknessMm": 20,
+                                  "DensityGCm3": 1.20,
+                                  "Source": "1.8 kg over a published 4.3 dm2 - 1.5 transparent plus 2.8 composite. The lighter Br1 variant is 1.0 kg over 5.0 dm2" },
+            "item_equipment_helmet_tor_2_faceshield": { "Prototype": "TOR-2 visor", "Material": "Glass", "ThicknessMm": 20,
+                                  "DensityGCm3": 1.20,
+                                  "Source": "1.15 kg over a published 3.7-3.9 dm2, all sizes. Br1 against the shell's Br2" },
+            "item_equipment_helmet_kiverm_shield": { "Prototype": "Fort Kiver-M visor", "Material": "Glass", "ThicknessMm": 21,
+                                  "DensityGCm3": 1.20,
+                                  "Source": "polycarbonate, 1.4 kg; area not published, so read over the 4.0-4.7 dm2 the comparable Br1 visors run" },
+            "item_equipment_helmet_vulkan_shield": { "Prototype": "Vulkan-5 visor", "Material": "Glass", "ThicknessMm": 22,
+                                  "DensityGCm3": 1.20,
+                                  "Source": "1.8 kg over a published 4.7 dm2 - the densest of the Russian visors. Br1 against the shell's Br4" },
 
-            // --- visors ---
-            "item_equipment_helmet_rys_t_shield":   { "Prototype": "Rys-T visor", "Material": "Glass", "ThicknessMm": 10,
-                                  "Source": "glass visor, GOST class 1 - Nagant and 9x18, not rifle" },
-            "item_equipment_helmet_lshz2dtm_shield": { "Prototype": "LShZ-2DTM visor", "Material": "Glass", "ThicknessMm": 10,
-                                  "Source": "polycarbonate combination, GOST class 1, 1.5 dm2 transparent" },
+            // the ceramic applique of the Bastion, which the game files as a shield
+            "item_equipment_helmet_diamond_age_bastion_shield": { "Prototype": "Bastion ceramic applique", "Material": "Ceramic", "ThicknessMm": 7.91, "BackingMm": 4,
+                                  "DensityGCm3": 3.15,
+                                  "Source": "MEASURED - 7.72/7.70/8.10/8.13 mm, 0.354 kg, slip-cast SILICON CARBIDE on carbon fibre. Chesapeake Testing; no penetration from M855A1 at 926 m/s, 7.5 mm backface" },
+
+            // the game calls this aluminium; no Gentex FAST hard-armour accessory is
+            "helmet_ops_core_fast_side_armor": { "Prototype": "Ops-Core FAST side armour", "Material": "UHMWPE", "ThicknessMm": 7.36,
+                                  "DensityGCm3": 1.05,
+                                  "Source": "no sheet exists for this SKU; the sibling FAST Low Profile Ballistic Applique publishes 0.290 +/- 0.030 in of carbon and unidirectional polyethylene" },
 
             // --- helmets with no ballistic rating at all ---
-            // Both are sold against blunt and edged attack. The game gives them a class
-            // anyway; what the manufacturer certifies is a 30 J strike and a knife
-            "kolpak_1s_4ml":    { "Prototype": "Kolpak-1S", "Material": "Aramid", "ThicknessMm": 3,
-                                  "Source": "impact helmet: the GOST special class is edged weapons, there is no ballistic rating" },
+            // Sold against blunt and edged attack. The game gives them a class anyway
+            "kolpak_1s_4ml":    { "Prototype": "Kolpak-1S (K-1S)", "Material": "Aramid", "ThicknessMm": 3,
+                                  "DensityGCm3": 1.20,
+                                  "Source": "1.2 kg over a published 16.5 dm2, BNTI 03.06.2012. Impact-resistant composite: knife to 50 J, blunt to 100 J. There is no ballistic rating" },
+            "item_equipment_helmet_k1c_shield": { "Prototype": "Kolpak-1S visor", "Material": "Glass", "ThicknessMm": 4,
+                                  "DensityGCm3": 1.20,
+                                  "Source": "identified from our own en.json - 'K1C' is the Kolpak-1S face shield. Impact polycarbonate, no ballistic rating" },
             "djeta_psh97":      { "Prototype": "PSh-97 Djeta", "Material": "Aramid", "ThicknessMm": 3,
-                                  "Source": "police impact helmet, 30 J blunt strike; no ballistic rating" }
+                                  "DensityGCm3": 1.20,
+                                  "Source": "1.3 kg over 14 dm2. Impact plastic with a polycarbonate visor: 30 J edged, 80 J blunt. No ballistic rating" },
+            "firefighter_shpm": { "Prototype": "ShPM fire helmet", "Material": "Aramid", "ThicknessMm": 3.5,
+                                  "DensityGCm3": 1.20,
+                                  "Source": "1.3 kg, injection-moulded Bayer POLYCARBONATE - not aramid. GOST R 53269-2009 certifies 200 C for 3 min and 400 V, and nothing ballistic at all" },
+
+            // --- soft packages with published construction ---
+            // The IOTV is the only soft-armour system in the game whose thickness AND
+            // areal density are both published, and by the US Army rather than a shop.
+            // Its 630 kg/m3 is where the sewn-package density in SoftArmor comes from
+            "iotv_gen4_a":      { "Prototype": "IOTV Gen4 base panel", "Material": "Aramid", "ThicknessMm": 7.6,
+                                  "DensityGCm3": 0.63,
+                                  "Source": "PUBLISHED - 0.30 in at 0.98 lb/ft2, purchase description FQ/PD 07-05G tables V and VI. Front 22.8 dm2, back 23.9. NIJ IIIA-equivalent, no rifle protection. The fibre is deliberately unspecified: a contractor 'shoot pack' of X plies tested only on performance" },
+            "iotv_gen4_f":      { "Prototype": "IOTV Gen4 base panel", "Material": "Aramid", "ThicknessMm": 7.6,
+                                  "DensityGCm3": 0.63, "Source": "the same panel; the cut adds groin and deltoids, not thickness" },
+            "iotv_gen4_m":      { "Prototype": "IOTV Gen4 base panel", "Material": "Aramid", "ThicknessMm": 7.6,
+                                  "DensityGCm3": 0.63, "Source": "the same panel; the mid cut drops the deltoids" },
+            "trooper":          { "Prototype": "HighCom Trooper SA3920", "Material": "Aramid", "ThicknessMm": 4.82,
+                                  "DensityGCm3": 0.87,
+                                  "Source": "PUBLISHED - 0.19 in at 0.86 psf. A unidirectional Dyneema and Twaron laminate, so denser than a sewn pack and lighter than a pressed shell. NIJ IIIA on its own" },
+            "6b23-1":           { "Prototype": "6B23 fabric package", "Material": "Aramid", "ThicknessMm": 7,
+                                  "DensityGCm3": 0.63,
+                                  "Source": "30 layers of TSVM-2, class II alone - TT and PMM at 5 m, fragment 1 g at 600 m/s. Chest 8 dm2 and back 8. Thickness not published; read at the IOTV's density" },
+            "6b23-2":           { "Prototype": "6B23 fabric package", "Material": "Aramid", "ThicknessMm": 7,
+                                  "DensityGCm3": 0.63, "Source": "the same 30-layer TSVM-2 package" },
+            "interceptor":      { "Prototype": "Interceptor OTV", "Material": "Aramid", "ThicknessMm": 7.6,
+                                  "DensityGCm3": 0.63,
+                                  "Source": "the vest IS the package - Kevlar KM2 or Twaron, 7.7 lb per the PEO Soldier fact sheet (ciehub says 8.4, the two official sources disagree). Stops 9 mm 124 gr at 426 m/s, V50 465" }
           },
 
           // ===== Reference plate per material and class =====
@@ -764,30 +992,12 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // and the maker publishes a rating and a price and no construction at all.
           // Only the second is worth revisiting.
           "NoRealSpecs": {
-            // real, and the maker says nothing about what is inside
-            "mtek_strike":            "MTEK publish no shell weight for the Strike",
-            "nfm_hjelm":              "NFM publish no shell weight",
-            "diamond_age_bastion":    "ceramic-augmented, defeats M855 and M855A1; no mass published",
-            "ballisticarmorco_bastion": "the same Adept helmet, sold under another name; no mass published",
-            "adept_neosteel":         "steel and composite to VPAM 3; no thickness published",
-            "item_equipment_helmet_neosteel_mandible": "no thickness published for the mandible",
-            "item_equipment_helmet_diamond_age_bastion_shield": "no mass published for the shield",
-            "class_tor2":             "NPP KlASS publish a rating and no construction",
-            "lshz":                   "Armocom publish a rating and no construction",
-
-            // visors, mandibles and appliques: sold by what they stop, never by mass
-            "item_equipment_helmet_tor_2_faceshield": "NPP KlASS publish nothing about the visor",
-            "item_equipment_helmet_kiverm_shield": "Fort publish nothing about the visor",
-            "item_equipment_helmet_vulkan_shield": "no mass published for the Vulkan-5 visor",
-            "helmet_ops_core_fast_visor": "Ops-Core publish a fragmentation rating and no mass",
-            "helmet_ops_core_fast_gunsight_mandible": "no mass published for the Ops-Core mandible",
-            "item_equipment_helmet_galvion_fixed_arm_visor": "no mass published for the Batlskin visor",
-            "item_equipment_helmet_galvion_applique": "no mass published for the applique",
-            "item_equipment_helmet_k1c_shield": "no construction published",
-
+            // real, and the maker genuinely publishes no construction
+            "item_equipment_helmet_galvion_fixed_arm_visor": "Galvion certify it to ANSI Z87.1 and MIL-PRF-32432 - EYE protection standards, not a ballistic rating - and publish no mass",
+            "helmet_ops_core_fast_visor": "tested to Gentex PRS-1011, V50 221 m/s against a 17-grain FSP; no mass, and the thickness varies across the lens",
             "granit4_4class_diy_back": "a cut-down panel, not a product",
-            "granit4_6b33_4class_front": "the 6B33 quotes a vest mass and a class, and no plate",
-            "SSAPI_5_side":           "the plain SAPI side, and sources disagree on whether it is alumina or boron carbide",
+            "granit4_6b33_4class_front": "real - ZAO Kirasa, used in the Zhuk, Gzhel, 6B13 and 6B23-2 - but only a vest mass and a class are published, never the plate",
+            "shlemofon_tsh_4ml":      "a tanker's helmet with NO ballistic element at all - the real armour is the separate 6B15-2 aramid overlay, <0.8 kg over >8 dm2, 1 g fragment at 460 m/s",
 
             // eyewear and masks
             "item_equipment_glasses_npp": "a polycarbonate shooting lens; no thickness published",
@@ -803,13 +1013,13 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "item_equipment_facecover_ballistic_mask_arena_bp_07": "a reskin of the ballistic mask",
             "item_equipment_facecover_strikeball_mask": "an airsoft mask; no ballistic rating to work from",
             "item_equipment_facecover_strikeball_mask_leshiy": "an airsoft mask; no ballistic rating to work from",
-            "shlemofon_tsh_4ml":       "a tanker's padded helmet - no ballistic element to specify",
-            "firefighter_shpm":       "a fire helmet - no ballistic rating to work from",
 
-            // invented for the game: no prototype exists to look up
-            "ronin":                  "invented for the game",
+            // invented for the game: no prototype exists to look up. Checked, not
+            // assumed - the EFT wiki names the real basis where one exists and is silent
+            // where none does, so its silence is itself the evidence
             "helmet_all_exeptNeck":   "a development item, not a product",
-            "item_equipment_helmet_tk_heavy_trooper": "a costume",
+            "item_equipment_helmet_tk_heavy_trooper": "a costume after the GALAC-TAC Heavy Gunner, itself airsoft",
+            "drd":                    "a Dr. Disrespect collaboration; soft-only, no plate slots at all",
             "tac_kek_fast_mt":        "an airsoft replica of the FAST, with no ballistic shell",
             "balaclava":              "a balaclava is fabric; the game rates it armour",
             "test_balaclava":         "a development item, not a product",
@@ -822,22 +1032,12 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "item_equipment_facecover_welding_kill":   "a welding mask; no ballistic rating to work from",
             "item_equipment_facecover_welding_minotaur": "a welding mask; no ballistic rating to work from",
             "item_equipment_head_bomber": "a hat; the game rates it armour",
-            "SAPI_AR500_legacy":      "invented for the game",
-            "SAPI_Cult_Locust":       "invented for the game",
-            "SAPI_Cult_Termite":      "invented for the game",
-            "SAPI_GAC_3s15m":         "invented for the game",
-            "SAPI_GAC_4sss2":         "invented for the game",
-            "SAPI_GlobalArmors_Steel": "invented for the game",
-            "SAPI_KITECO_SCIVSA":     "invented for the game",
-            "SAPI_KibaArms_Steel":    "invented for the game",
-            "SAPI_KibaArms_Titan":    "invented for the game",
-            "SAPI_Monoclete_PE":      "invented for the game",
-            "SAPI_NESCO_4400":        "invented for the game",
-            "SAPI_NewSphereTech":     "invented for the game",
-            "SAPI_PRTCTR_Lightweight": "invented for the game",
-            "SAPI_SPRTN_Elaphros":    "invented for the game",
-            "SAPI_SPRTN_Omega":       "invented for the game",
-            "SAPI_TallCom_Guardian":  "invented for the game"
+            "SAPI_Cult_Termite":      "invented; its sibling Cult Locust has a wiki trivia note naming the Adept Mantis and this one has none",
+            "SAPI_GlobalArmors_Steel": "invented; no wiki trivia note where comparable plates in the same table have one",
+            "SAPI_KITECO_SCIVSA":     "invented; no body-armour maker called Kiteco exists",
+            "SAPI_KibaArms_Steel":    "invented twice over - Kiba Arms is a fictional gun store INSIDE Tarkov, in the Ultra Mall on Interchange",
+            "SAPI_KibaArms_Titan":    "the same fictional store",
+            "tac_kek_fast_mt":        "the item's own description calls it 'a lower protection class replica' - an airsoft FAST shell with no ballistic core"
           },
 
           // ===== Soft armour =====
@@ -850,14 +1050,27 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // above 2 is read as 2 — the fabric is the same fabric. Reaching Br3 with
           // aramid alone would take about 200 mm of it, which is why carriers are sold
           // as Br1 or Br2 and the rifle protection lives in the plates.
+          //
+          // DENSITY. A sewn pack is loose plies with air between them, and reading it at
+          // the fibre's 1.44 makes it weigh twice what it does. The US Army's IOTV
+          // purchase description publishes both numbers for the same panel — 7.6 mm at
+          // 4.79 kg/m2 — which is 630 kg/m3. Two independent anchors agree: a Russian
+          // 35-layer package patent at 120-160 g/m2 a layer comes to 4.9 kg/m2, and
+          // owner measurements of 14-24 layer class-1 packs give 3.12-3.57.
           "SoftArmor": {
             "Aramid/1":       { "Prototype": "18-layer aramid package", "ThicknessMm": 5.5,
-                                "Source": "18 layers, 4-6 mm" },
-            "Aramid/2":       { "Prototype": "24-layer aramid package", "ThicknessMm": 7.0,
-                                "Source": "24 layers; the 6B5 package is 30 at ~8 mm" },
+                                "DensityGCm3": 0.63,
+                                "Source": "3.5 kg/m2 - the middle of the measured 14-24 layer band" },
+            "Aramid/2":       { "Prototype": "IOTV-weight aramid package", "ThicknessMm": 7.6,
+                                "DensityGCm3": 0.63,
+                                "Source": "IOTV base panel, 7.6 mm at 4.79 kg/m2, purchase description FQ/PD 07-05G" },
 
-            "UHMWPE/1":       { "Prototype": "light UHMWPE package",   "ThicknessMm": 5.0 },
-            "UHMWPE/2":       { "Prototype": "UHMWPE package",         "ThicknessMm": 7.0 }
+            // polyethylene fibre is lighter than aramid in the same weave, in the ratio
+            // of the two fibre densities
+            "UHMWPE/1":       { "Prototype": "light UHMWPE package",   "ThicknessMm": 5.0,
+                                "DensityGCm3": 0.45 },
+            "UHMWPE/2":       { "Prototype": "UHMWPE package",         "ThicknessMm": 7.0,
+                                "DensityGCm3": 0.45 }
           },
 
           // ===== Helmet shells, visors and rigid masks =====
@@ -866,8 +1079,13 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // heat into one rigid laminate, so it fails as a solid rather than as a stack
           // of layers and it is thicker than anything sewn.
           //
-          // The ladder is anchored to real helmets, at fibre-equivalent thickness so
-          // that density times thickness reproduces the published areal density.
+          // The ladder is anchored to real helmets. Each rung carries the laminate's own
+          // density, because a pressed shell is denser than a sewn pack and lighter than
+          // solid fibre: aramid prepreg comes out at 1350 kg/m3 (the ACH patent publishes
+          // 8.13 mm at 10.94 kg/m2, and the PASGT agrees), polyethylene at 1050 (Galvion
+          // publish 6.00 mm at 6.35 kg/m2 for the Caiman TL). Density times thickness
+          // then reproduces the published areal density, which is what the penetration
+          // model actually spends.
           //
           // Fibre still has a ceiling. Above Br2 a pressed shell stops getting thicker
           // and starts getting a metal or ceramic element instead, so aramid and
@@ -875,23 +1093,33 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // the last rung. Anything the game rates above that is a shell plus something
           // else, and the something else belongs in ArmorPlates by name.
           "HelmetShells": {
-            "Aramid/1":       { "Prototype": "light aramid shell",     "ThicknessMm": 5.4,
-                                "Source": "the 6B47, 1 kg over 11 dm2" },
-            "Aramid/2":       { "Prototype": "aramid shell",           "ThicknessMm": 7.8,
-                                "Source": "the PASGT, 11.2 kg/m2; the ACH is 7.9" },
-            "Aramid/3":       { "Prototype": "heavy aramid shell",     "ThicknessMm": 8.5,
-                                "Source": "Ops-Core FAST, 1.1 kg over a 9 dm2 high cut" },
+            "Aramid/1":       { "Prototype": "light aramid shell",     "ThicknessMm": 5.6,
+                                "DensityGCm3": 1.35,
+                                "Source": "the 6B47 at 7.5 kg/m2 - a Br1 shell, the lightest fielded" },
+            "Aramid/2":       { "Prototype": "aramid shell",           "ThicknessMm": 8.3,
+                                "DensityGCm3": 1.35,
+                                "Source": "the PASGT at 11.2 kg/m2; the ACH is 8.13 mm published" },
+            "Aramid/3":       { "Prototype": "heavy aramid shell",     "ThicknessMm": 8.6,
+                                "DensityGCm3": 1.35,
+                                "Source": "the MSA Gallet TC 801 at 11.23 kg/m2 - pure aramid tops out here" },
 
-            "UHMWPE/1":       { "Prototype": "light UHMWPE shell",     "ThicknessMm": 8.0 },
-            "UHMWPE/2":       { "Prototype": "UHMWPE shell",           "ThicknessMm": 10.9,
-                                "Source": "Team Wendy EXFIL, 0.95 kg over a 9 dm2 high cut" },
-            "UHMWPE/3":       { "Prototype": "heavy UHMWPE shell",     "ThicknessMm": 12.2,
-                                "Source": "an ECH-weight shell, 1.3 kg over 11 dm2" },
+            "UHMWPE/1":       { "Prototype": "light UHMWPE shell",     "ThicknessMm": 4.6,
+                                "DensityGCm3": 1.05,
+                                "Source": "the MTEK FLUX, 0.5 kg over its published 164 in2" },
+            "UHMWPE/2":       { "Prototype": "UHMWPE shell",           "ThicknessMm": 6.0,
+                                "DensityGCm3": 1.05,
+                                "Source": "the Galvion Caiman TL, 6.00 mm at 6.35 kg/m2, both published" },
+            "UHMWPE/3":       { "Prototype": "heavy UHMWPE shell",     "ThicknessMm": 7.3,
+                                "DensityGCm3": 1.05,
+                                "Source": "the Team Wendy EXFIL, 0.79 kg over 10.25 dm2" },
 
-            // a visor is polycarbonate and laminate, and stops where they stop
-            "Glass/1":        { "Prototype": "shooting glasses",       "ThicknessMm": 4.0 },
-            "Glass/2":        { "Prototype": "ballistic visor",        "ThicknessMm": 14.0,
-                                "Source": "the heaviest made is 1.8 kg of laminate over a face" },
+            // a visor is polycarbonate, and stops where polycarbonate stops
+            "Glass/1":        { "Prototype": "shooting glasses",       "ThicknessMm": 5.0,
+                                "DensityGCm3": 1.20,
+                                "Source": "the 6B34 is 6 mm; a fragmentation visor is 6.4" },
+            "Glass/2":        { "Prototype": "ballistic visor",        "ThicknessMm": 19.0,
+                                "DensityGCm3": 1.20,
+                                "Source": "patent RU209135U1, a certified Br1 visor: three PC panels of 5.5-6.1 mm bonded with 0.9-1.0 mm polyurethane" },
 
             // metal and ceramic shells are not capped: one really is thicker on a
             // heavier helmet. But they do not run away either — every rung above the
@@ -921,14 +1149,20 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "Ceramic/5":      { "Prototype": "ceramic shell",          "ThicknessMm": 6.0 },
             "Ceramic/6":      { "Prototype": "thickest ceramic shell", "ThicknessMm": 7.0 },
 
-            // aluminium is not a helmet material; these are the game's ear covers and
-            // side panels, which are composite on every real helmet they are drawn from
-            "Aluminium/3":    { "Prototype": "aluminium panel",        "ThicknessMm": 6.0 },
-            "Aluminium/4":    { "Prototype": "aluminium panel",        "ThicknessMm": 8.0 }
+            // aluminium armour in a helmet does exist, but only just: the ZSh-1-2M is an
+            // aluminium-alloy shell with an aramid backer, and it works out at 3.5-4 mm
+            "Aluminium/3":    { "Prototype": "aluminium shell",        "ThicknessMm": 3.8,
+                                "Source": "the ZSh-1-2M, 2.2 kg over 13.6 dm2 less its aramid backer" },
+            "Aluminium/4":    { "Prototype": "heavy aluminium shell",  "ThicknessMm": 4.5 }
           },
 
           // Blast anchor: Strength_i = Strength_anchor * (TntG_i / TntG_anchor)^(1/3)
-          "BlastAnchor": { "Name": "RGD-5", "Strength": 100, "TntG": 110 }
+          "BlastAnchor": { "Name": "RGD-5", "Strength": 100, "TntG": 110 },
+
+          // Raise this when a figure above is CORRECTED. Adding entries needs no bump —
+          // they merge in on their own — but a correction has to be able to overwrite,
+          // and on a bump this file is rewritten with the old one kept as a .bak
+          "Version": 2
         }
         """;
 }

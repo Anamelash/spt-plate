@@ -148,6 +148,18 @@ public class ReferenceBookTests
     }
 
     /// <summary>
+    /// The merge deliberately never overwrites, so a figure that was wrong when it
+    /// shipped would stay wrong on every machine that had already run the mod once.
+    /// The version field is the way out, and it only works if the shipped book actually
+    /// declares one.
+    /// </summary>
+    [Fact]
+    public void The_shipped_book_declares_its_version()
+    {
+        Assert.True(Shipped().Version > 0, "no Version in the shipped reference book");
+    }
+
+    /// <summary>
     /// The same trap one level down: a table the file already has is not therefore the
     /// table this version ships. Armour products are added release by release, and a
     /// whole-section check means the four an early install has on disk are the four it
@@ -372,10 +384,20 @@ public class ReferenceBookTests
             Assert.InRange(shells[key].ThicknessMm, 2, 20);
         }
 
-        // and the three tables must actually differ, otherwise splitting them bought
-        // nothing: a package is a fraction of a plate, and a pressed shell sits between
-        Assert.True(soft["UHMWPE/2"].ThicknessMm < shells["UHMWPE/2"].ThicknessMm);
-        Assert.True(shells["UHMWPE/3"].ThicknessMm < plates["UHMWPE/3"].ThicknessMm);
+        // The three tables must actually differ, otherwise splitting them bought
+        // nothing. Compare them by AREAL DENSITY, not by thickness: a sewn package is
+        // loose plies and can be thicker than a pressed shell while weighing a third of
+        // it, which is exactly what happens at UHMWPE/2 — 7.0 mm of package against
+        // 6.0 mm of shell, and the package is the lighter object by far.
+        static double Areal(ReferenceBook.ArmorPlateRef p, double fallback) =>
+            p.ThicknessMm * (p.DensityGCm3 > 0 ? p.DensityGCm3 : fallback);
+
+        var sewnPack = Areal(soft["UHMWPE/2"], 0.97);
+        var pressed = Areal(shells["UHMWPE/2"], 0.97);
+        var monolith = Areal(plates["UHMWPE/3"], 0.97);
+
+        Assert.True(sewnPack < pressed, $"a sewn package ({sewnPack:N1}) must be lighter than a shell ({pressed:N1})");
+        Assert.True(pressed < monolith, $"a shell ({pressed:N1}) must be lighter than a plate ({monolith:N1})");
     }
 
     /// <summary>
@@ -414,13 +436,13 @@ public class ReferenceBookTests
     /// rigid ever reads off the sewn table — there is no such thing as a steel package.
     /// </summary>
     [Theory]
-    [InlineData("ratnik_6b47_level3_helmet_armor_top", "Aramid", 3, 8.5)]
-    [InlineData("6b43_6a_level3_soft_armor_front", "Aramid", 3, 7.0)]
-    [InlineData("ulach_level4_helmet_armor_top", "UHMWPE", 4, 12.2)]
+    [InlineData("ratnik_6b47_level3_helmet_armor_top", "Aramid", 3, 8.6)]
+    [InlineData("6b43_6a_level3_soft_armor_front", "Aramid", 3, 7.6)]
+    [InlineData("ulach_level4_helmet_armor_top", "UHMWPE", 4, 7.3)]
     [InlineData("item_equipment_facecover_welding_gorilla", "ArmoredSteel", 5, 4.5)]
     // a face mask is pressed like a helmet, whatever the game files it under
-    [InlineData("item_equipment_facecover_ballistic_mask", "UHMWPE", 3, 12.2)]
-    [InlineData("item_equipment_facecover_shatteredmask", "Aramid", 3, 8.5)]
+    [InlineData("item_equipment_facecover_ballistic_mask", "UHMWPE", 3, 7.3)]
+    [InlineData("item_equipment_facecover_shatteredmask", "Aramid", 3, 8.6)]
     // and the few pieces of headgear that really are cloth stay cloth
     [InlineData("balaclava", "UHMWPE", 3, 7.0)]
     [InlineData("item_equipment_head_bomber", "Aramid", 1, 5.5)]
@@ -441,16 +463,26 @@ public class ReferenceBookTests
     [Fact]
     public void A_published_rating_is_used_where_a_construction_is_not_published()
     {
-        var book = Shipped();
+        var reference = Shipped();
 
-        var kiver = book.ArmorPlates["fort_kiver_m"];
-        Assert.Equal(0, kiver.ThicknessMm);
-        Assert.Equal(2, kiver.Rating);
+        // Nothing in the shipped book needs this today — every entry that once carried a
+        // bare rating has since had its construction found. The path still has to work,
+        // because the next maker who publishes what a thing stops and nothing else will
+        // land on it.
+        reference.ArmorPlates["a_maker_who_only_says_what_it_stops"] =
+            new ReferenceBook.ArmorPlateRef { Prototype = "stated at Br2", Rating = 2 };
 
-        // read at 2 it is the PASGT shell; read at the game's 3 it would be the heaviest
-        // aramid shell ever fielded
-        Assert.True(book.HelmetShells["Aramid/2"].ThicknessMm
-                    < book.HelmetShells["Aramid/3"].ThicknessMm);
+        const string item = "a_maker_who_only_says_what_it_stops_level5_helmet_armor_top";
+        var spec = ArmorNormalizer.ProductSpec(
+            reference, item, ArmorNormalizer.Product(item), out _);
+
+        Assert.Equal(0, spec!.ThicknessMm);
+        Assert.Equal(2, spec.Rating);
+
+        // read at their 2 it is the PASGT shell; read at the game's 5 it would be capped
+        // to 3 and come out as the heaviest aramid shell ever fielded
+        Assert.True(reference.HelmetShells["Aramid/2"].ThicknessMm
+                    < reference.HelmetShells["Aramid/3"].ThicknessMm);
     }
 
     /// <summary>

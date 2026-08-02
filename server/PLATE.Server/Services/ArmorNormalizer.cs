@@ -147,6 +147,11 @@ public class ArmorNormalizer(
             // for the game and has no specification to look up — this is the only honest
             // number available for it, and it is still physics rather than a guess
             var itemName = item.Name ?? "";
+            if (IsTemplate(itemName))
+            {
+                continue;
+            }
+
             var product = Product(itemName);
             var spec = ProductSpec(reference, itemName, product, out var specKey);
             var cls = (int)(p.ArmorClass ?? 0);
@@ -307,6 +312,21 @@ public class ArmorNormalizer(
 
         key = product;
         return reference.ArmorPlates.TryGetValue(product, out var byProduct) ? byProduct : null;
+    }
+
+    /// <summary>
+    /// Template stubs the game clones its real inserts from, and one development item.
+    /// `level2_soft_armor_front` and its siblings live under the BuiltInInserts node and
+    /// nothing in the database references them: every vest carries its own copy named
+    /// `&lt;vest&gt;_level3_soft_armor_&lt;zone&gt;`. `helmet_all_exeptNeck` weighs nothing, is
+    /// marked Not_exist, has empty locale strings and borrows a body-armour prefab.
+    /// Giving any of them a construction would be describing furniture.
+    /// </summary>
+    public static bool IsTemplate(string itemName)
+    {
+        return itemName.StartsWith("level2_", StringComparison.OrdinalIgnoreCase)
+               || itemName.StartsWith("level3_", StringComparison.OrdinalIgnoreCase)
+               || itemName.Equals("helmet_all_exeptNeck", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
