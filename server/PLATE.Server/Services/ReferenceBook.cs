@@ -541,9 +541,18 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "UHMWPE/6":       { "Prototype": "UHMWPE monolith, Br6",   "ThicknessMm": 38.0 },
 
             "Aluminium/4":    { "Prototype": "aluminium armour, Br4",  "ThicknessMm": 20.0 },
-            "Glass/4":        { "Prototype": "laminated ballistic glass", "ThicknessMm": 25.0 },
-            "Glass/5":        { "Prototype": "laminated ballistic glass", "ThicknessMm": 30.0 },
-            "Glass/6":        { "Prototype": "laminated ballistic glass", "ThicknessMm": 35.0 },
+
+            // A visor is polycarbonate and triplex, and the material tops out at pistol
+            // and fragments whatever the class in the game says. The heaviest one here
+            // is 1.8 kg, which over a face is about 14 mm of laminate; stopping a rifle
+            // round would take four or five times that, and nobody wears it. So the
+            // thicknesses stay what a real visor is and the model draws its own
+            // conclusion — a class 4 visor is a class 4 visor against pistol rounds.
+            "Glass/1":        { "Prototype": "shooting glasses",       "ThicknessMm": 4.0 },
+            "Glass/2":        { "Prototype": "visor, pistol-rated",    "ThicknessMm": 8.0 },
+            "Glass/3":        { "Prototype": "heavy visor",            "ThicknessMm": 11.0 },
+            "Glass/4":        { "Prototype": "heaviest visor made",    "ThicknessMm": 14.0,
+                                "Source": "1.8 kg of laminate over a face" },
             "Aramid/3":       { "Prototype": "aramid pack, Br3",       "ThicknessMm": 12.0 },
             "Aramid/4":       { "Prototype": "aramid pack, Br4",       "ThicknessMm": 16.0 },
             "Aramid/5":       { "Prototype": "aramid pack, Br5",       "ThicknessMm": 20.0 },

@@ -227,6 +227,7 @@ public class ReferenceBookTests
             "Titan/4", "Titan/5", "Titan/6",
             "UHMWPE/3", "UHMWPE/4", "UHMWPE/5", "UHMWPE/6",
             "Aluminium/4",
+            "Glass/1", "Glass/2", "Glass/3", "Glass/4",
         ];
 
         foreach (var key in shipped)
@@ -258,6 +259,25 @@ public class ReferenceBookTests
                 Assert.True(ladder[i].ThicknessMm > ladder[i - 1].ThicknessMm,
                     $"{group.Key}: class {ladder[i].Class} is not thicker than {ladder[i - 1].Class}");
             }
+        }
+    }
+
+    /// <summary>
+    /// A visor is polycarbonate and triplex, and that material stops pistol rounds and
+    /// fragments — no class number changes what it is made of. The heaviest one in the
+    /// game is 1.8 kg, about 14 mm of laminate over a face; a rifle-proof visor would be
+    /// four or five times that and nobody has ever worn one. If this table ever hands
+    /// glass a plate-like thickness, the game gets a face shield that eats rifle rounds
+    /// because a number said so.
+    /// </summary>
+    [Fact]
+    public void Ballistic_glass_never_gets_a_rifle_plate_thickness()
+    {
+        foreach (var (key, plate) in Shipped().ArmorByClass.Where(kv => kv.Key.StartsWith("Glass/")))
+        {
+            Assert.InRange(plate.ThicknessMm, 2, 15);
+            Assert.True(int.Parse(key.Split('/')[1]) <= 4,
+                $"{key}: the game has no glass above class 4, and reality has none above 2");
         }
     }
 
