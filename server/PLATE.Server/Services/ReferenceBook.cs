@@ -171,11 +171,20 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         public Dictionary<string, ArmorPlateRef> ArmorByClass { get; set; } = new();
 
         /// <summary>
-        /// Armour that is not a plate: the package sewn into a carrier and the shell of
-        /// a helmet. A woven package and a visor are read at a rating of 2 at most —
-        /// carriers are sold as Br1 or Br2 and the rifle protection lives in the plates.
+        /// Key — "Material/Class". The package sewn into a carrier: layers of fabric,
+        /// held together by the stitching and nothing else. Read at a rating of 2 at
+        /// most — carriers are sold as Br1 or Br2 and the rifle protection lives in the
+        /// plates.
         /// </summary>
         public Dictionary<string, ArmorPlateRef> SoftArmor { get; set; } = new();
+
+        /// <summary>
+        /// Key — "Material/Class". A rigid shell: a helmet, a visor, a mask. Aramid in
+        /// one of these is not the aramid of a vest package — it is pressed under heat
+        /// into a resin-bonded laminate and behaves as a solid, so it belongs in its own
+        /// table with its own figures.
+        /// </summary>
+        public Dictionary<string, ArmorPlateRef> HelmetShells { get; set; } = new();
 
         /// <summary>
         /// Key — the weapon template's _name. Only for weapons whose barrel does not
@@ -279,6 +288,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         Fill(nameof(loaded.ArmorPlates), loaded.ArmorPlates, s => s.ArmorPlates);
         Fill(nameof(loaded.ArmorByClass), loaded.ArmorByClass, s => s.ArmorByClass);
         Fill(nameof(loaded.SoftArmor), loaded.SoftArmor, s => s.SoftArmor);
+        Fill(nameof(loaded.HelmetShells), loaded.HelmetShells, s => s.HelmetShells);
 
         return filled;
     }
@@ -639,16 +649,16 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "Aluminium/4":    { "Prototype": "aluminium armour",      "ThicknessMm": 20.0 }
           },
 
-          // ===== Soft armour and helmet shells =====
-          // Everything that is not a plate: the woven package sewn into a vest, and the
-          // shell of a helmet. Same key, separate table, because a pack of a given
-          // rating is nothing like a monolithic plate of it — a class 3 polyethylene
-          // plate is 20 mm, a class 3 polyethylene helmet shell is nine.
+          // ===== Soft armour =====
+          // The package sewn into a carrier: layers of fabric held together by the
+          // stitching and nothing else. Separate from the plate table because a pack of
+          // a given rating is nothing like a monolithic plate of it, and separate from
+          // the shell table because pressed laminate is not fabric.
           //
-          // A woven package and a visor have a ceiling no rating can lift, so anything
-          // the game rates above 2 is read as 2 — the fabric is the same fabric. Reaching
-          // Br3 with aramid alone would take about 200 mm of it, which is why carriers
-          // are sold as Br1 or Br2 and the rifle protection lives in the plates.
+          // A woven package has a ceiling no rating can lift, so anything the game rates
+          // above 2 is read as 2 — the fabric is the same fabric. Reaching Br3 with
+          // aramid alone would take about 200 mm of it, which is why carriers are sold
+          // as Br1 or Br2 and the rifle protection lives in the plates.
           "SoftArmor": {
             "Aramid/1":       { "Prototype": "18-layer aramid package", "ThicknessMm": 5.5,
                                 "Source": "18 layers, 4-6 mm" },
@@ -656,34 +666,74 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                 "Source": "24 layers; the 6B5 package is 30 at ~8 mm" },
 
             "UHMWPE/1":       { "Prototype": "light UHMWPE package",   "ThicknessMm": 5.0 },
-            "UHMWPE/2":       { "Prototype": "UHMWPE package",         "ThicknessMm": 7.0 },
+            "UHMWPE/2":       { "Prototype": "UHMWPE package",         "ThicknessMm": 7.0 }
+          },
 
+          // ===== Helmet shells, visors and rigid masks =====
+          // Aramid in a helmet is not the aramid of a vest package. The fabric is
+          // prepreg — impregnated with 16-18% PVB-phenolic resin — and pressed under
+          // heat into one rigid laminate, so it fails as a solid rather than as a stack
+          // of layers and it is thicker than anything sewn.
+          //
+          // The ladder is anchored to real helmets, at fibre-equivalent thickness so
+          // that density times thickness reproduces the published areal density.
+          //
+          // Fibre still has a ceiling. Above Br2 a pressed shell stops getting thicker
+          // and starts getting a metal or ceramic element instead, so aramid and
+          // polyethylene are read at 3 at most — the thickest fielded shell of each is
+          // the last rung. Anything the game rates above that is a shell plus something
+          // else, and the something else belongs in ArmorPlates by name.
+          "HelmetShells": {
+            "Aramid/1":       { "Prototype": "light aramid shell",     "ThicknessMm": 5.4,
+                                "Source": "the 6B47, 1 kg over 11 dm2" },
+            "Aramid/2":       { "Prototype": "aramid shell",           "ThicknessMm": 7.8,
+                                "Source": "the PASGT, 11.2 kg/m2; the ACH is 7.9" },
+            "Aramid/3":       { "Prototype": "heavy aramid shell",     "ThicknessMm": 8.5,
+                                "Source": "Ops-Core FAST, 1.1 kg over a 9 dm2 high cut" },
+
+            "UHMWPE/1":       { "Prototype": "light UHMWPE shell",     "ThicknessMm": 8.0 },
+            "UHMWPE/2":       { "Prototype": "UHMWPE shell",           "ThicknessMm": 10.9,
+                                "Source": "Team Wendy EXFIL, 0.95 kg over a 9 dm2 high cut" },
+            "UHMWPE/3":       { "Prototype": "heavy UHMWPE shell",     "ThicknessMm": 12.2,
+                                "Source": "an ECH-weight shell, 1.3 kg over 11 dm2" },
+
+            // a visor is polycarbonate and laminate, and stops where they stop
             "Glass/1":        { "Prototype": "shooting glasses",       "ThicknessMm": 4.0 },
             "Glass/2":        { "Prototype": "ballistic visor",        "ThicknessMm": 14.0,
                                 "Source": "the heaviest made is 1.8 kg of laminate over a face" },
 
-            // hard shells worn as helmets rather than carried as plates. These are not
-            // capped — a shell really is thicker on a heavier helmet — but the figure is
-            // the shell's, and a named helmet belongs in ArmorPlates with its own.
-            "ArmoredSteel/2": { "Prototype": "steel helmet shell",     "ThicknessMm": 3.0 },
-            "ArmoredSteel/3": { "Prototype": "steel helmet shell",     "ThicknessMm": 4.0 },
-            "ArmoredSteel/4": { "Prototype": "steel helmet shell",     "ThicknessMm": 5.0 },
-            "ArmoredSteel/5": { "Prototype": "heavy steel shell",      "ThicknessMm": 6.0 },
-            "ArmoredSteel/6": { "Prototype": "thickest steel shell",   "ThicknessMm": 7.0 },
-            "Titan/2":        { "Prototype": "titanium shell",         "ThicknessMm": 3.0 },
-            "Titan/3":        { "Prototype": "titanium shell",         "ThicknessMm": 4.5 },
-            "Titan/4":        { "Prototype": "titanium shell",         "ThicknessMm": 6.5 },
-            "Titan/5":        { "Prototype": "heavy titanium shell",   "ThicknessMm": 8.0 },
-            "Titan/6":        { "Prototype": "thickest titanium shell", "ThicknessMm": 10.0 },
-            "Aluminium/3":    { "Prototype": "aluminium shell",        "ThicknessMm": 12.0 },
-            "Aluminium/4":    { "Prototype": "aluminium shell",        "ThicknessMm": 15.0 },
-            "Combined/3":     { "Prototype": "composite shell",        "ThicknessMm": 8.0 },
-            "Combined/4":     { "Prototype": "composite shell",        "ThicknessMm": 10.0 },
-            "Combined/5":     { "Prototype": "heavy composite shell",  "ThicknessMm": 12.0 },
-            "Combined/6":     { "Prototype": "thickest composite shell", "ThicknessMm": 14.0 },
-            "Ceramic/4":      { "Prototype": "ceramic shell",          "ThicknessMm": 7.0 },
-            "Ceramic/5":      { "Prototype": "ceramic shell",          "ThicknessMm": 8.5 },
-            "Ceramic/6":      { "Prototype": "thickest ceramic shell", "ThicknessMm": 10.0 }
+            // metal and ceramic shells are not capped: one really is thicker on a
+            // heavier helmet. But they do not run away either — every rung above the
+            // anchor is heavier than any helmet anyone has fielded
+            "ArmoredSteel/2": { "Prototype": "steel helmet shell",     "ThicknessMm": 3.0,
+                                "Source": "the Maska-1Sch, 4.3 kg over 13 dm2" },
+            "ArmoredSteel/3": { "Prototype": "steel helmet shell",     "ThicknessMm": 3.5 },
+            "ArmoredSteel/4": { "Prototype": "heavy steel shell",      "ThicknessMm": 4.0 },
+            "ArmoredSteel/5": { "Prototype": "heavy steel shell",      "ThicknessMm": 4.5 },
+            "ArmoredSteel/6": { "Prototype": "thickest steel shell",   "ThicknessMm": 5.0 },
+
+            "Titan/2":        { "Prototype": "titanium shell",         "ThicknessMm": 3.0,
+                                "Source": "the Altyn, 3 mm; the Rys-T works out at 3.6" },
+            "Titan/3":        { "Prototype": "titanium shell",         "ThicknessMm": 3.6 },
+            "Titan/4":        { "Prototype": "heavy titanium shell",   "ThicknessMm": 4.0,
+                                "Source": "the Altyn-R2 went to 4 mm and nothing has gone past it" },
+            "Titan/5":        { "Prototype": "heavy titanium shell",   "ThicknessMm": 4.0 },
+            "Titan/6":        { "Prototype": "thickest titanium shell", "ThicknessMm": 4.0 },
+
+            "Combined/3":     { "Prototype": "composite shell",        "ThicknessMm": 4.0 },
+            "Combined/4":     { "Prototype": "composite shell",        "ThicknessMm": 5.0 },
+            "Combined/5":     { "Prototype": "heavy composite shell",  "ThicknessMm": 6.0,
+                                "Source": "the Vulkan-5, 4.5 kg over 13 dm2 - the heaviest worn" },
+            "Combined/6":     { "Prototype": "thickest composite shell", "ThicknessMm": 6.5 },
+
+            "Ceramic/4":      { "Prototype": "ceramic shell",          "ThicknessMm": 5.0 },
+            "Ceramic/5":      { "Prototype": "ceramic shell",          "ThicknessMm": 6.0 },
+            "Ceramic/6":      { "Prototype": "thickest ceramic shell", "ThicknessMm": 7.0 },
+
+            // aluminium is not a helmet material; these are the game's ear covers and
+            // side panels, which are composite on every real helmet they are drawn from
+            "Aluminium/3":    { "Prototype": "aluminium panel",        "ThicknessMm": 6.0 },
+            "Aluminium/4":    { "Prototype": "aluminium panel",        "ThicknessMm": 8.0 }
           },
 
           // Blast anchor: Strength_i = Strength_anchor * (TntG_i / TntG_anchor)^(1/3)

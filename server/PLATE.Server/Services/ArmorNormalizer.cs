@@ -303,10 +303,10 @@ public class ArmorNormalizer(
     }
 
     /// <summary>
-    /// The real armour of this rating, or null when we have not named one. A plate and
-    /// a soft package of the same rating are different objects — 20 mm of monolithic
-    /// polyethylene against 9 mm of helmet shell — so which table answers depends on
-    /// which the item is.
+    /// The real armour of this rating, or null when we have not named one. Three
+    /// objects of the same rating are three different things — 20 mm of monolithic
+    /// polyethylene, an 11 mm pressed shell, a 7 mm sewn package — so which table
+    /// answers matters more than the rating does.
     /// </summary>
     private static Resolved? ClassReference(
         ReferenceBook.AmmoReference reference, string itemName, string material, int cls)
@@ -319,27 +319,48 @@ public class ArmorNormalizer(
                 : null;
         }
 
-        var rating = SoftRating(material, cls);
-        var softKey = $"{material}/{rating}";
-        return reference.SoftArmor.TryGetValue(softKey, out var soft)
-            ? new Resolved(soft, softKey, rating < cls ? cls : 0)
+        // A rigid element is rigid wherever it is worn: nobody sews a package out of
+        // steel, so anything that is not fibre is a shell. Fibre is the one material
+        // that comes both ways, and there the item decides — pressed into a helmet or
+        // stitched into a carrier
+        var shell = !Fibrous.Contains(material, StringComparer.OrdinalIgnoreCase)
+                    || Classify(itemName) == Kind.Helmet;
+
+        var table = shell ? reference.HelmetShells : reference.SoftArmor;
+        var rating = Math.Min(cls, Ceiling(material, shell));
+        var key = $"{material}/{rating}";
+
+        return table.TryGetValue(key, out var entry)
+            ? new Resolved(entry, key, rating < cls ? cls : 0)
             : null;
     }
 
-    /// <summary>
-    /// Materials with a ceiling their rating cannot lift. A woven package and a
-    /// polycarbonate visor stop pistol rounds and fragments; getting to Br3 with aramid
-    /// alone would take around 200 mm of it, which is why carriers are sold as Br1 or
-    /// Br2 and everything above that in a vest is a plate. Whatever the game prints on
-    /// one, it is read at 2.
-    /// </summary>
-    private static readonly string[] CappedAtTwo = ["Aramid", "UHMWPE", "Glass"];
+    /// <summary>The materials that come both as a pressed laminate and as loose fabric.</summary>
+    private static readonly string[] Fibrous = ["Aramid", "UHMWPE"];
 
-    private static int SoftRating(string material, int cls)
+    /// <summary>
+    /// The rating a material can actually reach in that form. A woven package stops at
+    /// 2: getting to Br3 with aramid alone would take around 200 mm of it, which is why
+    /// carriers are sold as Br1 or Br2 and everything above that in a vest is a plate.
+    /// Pressing the same fibre into a resin-bonded shell buys one rung and no more —
+    /// past that a helmet stops getting thicker and starts getting a metal or ceramic
+    /// element, and that element belongs in the product table by name. A visor is
+    /// polycarbonate and laminate whatever it is bolted to. Metal and ceramic are not
+    /// capped at all: a shell really is thicker on a heavier helmet.
+    /// </summary>
+    private static int Ceiling(string material, bool shell)
     {
-        return CappedAtTwo.Contains(material, StringComparer.OrdinalIgnoreCase)
-            ? Math.Min(cls, 2)
-            : cls;
+        if (material.Equals("Glass", StringComparison.OrdinalIgnoreCase))
+        {
+            return 2;
+        }
+
+        if (!Fibrous.Contains(material, StringComparer.OrdinalIgnoreCase))
+        {
+            return int.MaxValue;
+        }
+
+        return shell ? 3 : 2;
     }
 
     /// <summary>Drops the shared prefix so the report reads as plate names.</summary>

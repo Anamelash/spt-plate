@@ -281,22 +281,26 @@ public class ReferenceBookTests
     /// A woven package is not a plate. Every rating the game gives soft armour and
     /// helmet shells needs an entry in their own table, or those items fall through to
     /// a plate's thickness — a class 3 polyethylene plate is 20 mm and a class 3
-    /// polyethylene helmet shell is nine, and handing the shell the plate's figure
-    /// would make a helmet twice the armour it is.
+    /// polyethylene helmet shell is twelve, and handing the shell the plate's figure
+    /// would make a helmet nearly twice the armour it is.
     /// </summary>
     [Fact]
     public void Soft_armour_and_helmet_shells_have_their_own_reference()
     {
         var soft = Shipped().SoftArmor;
+        var shells = Shipped().HelmetShells;
         var plates = Shipped().ArmorByClass;
 
-        string[] shipped =
+        // a sewn package is only ever fabric, and only ever reaches 2
+        string[] sewn = ["Aramid/1", "Aramid/2", "UHMWPE/1", "UHMWPE/2"];
+
+        string[] rigid =
         [
-            // capped materials only reach 2, so those are the only entries they need
-            "Aramid/1", "Aramid/2",
-            "UHMWPE/1", "UHMWPE/2",
+            // pressed laminate buys one rung over the sewn package and stops
+            "Aramid/1", "Aramid/2", "Aramid/3",
+            "UHMWPE/1", "UHMWPE/2", "UHMWPE/3",
             "Glass/1", "Glass/2",
-            // a hard shell really is thicker on a heavier helmet
+            // metal and ceramic are not capped: a shell really is thicker on a heavier helmet
             "ArmoredSteel/2", "ArmoredSteel/3", "ArmoredSteel/4", "ArmoredSteel/5", "ArmoredSteel/6",
             "Titan/2", "Titan/3", "Titan/4", "Titan/5", "Titan/6",
             "Combined/3", "Combined/4", "Combined/5", "Combined/6",
@@ -304,34 +308,89 @@ public class ReferenceBookTests
             "Aluminium/3", "Aluminium/4",
         ];
 
-        foreach (var key in shipped)
+        foreach (var key in sewn)
         {
             Assert.True(soft.ContainsKey(key), $"no soft-armour reference for {key}");
             Assert.InRange(soft[key].ThicknessMm, 2, 20);
         }
 
-        // and it must actually differ from the plate table, otherwise splitting them
-        // bought nothing: a polyethylene package is a fraction of a monolithic plate
-        Assert.True(soft["UHMWPE/2"].ThicknessMm < plates["UHMWPE/3"].ThicknessMm / 2);
+        foreach (var key in rigid)
+        {
+            Assert.True(shells.ContainsKey(key), $"no helmet-shell reference for {key}");
+            Assert.InRange(shells[key].ThicknessMm, 2, 20);
+        }
+
+        // and the three tables must actually differ, otherwise splitting them bought
+        // nothing: a package is a fraction of a plate, and a pressed shell sits between
+        Assert.True(soft["UHMWPE/2"].ThicknessMm < shells["UHMWPE/2"].ThicknessMm);
+        Assert.True(shells["UHMWPE/3"].ThicknessMm < plates["UHMWPE/3"].ThicknessMm);
     }
 
     /// <summary>
-    /// A woven package and a visor cannot be rated past 2 by being made thicker, so the
-    /// table must not offer a rung above it — an entry at 3 would be applied to
-    /// something and would mean the rating had lifted a ceiling it cannot lift.
+    /// Fabric cannot be rated past 2 by being sewn thicker and a visor cannot be rated
+    /// past 2 at all, so neither table may offer a rung above its ceiling — an entry
+    /// there would be applied to something, and would mean a rating had lifted a
+    /// ceiling it cannot lift.
     /// </summary>
     [Fact]
-    public void Capped_materials_have_no_rung_above_two()
+    public void No_table_offers_a_rung_its_material_cannot_reach()
     {
         foreach (var (key, _) in Shipped().SoftArmor)
         {
             var parts = key.Split('/');
-            if (parts[0] is "Aramid" or "UHMWPE" or "Glass")
-            {
-                Assert.True(int.Parse(parts[1]) <= 2,
-                    $"{key}: woven fabric and laminate stop where they stop");
-            }
+            Assert.True(int.Parse(parts[1]) <= 2, $"{key}: sewn fabric stops where it stops");
         }
+
+        foreach (var (key, _) in Shipped().HelmetShells)
+        {
+            var parts = key.Split('/');
+            var ceiling = parts[0] switch
+            {
+                "Aramid" or "UHMWPE" => 3,
+                "Glass" => 2,
+                _ => 6,
+            };
+
+            Assert.True(int.Parse(parts[1]) <= ceiling,
+                $"{key}: past {ceiling} a shell of this is no longer a shell of this");
+        }
+    }
+
+    /// <summary>
+    /// The whole point of the split: the same fibre at the same rating has to come out
+    /// as two different objects depending on whether it was pressed or sewn. Nothing
+    /// rigid ever reads off the sewn table — there is no such thing as a steel package.
+    /// </summary>
+    [Theory]
+    [InlineData("ratnik_6b47_level3_helmet_armor_top", "Aramid", 3, 8.5)]
+    [InlineData("6b43_6a_level3_soft_armor_front", "Aramid", 3, 7.0)]
+    [InlineData("ulach_level4_helmet_armor_top", "UHMWPE", 4, 12.2)]
+    [InlineData("balaclava", "UHMWPE", 3, 7.0)]
+    [InlineData("item_equipment_facecover_welding_gorilla", "ArmoredSteel", 5, 4.5)]
+    public void Pressed_and_sewn_read_off_different_tables(
+        string item, string material, int cls, double expected)
+    {
+        var reference = Shipped();
+        ReferenceBook.MergeShippedDefaults(reference);
+
+        var resolved = Resolve(reference, item, material, cls);
+        Assert.Equal(expected, resolved, 1);
+    }
+
+    /// <summary>Runs the normalizer's own lookup, which is private to it.</summary>
+    private static double Resolve(ReferenceBook.AmmoReference reference,
+        string item, string material, int cls)
+    {
+        var method = typeof(ArmorNormalizer).GetMethod("ClassReference",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+
+        var resolved = method!.Invoke(null, [reference, item, material, cls]);
+        Assert.NotNull(resolved);
+
+        var plate = (ReferenceBook.ArmorPlateRef)resolved!.GetType()
+            .GetProperty("Ref")!.GetValue(resolved)!;
+        return plate.ThicknessMm;
     }
 
 
