@@ -141,6 +141,15 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         /// <summary>Thickness of the hard element, mm. This is what the game has nowhere.</summary>
         public double ThicknessMm { get; set; }
 
+        /// <summary>
+        /// The rating the manufacturer certifies, when they publish one but no
+        /// construction. Sometimes that is all there is: Fort say the Kiver-M stops a
+        /// Stechkin and nothing about what it is made of. With no thickness to use, the
+        /// reference is at least read at the real rating instead of the game's.
+        /// 0 = not stated.
+        /// </summary>
+        public int Rating { get; set; }
+
         /// <summary>Backing package behind the plate, mm of fibre (0 = none).</summary>
         public double BackingMm { get; set; }
 
@@ -185,6 +194,14 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         /// table with its own figures.
         /// </summary>
         public Dictionary<string, ArmorPlateRef> HelmetShells { get; set; } = new();
+
+        /// <summary>
+        /// Key — the same product or item name as ArmorPlates; value — why the search
+        /// came back empty. A headstone, not a setting: nothing here changes a figure.
+        /// It records that somebody has already gone looking, so the next pass over the
+        /// report spends its time on the entries nobody has looked at yet.
+        /// </summary>
+        public Dictionary<string, string> NoRealSpecs { get; set; } = new();
 
         /// <summary>
         /// Key — the weapon template's _name. Only for weapons whose barrel does not
@@ -289,6 +306,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         Fill(nameof(loaded.ArmorByClass), loaded.ArmorByClass, s => s.ArmorByClass);
         Fill(nameof(loaded.SoftArmor), loaded.SoftArmor, s => s.SoftArmor);
         Fill(nameof(loaded.HelmetShells), loaded.HelmetShells, s => s.HelmetShells);
+        Fill(nameof(loaded.NoRealSpecs), loaded.NoRealSpecs, s => s.NoRealSpecs);
 
         return filled;
     }
@@ -562,12 +580,23 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                   "Source": "the same laminate as the AirFrame shell" },
             "bnti_lshz_2dtm":   { "Prototype": "LShZ-2DTM", "Material": "Aramid", "ThicknessMm": 8.8,
                                   "Source": "discrete aramid fabric, GOST class 2; 4.45 kg for the whole set" },
+            "highcom_striker_achhc": { "Prototype": "HighCom Striker ACHHC", "Material": "Aramid", "ThicknessMm": 5.9,
+                                  "Source": "hybrid Kevlar and Spectra shell, 1.7 lb over a 9 dm2 high cut" },
+
+            // Fort publish what it stops and nothing about what it is made of. The
+            // rating is still worth having: the game rates it 3, they certify 1+
+            "fort_kiver_m":     { "Prototype": "Fort Kiver-M", "Rating": 2,
+                                  "Source": "class 1+ - Stechkin, 9x19 and fragments at 570 m/s; no construction published" },
             "item_equipment_helmet_lshz2dtm_aventail": { "Prototype": "LShZ-2DTM aventail", "Material": "Aramid", "ThicknessMm": 7,
                                   "Source": "aramid mail, 5.5 dm2, class 2" },
 
             // --- helmets: polyethylene shells ---
             "exfil":            { "Prototype": "Team Wendy EXFIL Ballistic", "Material": "UHMWPE", "ThicknessMm": 10.9,
                                   "Source": "0.95 kg polyethylene composite shell over a 9 dm2 high cut" },
+            "galvion_caiman":   { "Prototype": "Galvion Caiman", "Material": "UHMWPE", "ThicknessMm": 6.5,
+                                  "Source": "6.35 kg/m2 of UHMWPE, 0.69 kg in medium; the shell measures 6 mm" },
+            "mtek_flux":        { "Prototype": "MTEK FLUX", "Material": "UHMWPE", "ThicknessMm": 5.7,
+                                  "Source": "0.5 kg of polyethylene and carbon over a 9 dm2 high cut" },
             "helmet_team_wendy_exfil_ear_covers":        { "Prototype": "EXFIL ear covers", "Material": "UHMWPE", "ThicknessMm": 10.9,
                                   "Source": "the same laminate as the EXFIL shell" },
             "helmet_team_wendy_exfil_ear_covers_coyote": { "Prototype": "EXFIL ear covers", "Material": "UHMWPE", "ThicknessMm": 10.9,
@@ -596,6 +625,8 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                   "Source": "1.3 kg of steel; rated for a 1 g fragment at 250 m/s, not for bullets" },
             "Rys_T":            { "Prototype": "Rys-T", "Material": "Titan", "ThicknessMm": 3.6,
                                   "Source": "NII Stali titanium, 2.5 kg without the visor over 13 dm2, GOST class 2" },
+            "zsh_1_2m":         { "Prototype": "ZSh-1-2M", "Material": "Aluminium", "ThicknessMm": 6.1,
+                                  "Source": "aluminium alloy lined with aramid, Br2, V50 750 m/s; 3.5-4 kg with visor and aventail" },
 
             // --- visors ---
             "item_equipment_helmet_rys_t_shield":   { "Prototype": "Rys-T visor", "Material": "Glass", "ThicknessMm": 10,
@@ -647,6 +678,64 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "UHMWPE/6":       { "Prototype": "UHMWPE monolith, Br6",   "ThicknessMm": 38.0 },
 
             "Aluminium/4":    { "Prototype": "aluminium armour",      "ThicknessMm": 20.0 }
+          },
+
+          // ===== Searched, nothing published =====
+          // A headstone per product, so the same dead end is not walked twice. Nothing
+          // here changes a figure — the item still takes its reference construction —
+          // but the report says which entries have been looked into and which are still
+          // waiting, and that is the whole difference between a to-do list and a wall.
+          //
+          // Two reasons an entry lands here. Either the thing does not exist outside the
+          // game, in which case there is nothing to find and never will be; or it exists
+          // and the maker publishes a rating and a price and no construction at all.
+          // Only the second is worth revisiting.
+          "NoRealSpecs": {
+            // real, and the maker says nothing about what is inside
+            "mtek_strike":            "MTEK publish no shell weight for the Strike",
+            "nfm_hjelm":              "NFM publish no shell weight",
+            "diamond_age_bastion":    "ceramic-augmented, defeats M855 and M855A1; no mass published",
+            "ballisticarmorco_bastion": "the same Adept helmet, sold under another name; no mass published",
+            "adept_neosteel":         "steel and composite to VPAM 3; no thickness published",
+            "item_equipment_helmet_neosteel_mandible": "no thickness published for the mandible",
+            "item_equipment_helmet_diamond_age_bastion_shield": "no mass published for the shield",
+            "class_tor2":             "NPP KlASS publish a rating and no construction",
+            "lshz":                   "Armocom publish a rating and no construction",
+            "shlemofon_tsh_4ml":       "a tanker's padded helmet - no ballistic element to specify",
+            "firefighter_shpm":       "a fire helmet - no ballistic rating to work from",
+
+            // invented for the game: no prototype exists to look up
+            "ronin":                  "invented for the game",
+            "helmet_all_exeptNeck":   "a development item, not a product",
+            "item_equipment_helmet_tk_heavy_trooper": "a costume",
+            "tac_kek_fast_mt":        "an airsoft replica of the FAST, with no ballistic shell",
+            "balaclava":              "a balaclava is fabric; the game rates it armour",
+            "test_balaclava":         "a development item, not a product",
+            "balaclava_development":  "a development item, not a product",
+            "jack_o_lantern":         "a costume",
+            "item_equipment_facecover_glorious":   "invented for the game",
+            "item_equipment_facecover_shatteredmask": "invented for the game",
+            "item_equipment_facecover_mask_boss_blackknight": "invented for the game",
+            "item_equipment_facecover_welding_gorilla": "a welding mask; no ballistic rating to work from",
+            "item_equipment_facecover_welding_kill":   "a welding mask; no ballistic rating to work from",
+            "item_equipment_facecover_welding_minotaur": "a welding mask; no ballistic rating to work from",
+            "item_equipment_head_bomber": "a hat; the game rates it armour",
+            "SAPI_AR500_legacy":      "invented for the game",
+            "SAPI_Cult_Locust":       "invented for the game",
+            "SAPI_Cult_Termite":      "invented for the game",
+            "SAPI_GAC_3s15m":         "invented for the game",
+            "SAPI_GAC_4sss2":         "invented for the game",
+            "SAPI_GlobalArmors_Steel": "invented for the game",
+            "SAPI_KITECO_SCIVSA":     "invented for the game",
+            "SAPI_KibaArms_Steel":    "invented for the game",
+            "SAPI_KibaArms_Titan":    "invented for the game",
+            "SAPI_Monoclete_PE":      "invented for the game",
+            "SAPI_NESCO_4400":        "invented for the game",
+            "SAPI_NewSphereTech":     "invented for the game",
+            "SAPI_PRTCTR_Lightweight": "invented for the game",
+            "SAPI_SPRTN_Elaphros":    "invented for the game",
+            "SAPI_SPRTN_Omega":       "invented for the game",
+            "SAPI_TallCom_Guardian":  "invented for the game"
           },
 
           // ===== Soft armour =====

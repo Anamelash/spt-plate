@@ -106,6 +106,9 @@ public class ArmorNormalizer(
 
         /// <summary>Rating the item declares, when the material's ceiling overrode it.</summary>
         public int CappedFrom;
+
+        /// <summary>What the search for this one turned up, when it was not a figure.</summary>
+        public string Note = "";
     }
 
     /// <summary>A reference entry together with the key that found it, for the report.</summary>
@@ -148,10 +151,19 @@ public class ArmorNormalizer(
             var spec = ProductSpec(reference, itemName, product, out var specKey);
             var cls = (int)(p.ArmorClass ?? 0);
 
+            // an entry that names a rating and no construction is not a documented
+            // product — the maker says what it stops and nothing about what it is made
+            // of. It still beats the game's class, so the reference is read at theirs
+            var stated = spec is { ThicknessMm: <= 0 } ? spec : null;
+            spec = stated == null ? spec : null;
+            var rating = stated is { Rating: > 0 } ? stated.Rating : cls;
+
             // a plate the game invented has no product to look up, but there is a real
             // plate of the same rating doing the same job, and that is what it stands in
             // for. Mass only decides it when even that is missing
-            var byClass = spec == null ? ClassReference(reference, itemName, material, cls) : null;
+            var byClass = spec == null
+                ? ClassReference(reference, itemName, material, rating, cls)
+                : null;
             var derived = spec == null && byClass == null
                 ? DeriveThickness(itemName, p, material, reference)
                 : 0;
@@ -173,6 +185,7 @@ public class ArmorNormalizer(
                     Material = material,
                     Kind = Classify(itemName),
                     Class = cls,
+                    Note = Note(reference, itemName, product),
                 };
                 target[rowKey] = row;
             }
@@ -186,10 +199,15 @@ public class ArmorNormalizer(
                     row.From = Origin.Reference;
                     row.ReferenceKey = byClass.Key;
                     row.CappedFrom = byClass.CappedFrom;
-                    row.Prototype = byClass.Ref.Prototype;
+                    row.Prototype = stated?.Prototype.Length > 0 ? stated.Prototype : byClass.Ref.Prototype;
                     row.ThicknessMm = byClass.Ref.ThicknessMm;
                     row.Source = byClass.Ref.Source;
                     _thickness[item.Id] = byClass.Ref.ThicknessMm;
+
+                    if (stated != null)
+                    {
+                        row.Note = stated.Source;
+                    }
                 }
                 else if (derived > 0)
                 {
@@ -308,35 +326,75 @@ public class ArmorNormalizer(
     /// polyethylene, an 11 mm pressed shell, a 7 mm sewn package — so which table
     /// answers matters more than the rating does.
     /// </summary>
-    private static Resolved? ClassReference(
-        ReferenceBook.AmmoReference reference, string itemName, string material, int cls)
+    /// <param name="cls">The rating to read at — the maker's where they state one.</param>
+    /// <param name="declared">What the game prints on it, for the report.</param>
+    private static Resolved? ClassReference(ReferenceBook.AmmoReference reference,
+        string itemName, string material, int cls, int declared)
     {
         if (itemName.StartsWith("item_equipment_plate_", StringComparison.OrdinalIgnoreCase))
         {
             var plateKey = $"{material}/{cls}";
             return reference.ArmorByClass.TryGetValue(plateKey, out var plate)
-                ? new Resolved(plate, plateKey, 0)
+                ? new Resolved(plate, plateKey, cls < declared ? declared : 0)
                 : null;
         }
 
-        // A rigid element is rigid wherever it is worn: nobody sews a package out of
-        // steel, so anything that is not fibre is a shell. Fibre is the one material
-        // that comes both ways, and there the item decides — pressed into a helmet or
-        // stitched into a carrier
-        var shell = !Fibrous.Contains(material, StringComparer.OrdinalIgnoreCase)
-                    || Classify(itemName) == Kind.Helmet;
-
+        var shell = IsRigid(itemName, material);
         var table = shell ? reference.HelmetShells : reference.SoftArmor;
         var rating = Math.Min(cls, Ceiling(material, shell));
         var key = $"{material}/{rating}";
 
         return table.TryGetValue(key, out var entry)
-            ? new Resolved(entry, key, rating < cls ? cls : 0)
+            ? new Resolved(entry, key, rating < declared ? declared : 0)
             : null;
+    }
+
+    /// <summary>
+    /// Why the search for this one came back empty, or nothing if nobody has looked.
+    /// Keyed the same way the product table is — the item's own name, then the product.
+    /// </summary>
+    private static string Note(ReferenceBook.AmmoReference reference, string itemName, string product)
+    {
+        if (reference.NoRealSpecs.TryGetValue(Shorten(itemName), out var byName))
+        {
+            return byName;
+        }
+
+        return reference.NoRealSpecs.TryGetValue(product, out var byProduct) ? byProduct : "";
     }
 
     /// <summary>The materials that come both as a pressed laminate and as loose fabric.</summary>
     private static readonly string[] Fibrous = ["Aramid", "UHMWPE"];
+
+    /// <summary>
+    /// Headwear the game arms that is genuinely cloth. Everything else worn on the head
+    /// — a helmet, a visor, a face mask — is pressed into a rigid shell, so the list
+    /// runs this way round: fabric is the exception and has to be named.
+    /// </summary>
+    private static readonly string[] Woven =
+        ["balaclava", "bomber", "hood", "shemagh", "bandana", "beanie"];
+
+    /// <summary>
+    /// Whether the armour is a rigid element rather than a sewn package. A rigid
+    /// element is rigid wherever it is worn — nobody sews a package out of steel — so
+    /// anything that is not fibre is one. Fibre is the material that comes both ways: a
+    /// vest insert is stitched, and a helmet or a mask is prepreg pressed under heat
+    /// into a laminate that fails as a solid.
+    /// </summary>
+    private static bool IsRigid(string itemName, string material)
+    {
+        if (!Fibrous.Contains(material, StringComparer.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return Classify(itemName) switch
+        {
+            Kind.Helmet => true,
+            Kind.VestComponent or Kind.Plate => false,
+            _ => !Woven.Any(w => itemName.Contains(w, StringComparison.OrdinalIgnoreCase)),
+        };
+    }
 
     /// <summary>
     /// The rating a material can actually reach in that form. A woven package stops at
@@ -447,6 +505,14 @@ public class ArmorNormalizer(
         sb.AppendLine("Left to right is descending trust: published specifications for the thing "
                       + "the item is modelled on, then the real armour of its material and rating, "
                       + "then physics off a weight other mods can rewrite, then nothing at all.");
+
+        var onReference = all.Where(r => r.From == Origin.Reference).ToList();
+        var searched = onReference.Count(r => r.Note.Length > 0);
+        sb.AppendLine();
+        sb.AppendLine($"Of the {onReference.Count} on a reference, {searched} have been looked into "
+                      + $"and had nothing to give — `Looked up` says what was found instead — and "
+                      + $"{onReference.Count - searched} nobody has searched for yet. Those are the "
+                      + "ones worth an afternoon.");
 
         foreach (var kind in Kinds)
         {
@@ -561,7 +627,7 @@ public class ArmorNormalizer(
 
         var withReference = origin == Origin.Reference;
         sb.AppendLine(withReference
-            ? "| Item | Material | Class | Reference | Construction | Thickness | Zones |"
+            ? "| Item | Material | Class | Reference | Construction | Thickness | Looked up |"
             : "| Item | Material | Class | Construction | Thickness | Zones | Source |");
         sb.AppendLine("|---|---|---|---|---|---|---|");
 
@@ -577,7 +643,7 @@ public class ArmorNormalizer(
                     ? $"`{r.ReferenceKey}` (declares {r.CappedFrom})"
                     : $"`{r.ReferenceKey}`";
                 sb.AppendLine($"| {r.Product} | {material} | {r.Class} | {key} | {r.Prototype} | " +
-                              $"{r.ThicknessMm:N1} mm | {r.Zones} |");
+                              $"{r.ThicknessMm:N1} mm | {r.Note} |");
             }
             else
             {

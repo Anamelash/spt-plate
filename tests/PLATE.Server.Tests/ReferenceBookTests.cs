@@ -213,7 +213,17 @@ public class ReferenceBookTests
 
         foreach (var (name, plate) in Shipped().ArmorPlates)
         {
-            Assert.InRange(plate.ThicknessMm, 0.5, 60);
+            // a thickness, or failing that the rating the maker certifies — an entry
+            // with neither says nothing the game did not already know
+            if (plate.Rating > 0)
+            {
+                Assert.InRange(plate.Rating, 1, 6);
+            }
+            else
+            {
+                Assert.InRange(plate.ThicknessMm, 0.5, 60);
+            }
+
             Assert.False(string.IsNullOrWhiteSpace(plate.Source), $"{name}: no source for the figures");
 
             if (plate.Material.Length > 0)
@@ -365,16 +375,63 @@ public class ReferenceBookTests
     [InlineData("ratnik_6b47_level3_helmet_armor_top", "Aramid", 3, 8.5)]
     [InlineData("6b43_6a_level3_soft_armor_front", "Aramid", 3, 7.0)]
     [InlineData("ulach_level4_helmet_armor_top", "UHMWPE", 4, 12.2)]
-    [InlineData("balaclava", "UHMWPE", 3, 7.0)]
     [InlineData("item_equipment_facecover_welding_gorilla", "ArmoredSteel", 5, 4.5)]
+    // a face mask is pressed like a helmet, whatever the game files it under
+    [InlineData("item_equipment_facecover_ballistic_mask", "UHMWPE", 3, 12.2)]
+    [InlineData("item_equipment_facecover_shatteredmask", "Aramid", 3, 8.5)]
+    // and the few pieces of headgear that really are cloth stay cloth
+    [InlineData("balaclava", "UHMWPE", 3, 7.0)]
+    [InlineData("item_equipment_head_bomber", "Aramid", 1, 5.5)]
     public void Pressed_and_sewn_read_off_different_tables(
         string item, string material, int cls, double expected)
     {
         var reference = Shipped();
         ReferenceBook.MergeShippedDefaults(reference);
 
-        var resolved = Resolve(reference, item, material, cls);
-        Assert.Equal(expected, resolved, 1);
+        Assert.Equal(expected, Resolve(reference, item, material, cls), 1);
+    }
+
+    /// <summary>
+    /// Sometimes the maker publishes what a thing stops and nothing about what it is
+    /// made of. That rating is still better than the game's — Fort certify the Kiver-M
+    /// at 1+ and the game prints 3 — so the reference is read at theirs.
+    /// </summary>
+    [Fact]
+    public void A_published_rating_is_used_where_a_construction_is_not_published()
+    {
+        var book = Shipped();
+
+        var kiver = book.ArmorPlates["fort_kiver_m"];
+        Assert.Equal(0, kiver.ThicknessMm);
+        Assert.Equal(2, kiver.Rating);
+
+        // read at 2 it is the PASGT shell; read at the game's 3 it would be the heaviest
+        // aramid shell ever fielded
+        Assert.True(book.HelmetShells["Aramid/2"].ThicknessMm
+                    < book.HelmetShells["Aramid/3"].ThicknessMm);
+    }
+
+    /// <summary>
+    /// The headstone list is a record of where somebody looked, so it is worth nothing
+    /// if it names things that are not in the game or duplicates a product that already
+    /// has its figures.
+    /// </summary>
+    [Fact]
+    public void Nothing_is_both_documented_and_written_off()
+    {
+        var book = Shipped();
+
+        foreach (var (key, why) in book.NoRealSpecs)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(why), $"{key}: no reason given");
+
+            // an entry that states a rating has not been written off — it gave us that
+            if (book.ArmorPlates.TryGetValue(key, out var documented))
+            {
+                Assert.True(documented.ThicknessMm <= 0 && documented.Rating <= 0,
+                    $"{key}: written off, but the product table has its construction");
+            }
+        }
     }
 
     /// <summary>Runs the normalizer's own lookup, which is private to it.</summary>
@@ -385,7 +442,7 @@ public class ReferenceBookTests
             BindingFlags.NonPublic | BindingFlags.Static);
         Assert.NotNull(method);
 
-        var resolved = method!.Invoke(null, [reference, item, material, cls]);
+        var resolved = method!.Invoke(null, [reference, item, material, cls, cls]);
         Assert.NotNull(resolved);
 
         var plate = (ReferenceBook.ArmorPlateRef)resolved!.GetType()
