@@ -129,8 +129,11 @@ namespace PLATE.Client.Ballistics
             /// <summary>Thickness of the hard element, mm.</summary>
             public double T { get; set; }
 
-            /// <summary>Material key into ArmorPhysics.</summary>
+            /// <summary>Material key into the materials table.</summary>
             public string M { get; set; }
+
+            /// <summary>Fraction of the entry that is actually the material; 1 = solid.</summary>
+            public double P { get; set; } = 1;
         }
 
         /// <summary>How a material fails and how strongly, from the reference book.</summary>
@@ -292,9 +295,9 @@ namespace PLATE.Client.Ballistics
                 HardnessHv = m.HardnessHv,
                 DensityGCm3 = m.DensityGCm3,
 
-                // the per-entry density override that would say a sewn package is mostly
-                // air does not survive the wire; a plate resolved here is a plate
-                PackedFraction = 1,
+                // a sewn package is mostly air and only its fibre does any work; the
+                // server resolved that per item and sent it
+                PackedFraction = plate.P > 0 ? plate.P : 1,
             };
             return true;
         }

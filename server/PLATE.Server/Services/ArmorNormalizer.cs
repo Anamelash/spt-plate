@@ -30,10 +30,18 @@ public class ArmorNormalizer(
     /// <summary>One-line result for the startup summary; null if the module did not run.</summary>
     public string? Summary { get; private set; }
 
-    /// <summary>Resolved thickness per armour template id — what stage three will need.</summary>
+    /// <summary>Resolved thickness per armour template id — what the ballistic limit runs on.</summary>
     public IReadOnlyDictionary<string, double> ThicknessByTemplate => _thickness;
 
     private readonly Dictionary<string, double> _thickness = new();
+
+    /// <summary>
+    /// Resolved density per armour template id, where the entry states one. This is the
+    /// density-of-form finding carried through to the client: a sewn package is 0.63
+    /// g/cm³ against aramid's own 1.44, so 44% of it is fibre and only that fraction
+    /// does any work. Without it every vest package in the game reads as solid aramid.
+    /// </summary>
+    private readonly Dictionary<string, double> _density = new();
 
     /// <summary>
     /// "6b5-16_level3_soft_armor_front" and "granit4_5class_back" both name a product.
@@ -219,6 +227,7 @@ public class ArmorNormalizer(
                     row.ThicknessMm = byClass.Ref.ThicknessMm;
                     row.Source = byClass.Ref.Source;
                     _thickness[item.Id] = byClass.Ref.ThicknessMm;
+                    _density[item.Id] = byClass.Ref.DensityGCm3;
 
                     if (stated != null)
                     {
@@ -241,6 +250,7 @@ public class ArmorNormalizer(
             row.Source = spec.Source;
             row.ThicknessMm = spec.ThicknessMm;
             _thickness[item.Id] = spec.ThicknessMm;
+            _density[item.Id] = spec.DensityGCm3;
 
             // the game is right about the material far more often than not, so this
             // corrects the exceptions rather than overriding everything
@@ -281,10 +291,20 @@ public class ArmorNormalizer(
                 continue;
             }
 
+            var material = item.Properties?.ArmorMaterial?.ToString() ?? "";
+            var fibre = reference.ArmorMaterials.TryGetValue(material, out var physics)
+                ? physics.DensityGCm3
+                : 0;
+            var own = _density.TryGetValue(id, out var d) ? d : 0;
+
             plates[id.ToString()] = new
             {
                 T = Math.Round(thickness, 3),
-                M = item.Properties?.ArmorMaterial?.ToString() ?? "",
+                M = material,
+
+                // how much of this entry is actually the material and how much is the air
+                // between its layers; 1 for anything solid
+                P = own > 0 && fibre > 0 ? Math.Round(Math.Min(own / fibre, 1), 4) : 1,
             };
         }
 
@@ -522,6 +542,107 @@ public class ArmorNormalizer(
         return ProductCut.Replace(name, "").TrimEnd('_');
     }
 
+    /// <summary>
+    /// Does an item live up to the class the game prints on it?
+    ///
+    /// Two independent things now say how thick a plate is. The reference book says what
+    /// the real product measures, from its published mass and rated area. The class ladder
+    /// says what it takes to stop the cartridge that class is certified against, bracketed
+    /// from both sides by the ballistic limit. Where the first is well under the second,
+    /// the game has given an item a class its construction does not support — and with a
+    /// ballistic limit that is no longer a note in a document, it is how the item behaves.
+    ///
+    /// This is the audit for it, and it belongs in the report rather than in a test:
+    /// the class is the game's, so only a running server knows it.
+    /// </summary>
+    private static void WriteClassAudit(StringBuilder sb, ReferenceBook.AmmoReference reference,
+        List<Row> all)
+    {
+        var short_ = new List<(Row Row, double Needs)>();
+        foreach (var row in all.Where(r => r.From == Origin.Product && r.ThicknessMm > 0))
+        {
+            if (!reference.ArmorByClass.TryGetValue($"{row.Material}/{row.Class}", out var rung) ||
+                rung.ThicknessMm <= 0)
+            {
+                continue;
+            }
+
+            // 10% of slack: the rungs are picked inside a bracket, not on its edge
+            if (row.ThicknessMm < rung.ThicknessMm * 0.9)
+            {
+                short_.Add((row, rung.ThicknessMm));
+            }
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("## Items that do not live up to their class");
+        sb.AppendLine();
+
+        if (short_.Count == 0)
+        {
+            sb.AppendLine("None: every documented item is at least as thick as the class the "
+                          + "game gives it needs to stop its own test cartridge.");
+            return;
+        }
+
+        sb.AppendLine("The reference book measures these from the real product; the class ladder "
+                      + "says what it takes to stop what that class is certified against. Where "
+                      + "the two disagree the item now behaves like its construction and not like "
+                      + "its label.");
+        sb.AppendLine();
+
+        // A helmet is not a plate and the ladder is a plate ladder. Nobody certifies a
+        // helmet against a rifle - a IIIA shell that the game calls class 4 is not a
+        // model error, it is the game being generous, and it was already documented one
+        // item at a time in stage one. Keeping the two apart is the difference between a
+        // finding and a wall of noise.
+        var plates = short_.Where(x => x.Row.Kind == Kind.Plate).ToList();
+        var rest = short_.Where(x => x.Row.Kind != Kind.Plate).ToList();
+
+        void Table(string title, string blurb, List<(Row Row, double Needs)> rows)
+        {
+            if (rows.Count == 0)
+            {
+                return;
+            }
+
+            sb.AppendLine($"### {title}");
+            sb.AppendLine();
+            sb.AppendLine(blurb);
+            sb.AppendLine();
+            sb.AppendLine("| Item | Material | Class | Measures | Its class needs |");
+            sb.AppendLine("|---|---|---|---|---|");
+            foreach (var (row, needs) in rows.OrderByDescending(x => x.Needs / x.Row.ThicknessMm))
+            {
+                sb.AppendLine($"| {row.Product} | {row.Material} | {row.Class} | "
+                              + $"{row.ThicknessMm:N1} mm | {needs:N1} mm |");
+            }
+
+            sb.AppendLine();
+        }
+
+        Table("Plates", "These are the ones worth arguing about: a plate is exactly the thing "
+                        + "the ladder is calibrated for, so a plate that comes up short is either "
+                        + "mismeasured or genuinely rated above itself.", plates);
+
+        // The rest is helmets, visors and vest packages measured against a ladder built
+        // for plates, and there are hundreds of them. Nobody certifies a helmet against
+        // a rifle cartridge: a IIIA shell the game calls class 4 is the game being
+        // generous, which stage one already recorded item by item. A count says as much
+        // as three hundred rows would.
+        if (rest.Count > 0)
+        {
+            sb.AppendLine("### Everything else");
+            sb.AppendLine();
+            sb.AppendLine($"{rest.Count} helmets, visors and vest packages come in under the "
+                          + "plate of their class, and the list is not reproduced because it "
+                          + "is not a finding. Nobody certifies a helmet against a rifle "
+                          + "cartridge; a IIIA shell the game calls class 4 has the right "
+                          + "construction and the game's label, and each of those was recorded "
+                          + "against its own product when it was researched.");
+        }
+    }
+
     private void WriteReport(string modPath, ReferenceBook.AmmoReference reference,
         Dictionary<string, Row> known, Dictionary<string, Row> unknown)
     {
@@ -581,6 +702,8 @@ public class ArmorNormalizer(
         sb.AppendLine("Left to right is descending trust: published specifications for the thing "
                       + "the item is modelled on, then the real armour of its material and rating, "
                       + "then physics off a weight other mods can rewrite, then nothing at all.");
+
+        WriteClassAudit(sb, reference, all);
 
         var onReference = all.Where(r => r.From == Origin.Reference).ToList();
         var searched = onReference.Count(r => r.Note.Length > 0);

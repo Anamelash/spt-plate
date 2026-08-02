@@ -105,6 +105,34 @@ namespace PLATE.Tests
         }
 
         /// <summary>
+        /// The ballistic limit looks an armour item up by its template id, and the whole
+        /// of stage three quietly does nothing if that lookup is handed something that is
+        /// not an id. `Item.Template` compiles either way — everything has a ToString —
+        /// so nothing but this catches it: a mismatch means every plate in the game falls
+        /// back to its class threshold and its construction is never read.
+        /// </summary>
+        [Fact]
+        public void An_item_can_still_be_asked_which_template_it_is()
+        {
+            if (Skip) return;
+
+            var item = AccessTools.TypeByName("EFT.InventoryLogic.Item");
+            Assert.NotNull(item);
+
+            var prop = AccessTools.Property(item, "TemplateId");
+            Assert.NotNull(prop);
+
+            // a MongoID is a struct whose ToString is the id itself. Item.Template, the
+            // one that reads like the right member, is an ItemTemplate object whose
+            // ToString is a type name — which is what this test was written after.
+            Assert.True(
+                prop.PropertyType.Name.IndexOf("MongoID", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                prop.PropertyType == typeof(string),
+                $"Item.TemplateId is {prop.PropertyType.FullName}; the armour lookup keys " +
+                "on its ToString and needs an id, not an object");
+        }
+
+        /// <summary>
         /// The 0.9.2 regression: hook telemetry attached a second Harmony patch to
         /// every target. Observing something must never modify it.
         /// </summary>

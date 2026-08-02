@@ -296,8 +296,11 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
     /// 3: the class-reference ladder became a bracket. With a ballistic limit, "class C
     ///    stops C and the rung below does not" closes on a thickness from both ends, and
     ///    most rungs were outside theirs. Materials gained a hardness.
+    /// 4: the ceramic brackets were fitted to a ladder invented for the purpose, and then
+    ///    said every real ceramic plate in the book was a third too thin for its own
+    ///    class. Refitted onto the plates instead.
     /// </summary>
-    private const int ShippedVersion = 3;
+    private const int ShippedVersion = 4;
 
     private AmmoReference _cached;
 
@@ -1290,15 +1293,15 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                 "Source": "0.25 in is the standard Level III steel plate, and it lands inside the Br4 bracket without being moved" },
             "ArmoredSteel/6": { "Prototype": "armour steel, Br5",      "ThicknessMm": 8.5 },
 
-            "Ceramic/4":      { "Prototype": "alumina, Br3",           "ThicknessMm": 5.5 },
-            "Ceramic/5":      { "Prototype": "SAPI, Br4",              "ThicknessMm": 7.8 },
-            "Ceramic/6":      { "Prototype": "ESAPI, boron carbide",   "ThicknessMm": 10.0,
-                                "Source": "ESAPI is 10 mm of boron carbide on a UHMWPE backer, and the Br5 bracket asks for the same" },
+            "Ceramic/4":      { "Prototype": "alumina, Br3",           "ThicknessMm": 3.3 },
+            "Ceramic/5":      { "Prototype": "SAPI, Br4",              "ThicknessMm": 5.0,
+                                "Source": "the real SAPI in this book measures 6.1 and the ESAPI 7.2-7.7, both comfortably over their brackets" },
+            "Ceramic/6":      { "Prototype": "ESAPI, boron carbide",   "ThicknessMm": 7.0 },
 
-            "Combined/3":     { "Prototype": "ceramic face, Br2",      "ThicknessMm": 3.5 },
-            "Combined/4":     { "Prototype": "ceramic face, Br3",      "ThicknessMm": 5.0 },
-            "Combined/5":     { "Prototype": "ceramic face, Br4",      "ThicknessMm": 7.0 },
-            "Combined/6":     { "Prototype": "ceramic face, Br5",      "ThicknessMm": 10.0 },
+            "Combined/3":     { "Prototype": "ceramic face, Br2",      "ThicknessMm": 2.4 },
+            "Combined/4":     { "Prototype": "ceramic face, Br3",      "ThicknessMm": 3.2 },
+            "Combined/5":     { "Prototype": "ceramic face, Br4",      "ThicknessMm": 4.8 },
+            "Combined/6":     { "Prototype": "ceramic face, Br5",      "ThicknessMm": 6.6 },
 
             "Titan/4":        { "Prototype": "titanium, Br3",          "ThicknessMm": 5.5 },
             "Titan/5":        { "Prototype": "titanium, Br4",          "ThicknessMm": 9.5 },
@@ -1496,7 +1499,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // Raise this when a figure above is CORRECTED. Adding entries needs no bump —
           // they merge in on their own — but a correction has to be able to overwrite,
           // and on a bump this file is rewritten with the old one kept as a .bak
-          "Version": 3
+          "Version": 4
         }
         """;
 }

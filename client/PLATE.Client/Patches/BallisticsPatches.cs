@@ -839,7 +839,10 @@ namespace PLATE.Client.Patches
                 HardnessHv = AmmoDataCache.GetCoreHardness(shot.Ammo?.TemplateId),
             };
 
-            var haveGeometry = AmmoDataCache.TryBarrier(armor.Item.Template.ToString(),
+            // TemplateId, not Template: the latter is an ItemTemplate object whose
+            // ToString is a type name, so it matched nothing and every plate in the game
+            // fell back to its class threshold without saying so
+            var haveGeometry = AmmoDataCache.TryBarrier(armor.Item.TemplateId.ToString(),
                 out var barrier);
             float ratio;
             float eCost;

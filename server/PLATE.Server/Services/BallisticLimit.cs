@@ -135,12 +135,15 @@ public static class BallisticLimit
         {
             // the rolled-armour V50 ladder, six thicknesses, within 3% on this one number
             DuctileK = 2.50,
-            // the ceramic ladder against the GOST rifle classes. The bare-alumina
-            // depth-of-penetration point wants 0.68, three and a half times this, and
-            // the difference is that a plate is a strike face on a backer while that
-            // measurement was a tile in a fixture - the thickness in the book is the
-            // whole plate, so the constant has to be the whole plate's too
-            BrittleK = 0.20,
+            // the ceramic plates the reference book measured from real products - a
+            // Granit-4 at 6.8 mm certified Br5, a SAPI at 6.1 - held against the GOST
+            // rifle classes. The first pass fitted this to a ladder invented for the
+            // purpose instead and came out at 0.20, which then said every real ceramic
+            // plate in the game was a third too thin for its own class. The bare-alumina
+            // depth-of-penetration point wants 0.68; a plate is a strike face on a
+            // backer rather than a tile in a fixture, so under it, but not by three and
+            // a half times
+            BrittleK = 0.43,
             // a 33 mm polyethylene plate certified to stop M80 at 847, and a 7.6 mm
             // aramid package stopping the 9x18 GOST fires at Бр1, once the package's
             // 44% packing is taken out
