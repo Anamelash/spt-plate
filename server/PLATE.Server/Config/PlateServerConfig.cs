@@ -31,6 +31,9 @@ public class PlateServerConfig
         /// <summary>Barrel muzzle velocity from barrel length (including mod-added weapons).</summary>
         public bool BarrelNormalizer { get; set; } = true;
 
+        /// <summary>Armour material and thickness from the real product it is modelled on.</summary>
+        public bool ArmorNormalizer { get; set; } = true;
+
         /// <summary>GOST armor class normalization (disabled by default).</summary>
         public bool GostArmor { get; set; } = false;
     }

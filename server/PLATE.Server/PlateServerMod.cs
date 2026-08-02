@@ -19,6 +19,7 @@ public class PlateServerMod(
     ModHelper modHelper,
     Services.AmmoNormalizer ammoNormalizer,
     Services.BarrelNormalizer barrelNormalizer,
+    Services.ArmorNormalizer armorNormalizer,
     Services.GrenadePhysics grenadePhysics,
     Services.BloodGlobals bloodGlobals,
     Services.TransfusionItem transfusionItem,
@@ -40,6 +41,11 @@ public class PlateServerMod(
         if (config.Modules.BarrelNormalizer)
         {
             barrelNormalizer.Run(config, modPath); // muzzle velocity from barrel length
+        }
+
+        if (config.Modules.ArmorNormalizer)
+        {
+            armorNormalizer.Run(config, modPath); // armour construction from real products
         }
 
         if (config.Modules.GrenadePhysics)
@@ -65,6 +71,7 @@ public class PlateServerMod(
             {
                 ammoNormalizer.Summary,
                 barrelNormalizer.Summary,
+                armorNormalizer.Summary,
                 grenadePhysics.Summary,
                 bloodGlobals.Summary,
                 transfusionItem.Summary,
@@ -151,6 +158,8 @@ public class PlateServerMod(
             // published barrel-length ladders). Weapon packs and live-values backports
             // ship modifiers that are not physical, and they feed straight into damage.
             "BarrelNormalizer": true,
+            // Armour material and thickness from the real product the item is modelled on
+            "ArmorNormalizer": true,
             // Grenade fragments/blast brought to prototype specs (ammo-reference.jsonc)
             "GrenadePhysics": true,
             // Globals tweaks for the blood system: bleedings no longer damage HP
