@@ -115,6 +115,13 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         /// <summary>Fibrous: strain to failure, fraction — how far the cone stretches.</summary>
         public double FailureStrain { get; set; }
 
+        /// <summary>
+        /// Share of a plate's mass that is the hard element. A steel plate is all steel;
+        /// a ceramic one is a strike face on a fibre backer, and counting the backer as
+        /// ceramic would make every plate read thicker than it is.
+        /// </summary>
+        public double HardMassFraction { get; set; } = 1.0;
+
         public string Source { get; set; } = "";
     }
 
@@ -460,9 +467,9 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "Aluminium":    { "Class": "Ductile", "DensityGCm3": 2.70, "YieldMPa": 300,  "ShearMPa": 190,
                               "Source": "5083/7039 armour plate" },
             "Ceramic":      { "Class": "Brittle", "DensityGCm3": 3.90, "CompressiveMPa": 2500,
-                              "Source": "Al2O3 alumina" },
+                              "HardMassFraction": 0.65, "Source": "Al2O3 on a fibre backer" },
             "Combined":     { "Class": "Brittle", "DensityGCm3": 3.20, "CompressiveMPa": 2600,
-                              "Source": "ceramic face on a composite backing" },
+                              "HardMassFraction": 0.60, "Source": "ceramic face, composite backing" },
             "Glass":        { "Class": "Brittle", "DensityGCm3": 2.50, "CompressiveMPa": 1000,
                               "Source": "laminated ballistic glass" },
             "Aramid":       { "Class": "Fibrous", "DensityGCm3": 1.44, "FibreTensileMPa": 2900, "FailureStrain": 0.034,

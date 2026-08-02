@@ -43,6 +43,21 @@ public class ArmorNormalizer(
     private static readonly Regex ProductCut =
         new(@"_(level\d+|\d+\s*class).*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    /// <summary>
+    /// Plate face area by inventory footprint, mm². The grid is the only size the game
+    /// carries, so it maps onto the standard plate sizes it is drawn from: a side plate,
+    /// a square plate, a SAPI-sized one. Only used to turn mass into thickness, and a
+    /// plate that lands in the wrong bucket is off by the ratio of two real plate sizes,
+    /// not by an order of magnitude.
+    /// </summary>
+    private static readonly Dictionary<string, double> PlateAreaMm2 = new()
+    {
+        ["1x1"] = 152 * 152.0,  // small square insert
+        ["2x1"] = 203 * 152.0,  // side plate, 8x6 in
+        ["2x2"] = 254 * 254.0,  // 10x10 in
+        ["2x3"] = 254 * 318.0,  // 10x12.5 in, SAPI cut
+    };
+
     private sealed class Row
     {
         public required string Product;
@@ -53,6 +68,7 @@ public class ArmorNormalizer(
         public string Prototype = "";
         public string Source = "";
         public string MaterialWas = "";
+        public bool Derived;
     }
 
     public void Run(PlateServerConfig cfg, string modPath)
@@ -84,7 +100,14 @@ public class ArmorNormalizer(
             }
 
             var product = Product(item.Name ?? "");
-            var target = reference.ArmorPlates.TryGetValue(product, out var spec) ? known : unknown;
+            reference.ArmorPlates.TryGetValue(product, out var spec);
+
+            // no documented product, but a plate carries its own mass, and mass over
+            // density over face area is a thickness. Most of the armour here is invented
+            // for the game and has no specification to look up — this is the only honest
+            // number available for it, and it is still physics rather than a guess
+            var derived = spec == null ? DeriveThickness(p, material, reference) : 0;
+            var target = spec != null || derived > 0 ? known : unknown;
 
             if (!target.TryGetValue(product, out var row))
             {
@@ -101,6 +124,14 @@ public class ArmorNormalizer(
 
             if (spec == null)
             {
+                if (derived > 0)
+                {
+                    row.Derived = true;
+                    row.ThicknessMm = derived;
+                    row.Source = "from its own mass";
+                    _thickness[item.Id] = derived;
+                }
+
                 continue;
             }
 
@@ -124,6 +155,33 @@ public class ArmorNormalizer(
         Summary = $"{known.Count}/{known.Count + unknown.Count} armour products";
         logger.Debug($"[PLATE] ArmorNormalizer: {known.Count} products with construction data, " +
                      $"{unknown.Count} on their class");
+    }
+
+    /// <summary>
+    /// Thickness of the hard element from the plate's own mass: t = m·hardFraction /
+    /// (ρ·A). Returns 0 when the item has no mass of its own — soft armour built into a
+    /// vest weighs nothing here, its mass lives on the vest.
+    /// </summary>
+    private static double DeriveThickness(TemplateItemProperties p, string material,
+        ReferenceBook.AmmoReference reference)
+    {
+        var kg = p.Weight ?? 0;
+        if (kg <= 0 || !reference.ArmorMaterials.TryGetValue(material, out var m) ||
+            m.DensityGCm3 <= 0)
+        {
+            return 0;
+        }
+
+        var footprint = $"{p.Width}x{p.Height}";
+        if (!PlateAreaMm2.TryGetValue(footprint, out var areaMm2))
+        {
+            return 0;
+        }
+
+        // kg -> g, g/cm³ -> g/mm³
+        var hardGrams = kg * 1000.0 * m.HardMassFraction;
+        var densityGMm3 = m.DensityGCm3 / 1000.0;
+        return hardGrams / (densityGMm3 * areaMm2);
     }
 
     /// <summary>
@@ -178,11 +236,16 @@ public class ArmorNormalizer(
         }
 
         sb.AppendLine();
-        sb.AppendLine($"## Products with construction data ({known.Count})");
+        sb.AppendLine($"## Products with a thickness ({known.Count})");
+        sb.AppendLine();
+        sb.AppendLine("A documented product gets its real construction. Everything else that "
+                      + "carries its own mass gets a thickness derived from it — most of the "
+                      + "armour in the game is invented for it and has no specification to look "
+                      + "up, and mass over density over face area is still physics.");
         sb.AppendLine();
         sb.AppendLine("| Product | Prototype | Material | Thickness | Zones | Source |");
         sb.AppendLine("|---|---|---|---|---|---|");
-        foreach (var r in known.Values.OrderBy(r => r.Product))
+        foreach (var r in known.Values.OrderByDescending(r => r.Derived ? 0 : 1).ThenBy(r => r.Product))
         {
             var material = r.MaterialWas.Length > 0
                 ? $"{r.MaterialWas} → **{r.Material}**"
