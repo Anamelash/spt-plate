@@ -208,6 +208,45 @@ with specific energy.
 
 ### Threshold
 
+### The ballistic limit
+
+Where the item resolves to a real thickness and a real material — which is every
+piece of armor the reference book covers — the question is not whether a specific
+energy clears a threshold. It is whether the projectile is faster than the speed
+at which that plate stops it:
+
+```
+W    = k(failure mode) · S · geometry · packing · (H_plate / H_core)
+v_bl = √(2W / m_core)
+```
+
+`S` is the strength that resists this projectile, and which one that is depends on
+how the barrier fails: a ductile metal shears, a ceramic crushes, a fiber panel
+stretches (`σ_fibre · ε_fibre`). The geometry follows the same split — punching a
+hole through a solid means shearing its perimeter through its own thickness, so
+`π·d·T²`, while a fiber pack has no hole to punch and each layer takes its share
+over the core's face, so `π·d²/4·T`. Only the fiber in a pack works, so a sewn
+package is scaled by how much of it is fiber rather than air.
+
+The hardness ratio is the term that separates a mild steel core from a hardened
+one out of the same cartridge case: a core softer than the plate upsets on the
+face and stops being a punch.
+
+Below `v_bl` the plate holds. Above it, Recht–Ipson gives what carries on, and the
+plug punched out of the plate leaves with it:
+
+```
+v_r = m/(m + m_plug) · √(v² − v_bl²)
+```
+
+The energy the armor took is no longer a constant to tune. It is `½m(v² − v_r²)`,
+and it falls out of the limit.
+
+### The class threshold, for armor with no construction on file
+
+An item the reference book cannot resolve — an invented plate, a mod's own — still
+falls back to a specific energy against its class:
+
 ```
 A_hit   = A · CoreAreaFrac · (1 + ExpansionOnArmor · X)
 U_hit   = E / A_hit
@@ -245,10 +284,10 @@ U_limit ← U_limit · (1 − SharpVulnMult · clamp01((0.5 − X) · 2))
 ### The band
 
 Real panels are not uniform, and a hard threshold produces a step nobody believes.
-Penetration is probabilistic in a band around the threshold:
+Penetration is probabilistic in a band around whichever limit applies — `v/v_bl`
+where the construction is known, `U_hit/U_limit` where it is not:
 
 ```
-ratio  = U_hit / U_limit
 P(pierce) = clamp01( (ratio − (1 − band)) / (2·band) )
 ```
 
@@ -259,7 +298,7 @@ Outside the band the outcome is deterministic.
 A projectile that defeats the panel pays for it:
 
 ```
-E_cost = ECostMult · U_limit · A_hit              work ∝ strength × hole × thickness
+E_cost = E − ½m·v_r²                              a consequence, not a constant
 v_out  = √(2·(E − E_cost) / m)                   the whole bullet decelerated as one
 m_out  = m · CoreMassFrac · (1 − KFrag)          jacket stripped, then eroded
 d_out  = d · √CoreAreaFrac                       what carries on is the core

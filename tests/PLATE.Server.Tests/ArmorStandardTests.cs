@@ -51,6 +51,8 @@ public class ArmorStandardTests
         double V,
         double X,
         double CoreAreaFrac,
+        double CoreMassFrac,
+        double CoreHardnessHv,
         string Source)
     {
         public double EnergyJ => 0.5 * (MassG / 1000.0) * V * V;
@@ -69,19 +71,20 @@ public class ArmorStandardTests
     // Бр6 is 12.7x108 B-32 and has no in-game class — the game's table stops at 6.
     public static readonly Threat[] Gost =
     [
-        new("GOST", "Бр1", 2, "9x18 Pst 57-N-181S", 5.9, 9.27, 335, 0.30, 1.0,
-            "steel core, APS at 5 m"),
-        new("GOST", "Бр2", 3, "9x21 P 7N28", 7.93, 9.02, 390, 0.35, 1.0,
-            "LEAD core - the heaviest pistol bullet in the standard, and the least pointed"),
-        new("GOST", "Бр3", 4, "9x19 Pst 7N21", 5.2, 9.00, 455, 0.20, 1.0,
-            "hardened steel core; core mass and diameter are not published, so no area fraction"),
-        new("GOST", "Бр4", 5, "5.45x39 PP 7N10", 3.5, 5.62, 895, 0.15, 0.532,
+        new("GOST", "Бр1", 2, "9x18 Pst 57-N-181S", 5.9, 9.27, 335, 0.30, 1.0, 0, 250,
+            "mild steel core in a lead sleeve, APS at 5 m"),
+        new("GOST", "Бр2", 3, "9x21 P 7N28", 7.93, 9.02, 390, 0.35, 1.0, 0, 60,
+            "LEAD core - the heaviest pistol bullet in the standard, and the softest"),
+        new("GOST", "Бр3", 4, "9x19 Pst 7N21", 5.2, 9.00, 455, 0.20, 1.0, 0, 700,
+            "hardened steel core; its mass and diameter are not published, so the bullet " +
+            "has to be read as solid - only its hardness is known"),
+        new("GOST", "Бр4", 5, "5.45x39 PP 7N10", 3.5, 5.62, 895, 0.15, 0.532, 0.478, 697,
             "hardened steel core 1.72-1.80 g, 4.1 mm, 60 HRC"),
-        new("GOST", "Бр4", 5, "7.62x39 PS 57-N-231", 7.9, 7.92, 720, 0.25, 1.0,
+        new("GOST", "Бр4", 5, "7.62x39 PS 57-N-231", 7.9, 7.92, 720, 0.25, 1.0, 0.468, 390,
             "the standard calls this core heat-treated; at 35-45 HRC it still upsets on a plate"),
-        new("GOST", "Бр5", 6, "7.62x54R PP 7N13", 9.4, 7.92, 830, 0.10, 0.673,
+        new("GOST", "Бр5", 6, "7.62x54R PP 7N13", 9.4, 7.92, 830, 0.10, 0.673, 0.463, 650,
             "U12A core 70 gr, 6.5 mm, 55-60 HRC"),
-        new("GOST", "Бр5", 6, "7.62x54R B-32 7-BZ-3", 10.4, 7.92, 810, 0.10, 0.60,
+        new("GOST", "Бр5", 6, "7.62x54R B-32 7-BZ-3", 10.4, 7.92, 810, 0.10, 0.60, 0.60, 700,
             "armour-piercing incendiary, hardened steel core at 60 HRC"),
     ];
 
@@ -91,16 +94,16 @@ public class ArmorStandardTests
     // the rifle end of it is where it shows.
     public static readonly Threat[] Nij =
     [
-        new("NIJ", "HG1", 2, "9mm FMJ RN 124 gr", 8.0, 9.00, 398, 0.30, 1.0, "lead core, jacketed"),
-        new("NIJ", "HG1", 3, ".357 Magnum JSP 158 gr", 10.2, 9.07, 436, 0.70, 1.0, "soft point"),
-        new("NIJ", "HG2", 3, "9mm FMJ RN 124 gr", 8.0, 9.00, 448, 0.30, 1.0, "lead core, jacketed"),
-        new("NIJ", "HG2", 3, ".44 Magnum SJHP 240 gr", 15.6, 10.90, 436, 0.90, 1.0, "semi-jacketed hollow point"),
-        new("NIJ", "RF1", 4, "7.62x51 M80 ball 147 gr", 9.5, 7.85, 847, 0.25, 1.0, "lead alloy core"),
-        new("NIJ", "RF1", 4, "7.62x39 MSC 120.5 gr", 7.9, 7.92, 732, 0.25, 1.0, "mild steel core"),
-        new("NIJ", "RF1", 4, "5.56x45 M193 56 gr", 3.6, 5.70, 990, 0.30, 1.0, "lead core"),
-        new("NIJ", "RF2", 5, "5.56x45 M855 62 gr", 4.0, 5.70, 950, 0.25, 1.0,
+        new("NIJ", "HG1", 2, "9mm FMJ RN 124 gr", 8.0, 9.00, 398, 0.30, 1.0, 0, 60, "lead core, jacketed"),
+        new("NIJ", "HG1", 3, ".357 Magnum JSP 158 gr", 10.2, 9.07, 436, 0.70, 1.0, 0, 60, "soft point"),
+        new("NIJ", "HG2", 3, "9mm FMJ RN 124 gr", 8.0, 9.00, 448, 0.30, 1.0, 0, 60, "lead core, jacketed"),
+        new("NIJ", "HG2", 3, ".44 Magnum SJHP 240 gr", 15.6, 10.90, 436, 0.90, 1.0, 0, 60, "semi-jacketed hollow point"),
+        new("NIJ", "RF1", 4, "7.62x51 M80 ball 147 gr", 9.5, 7.85, 847, 0.25, 1.0, 0, 60, "lead alloy core"),
+        new("NIJ", "RF1", 4, "7.62x39 MSC 120.5 gr", 7.9, 7.92, 732, 0.25, 1.0, 0.468, 390, "mild steel core"),
+        new("NIJ", "RF1", 4, "5.56x45 M193 56 gr", 3.6, 5.70, 990, 0.30, 1.0, 0, 60, "lead core"),
+        new("NIJ", "RF2", 5, "5.56x45 M855 62 gr", 4.0, 5.70, 950, 0.25, 1.0, 0.162, 410,
             "10 gr steel tip at 40-45 HRC - too soft to concentrate"),
-        new("NIJ", "RF3", 6, ".30-06 M2 AP 165.7 gr", 10.7, 7.82, 878, 0.10, 0.55,
+        new("NIJ", "RF3", 6, ".30-06 M2 AP 165.7 gr", 10.7, 7.82, 878, 0.10, 0.55, 0.55, 730,
             "hardened steel core at 60+ HRC; diameter read at the M61's, the same core in the same calibre"),
     ];
 

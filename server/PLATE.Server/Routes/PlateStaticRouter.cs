@@ -14,6 +14,18 @@ public static class PlateAmmoData
     public static string Json { get; set; } = "{}";
 }
 
+/// <summary>
+/// Armour geometry for the client: how thick each item is and what its material is made
+/// of. Its own route rather than a block inside the ammo data, because the armour pass
+/// runs after the ammo one and the ammo payload is already built by then. An item the
+/// armour pass could not resolve is simply absent, and the client falls back to reading
+/// its class.
+/// </summary>
+public static class PlateArmorData
+{
+    public static string Json { get; set; } = "{}";
+}
+
 /// <summary>Config loaded in OnLoad — for the request handlers.</summary>
 public static class PlateConfigHolder
 {
@@ -46,6 +58,10 @@ public class PlateStaticRouter(JsonUtil jsonUtil, BloodPersistence bloodPersiste
     new RouteAction<EmptyRequestData>(
         "/plate/ammo-data",
         async (url, info, sessionId, output) => await new ValueTask<string>(PlateAmmoData.Json)
+    ),
+    new RouteAction<EmptyRequestData>(
+        "/plate/armor-data",
+        async (url, info, sessionId, output) => await new ValueTask<string>(PlateArmorData.Json)
     ),
     new RouteAction<EmptyRequestData>(
         "/plate/blood-get",

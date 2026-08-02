@@ -65,6 +65,14 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         /// </summary>
         public double CoreMassFrac { get; set; }
 
+        /// <summary>
+        /// Vickers hardness of the core. Published as HRC by everyone who publishes it
+        /// at all, converted here: 40 HRC is 392 HV, 60 is 697, 65 is 832, and tungsten
+        /// carbide runs 1200-1500. 0 = lead and copper, which is 40 HV and never wins
+        /// an argument with a plate.
+        /// </summary>
+        public double CoreHardnessHv { get; set; }
+
         public string Source { get; set; } = "";
     }
 
@@ -149,6 +157,15 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
 
         /// <summary>Fibrous: strain to failure, fraction — how far the cone stretches.</summary>
         public double FailureStrain { get; set; }
+
+        /// <summary>
+        /// Vickers hardness. Not a strength: the question it answers is which of the two
+        /// pieces of metal gives way first. A mild steel core at 400 HV upsets on the
+        /// face of a 580 HV plate and stops being a punch; the same plate against a
+        /// tungsten carbide core at 1300 HV is the one losing. 0 leaves the term out,
+        /// which is right for fibre — a woven pack has no hardness worth the name.
+        /// </summary>
+        public double HardnessHv { get; set; }
 
         /// <summary>
         /// Share of a plate's mass that is the hard element. A steel plate is all steel;
@@ -276,8 +293,11 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
     /// The version the mod ships. Raise it when an existing figure is corrected.
     /// 2: armour read at the density of its form rather than of its fibre, and over
     ///    rated areas rather than outer rectangles. Moved most of the armour.
+    /// 3: the class-reference ladder became a bracket. With a ballistic limit, "class C
+    ///    stops C and the rung below does not" closes on a thickness from both ends, and
+    ///    most rungs were outside theirs. Materials gained a hardness.
     /// </summary>
-    private const int ShippedVersion = 2;
+    private const int ShippedVersion = 3;
 
     private AmmoReference _cached;
 
@@ -469,15 +489,15 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           "Bullets": {
             // --- 5.45x39. Core masses: ru.wikipedia, sourced to the GRAU indices;
             // core diameters and hardness: Adept Armor threat survey ---
-            "patron_545x39_PS":   { "Prototype": "7N6 PS",        "X": 0.25, "CoreAreaFrac": 1.0, "CoreMassFrac": 0.42,
+            "patron_545x39_PS":   { "Prototype": "7N6 PS",        "X": 0.25, "CoreAreaFrac": 1.0, "CoreMassFrac": 0.42, "CoreHardnessHv": 410,
                                     "Source": "core 1.43 g of Steel 10 in a 3.4 g bullet, 4.0 mm, 40-45 HRC - mild, so the area fraction stays 1: it upsets against a plate rather than punching through it" },
-            "patron_545x39_PP":   { "Prototype": "7N10 PP",       "X": 0.15, "CoreAreaFrac": 0.532, "CoreMassFrac": 0.478,
+            "patron_545x39_PP":   { "Prototype": "7N10 PP",       "X": 0.15, "CoreAreaFrac": 0.532, "CoreMassFrac": 0.478, "CoreHardnessHv": 697,
                                     "Source": "core 1.72-1.80 g of Steel 70/75 in a 3.62-3.74 g bullet, 4.1 mm, 60 HRC" },
-            "patron_545x39_BP":   { "Prototype": "7N22 BP",       "X": 0.08, "CoreAreaFrac": 0.507, "CoreMassFrac": 0.477,
+            "patron_545x39_BP":   { "Prototype": "7N22 BP",       "X": 0.08, "CoreAreaFrac": 0.507, "CoreMassFrac": 0.477, "CoreHardnessHv": 765,
                                     "Source": "core 1.75 g of U12A tool steel in a 3.67 g bullet, 4.0 mm, 60-65 HRC" },
-            "patron_545x39_BS":   { "Prototype": "7N24 BS",       "X": 0.05, "CoreAreaFrac": 0.507, "CoreMassFrac": 0.512,
+            "patron_545x39_BS":   { "Prototype": "7N24 BS",       "X": 0.05, "CoreAreaFrac": 0.507, "CoreMassFrac": 0.512, "CoreHardnessHv": 1300,
                                     "Source": "core 2.1 g of VK-8 tungsten-cobalt in a 4.1 g bullet, 4.0 mm (Adept read the core at 1.8 g)" },
-            "patron_545x39_7n39": { "Prototype": "7N39 Igolnik",  "X": 0.05, "CoreAreaFrac": 0.507, "CoreMassFrac": 0.463,
+            "patron_545x39_7n39": { "Prototype": "7N39 Igolnik",  "X": 0.05, "CoreAreaFrac": 0.507, "CoreMassFrac": 0.463, "CoreHardnessHv": 1300,
                                     "Source": "core 1.9 g of 92% tungsten carbide on cobalt in a 4.1 g bullet, 4.0 mm, pressed and sintered" },
             "patron_545x39_7n40": { "Prototype": "7N40",          "X": 0.12,
                                     "Source": "the enhanced-penetration development of the PP; no core figures published" },
@@ -491,13 +511,13 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                     "Source": "heavy subsonic on a blunt VK8 core; too slow to do anything with it" },
 
             // --- 5.56x45 ---
-            "patron_556x45_M855":     { "Prototype": "M855 / SS109", "X": 0.25, "CoreAreaFrac": 1.0, "CoreMassFrac": 0.162,
+            "patron_556x45_M855":     { "Prototype": "M855 / SS109", "X": 0.25, "CoreAreaFrac": 1.0, "CoreMassFrac": 0.162, "CoreHardnessHv": 410,
                                         "Source": "10 gr steel tip over a 32 gr lead rear in a 62 gr bullet, 4.6 mm, 40-45 HRC - the tip is not hard enough to hold its shape, so the area fraction stays 1. It still arrives on the far side as 0.65 g of steel" },
-            "patron_556x45_M855A1":   { "Prototype": "M855A1 EPR",   "X": 0.10, "CoreAreaFrac": 0.569, "CoreMassFrac": 0.306,
+            "patron_556x45_M855A1":   { "Prototype": "M855A1 EPR",   "X": 0.10, "CoreAreaFrac": 0.569, "CoreMassFrac": 0.306, "CoreHardnessHv": 670,
                                         "Source": "19 gr exposed hardened steel over a copper slug, 4.3 mm, 58-60 HRC - the same 62 gr as the M855 and a different weapon against steel" },
-            "patron_556x45_M856A1":   { "Prototype": "M856A1 tracer EPR", "X": 0.10, "CoreAreaFrac": 0.569, "CoreMassFrac": 0.306,
+            "patron_556x45_M856A1":   { "Prototype": "M856A1 tracer EPR", "X": 0.10, "CoreAreaFrac": 0.569, "CoreMassFrac": 0.306, "CoreHardnessHv": 670,
                                         "Source": "the tracer built on the M855A1's penetrator" },
-            "patron_556x45_M995":     { "Prototype": "M995 AP",      "X": 0.05, "CoreAreaFrac": 0.492, "CoreMassFrac": 0.615,
+            "patron_556x45_M995":     { "Prototype": "M995 AP",      "X": 0.05, "CoreAreaFrac": 0.492, "CoreMassFrac": 0.615, "CoreHardnessHv": 1300,
                                         "Source": "32 gr WC-Co core in an aluminium cup, 4.0 mm, in a 52 gr bullet. Two sources agree on the core: 2.07 g and 2.08 g" },
             "patron_556x45_ssa_ap":   { "Prototype": "SSA AP",       "X": 0.05,
                                         "Source": "same mass and velocity as the M995 in the game; nobody publishes a construction for it" },
@@ -510,9 +530,9 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "patron_556x45_varmageddon":  { "Prototype": "Varmageddon", "X": 0.95 },
 
             // --- 7.62x39 ---
-            "patron_762x39_PS":     { "Prototype": "57-N-231 PS",  "X": 0.25, "CoreAreaFrac": 1.0, "CoreMassFrac": 0.468,
+            "patron_762x39_PS":     { "Prototype": "57-N-231 PS",  "X": 0.25, "CoreAreaFrac": 1.0, "CoreMassFrac": 0.468, "CoreHardnessHv": 390,
                                       "Source": "55-60 gr steel slug in a lead sheath, 5.6 mm, 35-45 HRC - a lead substitute, not a penetrator, so the area fraction stays 1" },
-            "patron_762x39_BP":     { "Prototype": "7N23 BP",      "X": 0.07, "CoreAreaFrac": 0.399, "CoreMassFrac": 0.492,
+            "patron_762x39_BP":     { "Prototype": "7N23 BP",      "X": 0.07, "CoreAreaFrac": 0.399, "CoreMassFrac": 0.492, "CoreHardnessHv": 697,
                                       "Source": "60 gr hardened core, 5.0 mm, 60 HRC, in the same 123 gr bullet as the PS" },
             "patron_762x39_pp":     { "Prototype": "7N27 PP",      "X": 0.15 },
             "patron_762x39_mai_ap": { "Prototype": "MAI AP",       "X": 0.05 },
@@ -525,11 +545,11 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             // --- 7.62x51 ---
             "patron_762x51_M80":    { "Prototype": "M80 ball",     "X": 0.25,
                                       "Source": "147 gr of lead alloy in a jacket; one piece of metal" },
-            "patron_762x51_m80a1":  { "Prototype": "M80A1 EPR",    "X": 0.12, "CoreAreaFrac": 0.491, "CoreMassFrac": 0.347,
+            "patron_762x51_m80a1":  { "Prototype": "M80A1 EPR",    "X": 0.12, "CoreAreaFrac": 0.491, "CoreMassFrac": 0.347, "CoreHardnessHv": 550,
                                       "Source": "45 gr hardened steel tip over a copper slug, 5.5 mm, 50-55 HRC, in a 130 gr bullet" },
-            "patron_762x51_M61":    { "Prototype": "M61 AP",       "X": 0.10, "CoreAreaFrac": 0.491, "CoreMassFrac": 0.365,
+            "patron_762x51_M61":    { "Prototype": "M61 AP",       "X": 0.10, "CoreAreaFrac": 0.491, "CoreMassFrac": 0.365, "CoreHardnessHv": 730,
                                       "Source": "55 gr hardened core at 60-63 HRC with a lead filler, in a 150.5 gr bullet. Core diameter is not published; read at the M80A1's 5.5 mm, the same calibre and the same kind of core" },
-            "patron_762x51_m993":   { "Prototype": "M993 AP",      "X": 0.05, "CoreAreaFrac": 0.491, "CoreMassFrac": 0.712,
+            "patron_762x51_m993":   { "Prototype": "M993 AP",      "X": 0.05, "CoreAreaFrac": 0.491, "CoreMassFrac": 0.712, "CoreHardnessHv": 1300,
                                       "Source": "91 gr WC-Co core in an aluminium cup under a tombac-clad steel jacket, 5.5 mm, in a 128 gr bullet. Bofors FFV design, 58-degree tip" },
             "patron_762x51_M62":    { "Prototype": "M62 tracer",   "X": 0.25 },
             "patron_762x51_bpz_fmj":{ "Prototype": "BPZ FMJ",      "X": 0.28 },
@@ -541,9 +561,9 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                         "Source": "mild steel core; a lead substitute, no hard element" },
             "patron_762x54R_7N1":     { "Prototype": "7N1 sniper",    "X": 0.30,
                                         "Source": "steel nose and lead base with an air cavity at the tip - an open tip that is not there to expand" },
-            "patron_762x54R_SNB":     { "Prototype": "7N14 SNB",      "X": 0.08, "CoreAreaFrac": 0.673, "CoreMassFrac": 0.463,
+            "patron_762x54R_SNB":     { "Prototype": "7N14 SNB",      "X": 0.08, "CoreAreaFrac": 0.673, "CoreMassFrac": 0.463, "CoreHardnessHv": 720,
                                         "Source": "pointed U12A core over 60 HRC. Dimensions are not published for the 7N14 itself; read at the 7N13 BP's 70 gr and 6.5 mm, the same U12A core in the same case" },
-            "patron_762x54r_7n37":    { "Prototype": "7N37",          "X": 0.05, "CoreAreaFrac": 0.531, "CoreMassFrac": 0.510,
+            "patron_762x54r_7n37":    { "Prototype": "7N37",          "X": 0.05, "CoreAreaFrac": 0.531, "CoreMassFrac": 0.510, "CoreHardnessHv": 1300,
                                         "Source": "core 6.22 g of VK8, 20.9 mm long, in a 12.2 g bullet; 426 mm3 over 0.78 of that length is 26 mm2, or 5.8 mm across" },
             "patron_762x54r_7bt1":    { "Prototype": "7BT1 AP-tracer","X": 0.10 },
             "patron_762x54r_bthp":    { "Prototype": "BTHP match",    "X": 0.35 },
@@ -552,12 +572,12 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "patron_762x54r_t46m":    { "Prototype": "T-46M tracer",  "X": 0.25 },
 
             // --- 6.8x51 ---
-            "patron_68x51":     { "Prototype": "XM1186 GP", "X": 0.12, "CoreAreaFrac": 0.675, "CoreMassFrac": 0.26,
+            "patron_68x51":     { "Prototype": "XM1186 GP", "X": 0.12, "CoreAreaFrac": 0.675, "CoreMassFrac": 0.26, "CoreHardnessHv": 700,
                                   "Source": "30-40 gr hardened steel penetrator over a copper slug, 5.5-6.0 mm, 58-62 HRC, in a 135 gr bullet" },
             "patron_68x51_fmj": { "Prototype": "6.8x51 FMJ", "X": 0.28 },
 
             // --- .338 Lapua Magnum ---
-            "patron_86x70_lapua_ap":          { "Prototype": ".338 AP (AP485/AP529)", "X": 0.05, "CoreAreaFrac": 0.666, "CoreMassFrac": 0.587,
+            "patron_86x70_lapua_ap":          { "Prototype": ".338 AP (AP485/AP529)", "X": 0.05, "CoreAreaFrac": 0.666, "CoreMassFrac": 0.587, "CoreHardnessHv": 1300,
                                                 "Source": "WC-Co core 7.0 mm across, 120-200 gr, in a 248-300 gr bullet" },
             "patron_86x70_lapua_magnum":      { "Prototype": "Lock Base B408",  "X": 0.35 },
             "patron_86x70_lapua_magnum_upz":  { "Prototype": ".338 UPZ",        "X": 0.40 },
@@ -565,7 +585,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                                 "Source": "solid copper hollow point, made to open into petals" },
 
             // --- 9x19 ---
-            "patron_9x19_7n31":       { "Prototype": "7N31 PBP",  "X": 0.08, "CoreAreaFrac": 0.563, "CoreMassFrac": 0.687,
+            "patron_9x19_7n31":       { "Prototype": "7N31 PBP",  "X": 0.08, "CoreAreaFrac": 0.563, "CoreMassFrac": 0.687, "CoreHardnessHv": 700,
                                         "Source": "hardened carbon steel core 2.7-3.0 g in a 4.1-4.2 g bullet, exposed at the tip under an aluminium alloy jacket. Diameter is not published: 363 mm3 of steel over 0.78 of the bullet's own 13 mm gives 6.8 mm" },
             "patron_9x19_ap_63":      { "Prototype": "AP 6.3",     "X": 0.15 },
             "patron_9x19_PST_gzh":    { "Prototype": "7N21 PST",   "X": 0.20,
@@ -625,7 +645,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "patron_57x28_r37x":    { "Prototype": "R37.X",          "X": 0.90 },
 
             // --- 4.6x30 ---
-            "patron_46x30_ap_sx":       { "Prototype": "4.6x30 AP SX", "X": 0.05, "CoreAreaFrac": 0.85, "CoreMassFrac": 0.92,
+            "patron_46x30_ap_sx":       { "Prototype": "4.6x30 AP SX", "X": 0.05, "CoreAreaFrac": 0.85, "CoreMassFrac": 0.92, "CoreHardnessHv": 700,
                                           "Source": "the bullet IS the core: 2 g of hardened steel with a copper plating and nothing else. Fractions are the plating's share, which is why this one punches so far above its energy" },
             "patron_46x30_fmj_sx":      { "Prototype": "4.6x30 FMJ SX", "X": 0.20 },
             "patron_46x30_subsonic_sx": { "Prototype": "4.6x30 subsonic","X": 0.25 },
@@ -671,7 +691,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "patron_127x55_ps12a": { "Prototype": "PS12A",  "X": 0.20 },
             "patron_127x108":      { "Prototype": "B-32 API", "X": 0.10 },
             "patron_127x108_bzt":  { "Prototype": "BZT-44 API-T", "X": 0.10 },
-            "patron_127x99_m903":  { "Prototype": "M903 SLAP", "X": 0.05, "CoreAreaFrac": 0.55, "CoreMassFrac": 1.0,
+            "patron_127x99_m903":  { "Prototype": "M903 SLAP", "X": 0.05, "CoreAreaFrac": 0.55, "CoreMassFrac": 1.0, "CoreHardnessHv": 1300,
                                      "Source": "the sabot is gone by the time it arrives: a .223 in tungsten penetrator, 5.66 mm, and the game already gives the round that penetrator's 7.62 mm as a calibre, so the area fraction is against that" },
             "patron_127x99_m33":   { "Prototype": "M33 ball", "X": 0.25 },
             "patron_127x99_m21":   { "Prototype": "M21 tracer","X": 0.20 },
@@ -841,21 +861,31 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           //   Ductile — metals: the projectile punches a plug and pushes material aside
           //   Brittle — ceramics: a fracture conoid forms and erodes the projectile
           //   Fibrous — aramid/UHMWPE: a cone of fibres stretches until it fails
+          // HardnessHv decides which of two pieces of metal gives way first, which is a
+          // separate question from how strong either of them is. Without it no single
+          // constant fits both the rolled-armour V50 ladder and the GOST classes: they
+          // sit a factor of 3.8 apart in energy per mm2, and most of that gap is a 40 HRC
+          // core meeting a 580 HV plate.
           "ArmorMaterials": {
             "ArmoredSteel": { "Class": "Ductile", "DensityGCm3": 7.85, "YieldMPa": 1250, "ShearMPa": 750,
-                              "Source": "RHA / armour steel ~500 HB" },
+                              "HardnessHv": 580,
+                              "Source": "armour steel ~500-550 HB. Rolled homogeneous armour is softer - 300 HB, 450 MPa shear, 320 HV - and the V50 ladder in the fixture is RHA, not this" },
             "Titan":        { "Class": "Ductile", "DensityGCm3": 4.43, "YieldMPa": 880,  "ShearMPa": 550,
+                              "HardnessHv": 350,
                               "Source": "Ti-6Al-4V, 334 HB, UTS 950 MPa" },
             "Aluminium":    { "Class": "Ductile", "DensityGCm3": 2.70, "YieldMPa": 300,  "ShearMPa": 190,
+                              "HardnessHv": 120,
                               "Source": "5083/7039 armour plate" },
             "Ceramic":      { "Class": "Brittle", "DensityGCm3": 3.90, "CompressiveMPa": 2500,
-                              "HardMassFraction": 0.65, "Source": "Al2O3 on a fibre backer" },
+                              "HardnessHv": 1500, "HardMassFraction": 0.65,
+                              "Source": "Al2O3 on a fibre backer; alumina runs 1400-1600 HV, which is why it beats a carbide core" },
             "Combined":     { "Class": "Brittle", "DensityGCm3": 3.20, "CompressiveMPa": 2600,
-                              "HardMassFraction": 0.60, "Source": "ceramic face, composite backing" },
+                              "HardnessHv": 1600, "HardMassFraction": 0.60,
+                              "Source": "ceramic face, composite backing" },
             "Glass":        { "Class": "Brittle", "DensityGCm3": 2.50, "CompressiveMPa": 1000,
-                              "Source": "laminated ballistic glass" },
+                              "HardnessHv": 550, "Source": "laminated ballistic glass" },
             "Aramid":       { "Class": "Fibrous", "DensityGCm3": 1.44, "FibreTensileMPa": 2900, "FailureStrain": 0.034,
-                              "Source": "Kevlar 29 / TSVM-DZh" },
+                              "Source": "Kevlar 29 / TSVM-DZh; no hardness - a woven pack has none worth the name" },
             "UHMWPE":       { "Class": "Fibrous", "DensityGCm3": 0.97, "FibreTensileMPa": 3400, "FailureStrain": 0.035,
                               "Source": "Dyneema HB grade" }
           },
@@ -1243,34 +1273,44 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // look up. What there is, for every rating, is a real plate that does the same
           // job — and that is what an invented one is standing in for. Keyed
           // "Material/Class"; a documented product always wins over this.
+          // A rung here used to be a guess about what a plate of that class looks like.
+          // It is a bracket now. A class is a two-sided promise — it stops the cartridge
+          // it is rated against and the rung below it does not — and with a ballistic
+          // limit those two conditions close on the thickness from both ends. Every entry
+          // sits inside its bracket, and GostPenetrationTests fires the standard's own
+          // cartridges at them one at a time to keep it that way. Where a bracket and a
+          // published product disagreed, the product won and the constants were checked
+          // again: AR500 at 6.35 mm falls inside the Br4 bracket on its own, which is
+          // exactly what a Level III steel plate is certified as.
           "ArmorByClass": {
-            "ArmoredSteel/3": { "Prototype": "thin armour steel, Br3", "ThicknessMm": 4.5 },
-            "ArmoredSteel/4": { "Prototype": "armour steel, Br4",      "ThicknessMm": 5.5 },
-            "ArmoredSteel/5": { "Prototype": "AR500, NIJ III",         "ThicknessMm": 6.35,
-                                "Source": "0.25 in is the standard Level III steel plate" },
-            "ArmoredSteel/6": { "Prototype": "armour steel, III+",     "ThicknessMm": 8.0 },
+            "ArmoredSteel/2": { "Prototype": "steel insert, Br1",      "ThicknessMm": 1.8 },
+            "ArmoredSteel/3": { "Prototype": "steel insert, Br2",      "ThicknessMm": 2.8 },
+            "ArmoredSteel/4": { "Prototype": "thin armour steel, Br3", "ThicknessMm": 3.6 },
+            "ArmoredSteel/5": { "Prototype": "AR500, NIJ III / Br4",   "ThicknessMm": 6.35,
+                                "Source": "0.25 in is the standard Level III steel plate, and it lands inside the Br4 bracket without being moved" },
+            "ArmoredSteel/6": { "Prototype": "armour steel, Br5",      "ThicknessMm": 8.5 },
 
-            "Ceramic/4":      { "Prototype": "alumina, SAPI class",    "ThicknessMm": 7.0 },
-            "Ceramic/5":      { "Prototype": "SAPI, silicon carbide",  "ThicknessMm": 8.5 },
+            "Ceramic/4":      { "Prototype": "alumina, Br3",           "ThicknessMm": 5.5 },
+            "Ceramic/5":      { "Prototype": "SAPI, Br4",              "ThicknessMm": 7.8 },
             "Ceramic/6":      { "Prototype": "ESAPI, boron carbide",   "ThicknessMm": 10.0,
-                                "Source": "ESAPI is 10 mm of boron carbide on a UHMWPE backer" },
+                                "Source": "ESAPI is 10 mm of boron carbide on a UHMWPE backer, and the Br5 bracket asks for the same" },
 
-            "Combined/3":     { "Prototype": "ceramic face, Br3",      "ThicknessMm": 6.0 },
-            "Combined/4":     { "Prototype": "ceramic face, Br4",      "ThicknessMm": 7.0 },
-            "Combined/5":     { "Prototype": "ceramic face, Br5",      "ThicknessMm": 8.5 },
-            "Combined/6":     { "Prototype": "ceramic face, Br6",      "ThicknessMm": 10.0 },
+            "Combined/3":     { "Prototype": "ceramic face, Br2",      "ThicknessMm": 3.5 },
+            "Combined/4":     { "Prototype": "ceramic face, Br3",      "ThicknessMm": 5.0 },
+            "Combined/5":     { "Prototype": "ceramic face, Br4",      "ThicknessMm": 7.0 },
+            "Combined/6":     { "Prototype": "ceramic face, Br5",      "ThicknessMm": 10.0 },
 
-            "Titan/4":        { "Prototype": "titanium, Br4",          "ThicknessMm": 8.0 },
-            "Titan/5":        { "Prototype": "titanium, Br5",          "ThicknessMm": 10.0 },
-            "Titan/6":        { "Prototype": "titanium, Br6",          "ThicknessMm": 13.0 },
+            "Titan/4":        { "Prototype": "titanium, Br3",          "ThicknessMm": 5.5 },
+            "Titan/5":        { "Prototype": "titanium, Br4",          "ThicknessMm": 9.5 },
+            "Titan/6":        { "Prototype": "titanium, Br5",          "ThicknessMm": 13.0 },
 
             // polyethylene stops by encapsulating the round, so it needs far more of
             // itself than a hard face does
-            "UHMWPE/3":       { "Prototype": "UHMWPE monolith, Br3",   "ThicknessMm": 20.0 },
-            "UHMWPE/4":       { "Prototype": "UHMWPE monolith, Br4",   "ThicknessMm": 25.0 },
-            "UHMWPE/5":       { "Prototype": "UHMWPE monolith, NIJ III", "ThicknessMm": 33.0,
-                                "Source": "standalone Level III polyethylene plate, 1.3 in" },
-            "UHMWPE/6":       { "Prototype": "UHMWPE monolith, Br6",   "ThicknessMm": 38.0 },
+            "UHMWPE/3":       { "Prototype": "UHMWPE monolith, Br2",   "ThicknessMm": 20.0 },
+            "UHMWPE/4":       { "Prototype": "UHMWPE monolith, Br3",   "ThicknessMm": 25.0 },
+            "UHMWPE/5":       { "Prototype": "UHMWPE monolith, NIJ III / Br4", "ThicknessMm": 33.0,
+                                "Source": "standalone Level III polyethylene plate, 1.3 in - the certificate and the Br4 bracket agree" },
+            "UHMWPE/6":       { "Prototype": "UHMWPE monolith, Br5",   "ThicknessMm": 39.0 },
 
             "Aluminium/4":    { "Prototype": "aluminium armour",      "ThicknessMm": 20.0 }
           },
@@ -1456,7 +1496,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // Raise this when a figure above is CORRECTED. Adding entries needs no bump —
           // they merge in on their own — but a correction has to be able to overwrite,
           // and on a bump this file is rewritten with the old one kept as a .bak
-          "Version": 2
+          "Version": 3
         }
         """;
 }

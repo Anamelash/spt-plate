@@ -254,9 +254,54 @@ public class ArmorNormalizer(
         }
 
         WriteReport(modPath, reference, known, unknown);
+        Routes.PlateArmorData.Json = BuildMachineData(items, reference);
         Summary = $"{known.Count}/{known.Count + unknown.Count} armour products";
         logger.Debug($"[PLATE] ArmorNormalizer: {known.Count} products with construction data, " +
-                     $"{unknown.Count} on their class");
+                     $"{unknown.Count} on their class, " +
+                     $"{_thickness.Count} items carrying a thickness for the ballistic limit");
+    }
+
+    /// <summary>
+    /// What the client needs to run a ballistic limit at the moment of a hit: the
+    /// thickness of every item this pass could resolve, and the physics of every
+    /// material the reference book describes. Neither exists in the game's own data —
+    /// the client sees a class number and a material enum and nothing else — so without
+    /// this the ballistic limit has nothing to work on and every hit falls back to the
+    /// class threshold. An item that is absent here is exactly that case.
+    /// </summary>
+    private string BuildMachineData(IDictionary<SPTarkov.Server.Core.Models.Common.MongoId,
+            TemplateItem> items,
+        ReferenceBook.AmmoReference reference)
+    {
+        var plates = new Dictionary<string, object>();
+        foreach (var (id, thickness) in _thickness)
+        {
+            if (thickness <= 0 || !items.TryGetValue(id, out var item))
+            {
+                continue;
+            }
+
+            plates[id.ToString()] = new
+            {
+                T = Math.Round(thickness, 3),
+                M = item.Properties?.ArmorMaterial?.ToString() ?? "",
+            };
+        }
+
+        var materials = reference.ArmorMaterials.ToDictionary(
+            kv => kv.Key,
+            kv => (object)new
+            {
+                kv.Value.Class,
+                kv.Value.DensityGCm3,
+                kv.Value.ShearMPa,
+                kv.Value.CompressiveMPa,
+                kv.Value.FibreTensileMPa,
+                kv.Value.FailureStrain,
+                kv.Value.HardnessHv,
+            });
+
+        return System.Text.Json.JsonSerializer.Serialize(new { Plates = plates, Materials = materials });
     }
 
     /// <summary>

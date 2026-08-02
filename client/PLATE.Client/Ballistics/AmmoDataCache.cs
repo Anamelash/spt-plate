@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using PLATE.Server.Services;
 using SPT.Common.Http;
 
 namespace PLATE.Client.Ballistics
@@ -24,6 +26,9 @@ namespace PLATE.Client.Ballistics
 
             /// <summary>Hard core mass as a fraction of the bullet's; 1 = monolithic.</summary>
             public double Cm { get; set; } = 1;
+
+            /// <summary>Vickers hardness of the core — which of it and the plate gives way first.</summary>
+            public double Hv { get; set; } = 60;
 
             /// <summary>Fragmentation chance (vanilla field) — temporary cavity bonus in the channel model.</summary>
             public double Frag { get; set; }
@@ -118,10 +123,41 @@ namespace PLATE.Client.Ballistics
             }
         }
 
+        /// <summary>An armour item's construction: how thick it is and what of.</summary>
+        internal class PlateGeometry
+        {
+            /// <summary>Thickness of the hard element, mm.</summary>
+            public double T { get; set; }
+
+            /// <summary>Material key into ArmorPhysics.</summary>
+            public string M { get; set; }
+        }
+
+        /// <summary>How a material fails and how strongly, from the reference book.</summary>
+        internal class MaterialPhysics
+        {
+            public string Class { get; set; }
+            public double DensityGCm3 { get; set; }
+            public double ShearMPa { get; set; }
+            public double CompressiveMPa { get; set; }
+            public double FibreTensileMPa { get; set; }
+            public double FailureStrain { get; set; }
+            public double HardnessHv { get; set; }
+        }
+
+        /// <summary>The /plate/armor-data payload.</summary>
+        internal class ArmorGeometry
+        {
+            public Dictionary<string, PlateGeometry> Plates { get; set; }
+            public Dictionary<string, MaterialPhysics> Materials { get; set; }
+        }
+
         private static Dictionary<string, Entry> _data;
         private static WoundParams _wound;
         private static ArmorParams _armor;
+        private static ArmorGeometry _geometry;
         private static bool _fetchFailed;
+        private static bool _geometryFailed;
 
         /// <summary>X for a cartridge; 0.5 (neutral) when there is no data.</summary>
         public static double GetX(string ammoTemplateId)
@@ -153,6 +189,19 @@ namespace PLATE.Client.Ballistics
 
             areaFrac = 1f;
             massFrac = 1f;
+        }
+
+        /// <summary>Vickers hardness of the core; 60 (lead and copper) when unknown.</summary>
+        public static double GetCoreHardness(string ammoTemplateId)
+        {
+            EnsureLoaded();
+            if (ammoTemplateId != null && _data != null &&
+                _data.TryGetValue(ammoTemplateId, out var e) && e.Hv > 0)
+            {
+                return e.Hv;
+            }
+
+            return 60;
         }
 
         /// <summary>A core fraction is a fraction; 0 would mean a bullet with no bullet in it.</summary>
@@ -208,6 +257,72 @@ namespace PLATE.Client.Ballistics
             }
 
             return -1;
+        }
+
+        /// <summary>
+        /// The barrier an armour item is, ready for the ballistic limit. Returns false
+        /// when the server could not resolve a thickness for it, which is the caller's
+        /// signal to fall back to reading the item's class.
+        /// </summary>
+        public static bool TryBarrier(string armorTemplateId, out BallisticLimit.Barrier barrier)
+        {
+            barrier = default;
+            EnsureGeometry();
+            if (armorTemplateId == null || _geometry?.Plates == null ||
+                !_geometry.Plates.TryGetValue(armorTemplateId, out var plate) ||
+                plate == null || plate.T <= 0)
+            {
+                return false;
+            }
+
+            if (_geometry.Materials == null || plate.M == null ||
+                !_geometry.Materials.TryGetValue(plate.M, out var m) || m == null)
+            {
+                return false;
+            }
+
+            barrier = new BallisticLimit.Barrier
+            {
+                Class = m.Class,
+                ThicknessMm = plate.T,
+                ShearMPa = m.ShearMPa,
+                CompressiveMPa = m.CompressiveMPa,
+                FibreTensileMPa = m.FibreTensileMPa,
+                FailureStrain = m.FailureStrain,
+                HardnessHv = m.HardnessHv,
+                DensityGCm3 = m.DensityGCm3,
+
+                // the per-entry density override that would say a sewn package is mostly
+                // air does not survive the wire; a plate resolved here is a plate
+                PackedFraction = 1,
+            };
+            return true;
+        }
+
+        private static void EnsureGeometry()
+        {
+            if (_geometry != null || _geometryFailed)
+            {
+                return;
+            }
+
+            try
+            {
+                _geometry = JsonConvert.DeserializeObject<ArmorGeometry>(
+                    RequestHandler.GetJson("/plate/armor-data"));
+                var status = "[PLATE] Armour geometry loaded from server: " +
+                             $"{_geometry?.Plates?.Count ?? 0} items with a thickness, " +
+                             $"{_geometry?.Materials?.Count ?? 0} materials";
+                Plugin.Log.LogInfo(status);
+                Overlay.HitFeed.LogEvent(status);
+            }
+            catch (Exception ex)
+            {
+                _geometryFailed = true;
+                Plugin.Log.LogWarning(
+                    $"[PLATE] Failed to fetch /plate/armor-data ({ex.Message}); every plate " +
+                    "will be read at its class threshold instead of its construction.");
+            }
         }
 
         private static void EnsureLoaded()

@@ -24,6 +24,19 @@
     </AssemblyAttribute>
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      The ballistic limit is compiled into both halves from one file rather than written
+      twice. The wound channel is duplicated (WoundModel / ClientWoundModel) with a
+      comment asking the next person to keep them in step, and that is a bad trade at
+      this size: the server bakes the card numbers from it and the client decides real
+      hits with it, and the two silently disagreeing would be invisible in a raid.
+      Pure System.Math, so it compiles under net471 as happily as under net9.
+    -->
+    <Compile Include="..\..\server\PLATE.Server\Services\BallisticLimit.cs"
+             Link="Ballistics\BallisticLimit.cs" />
+  </ItemGroup>
+
   <!-- All game assemblies are referenced by HintPath from the install and not copied to the output -->
   <ItemGroup>
     <Reference Include="BepInEx">

@@ -64,10 +64,21 @@ penetrating hits lose a flat percentage of damage.
 **PLATE:** a plate or soft panel is an obstacle with material properties, and
 the projectile has to defeat it with specific energy:
 
-- **Protection classes are anchored to the real GOST protection standard.**
-  Class thresholds correspond to what those classes are actually rated to stop.
-  Bottom-tier "class 1" junk headwear (construction helmets and the like) is
-  fragment protection only — it will not stop a pistol bullet.
+- **A plate is a thickness of a material, not a class number.** Where the armor is
+  modelled on something real — which is nearly all of it — whether a round gets
+  through is decided by the speed at which that much of that material stops that
+  particular core, and not by a rating. Every cartridge GOST R 50744-95 names is
+  fired at a plate of its own class in the test suite and must be stopped, and at
+  the plate one class down, where it must get through.
+- **Protection classes are anchored to the real GOST protection standard,** and
+  are the fallback for armor nothing is known about. Bottom-tier "class 1" junk
+  headwear (construction helmets and the like) is fragment protection only — it
+  will not stop a pistol bullet.
+- **Hardness decides who wins.** A core softer than the plate flattens on its face
+  and stops being a punch. This is the difference between the two 7.62×39 loads
+  and between the two 62-grain 5.56 loads, and it is why 25 mm of polyethylene
+  shrugs off a mild-steel-cored rifle round and is beaten by a small hard core
+  carrying half the energy.
 - **Materials behave like themselves.** Ceramic offers the highest threshold
   and grinds down even hard AP cores, but cracks in tiles — a follow-up hit
   into the same segment meets rubble. Armor steel is expensive to defeat and

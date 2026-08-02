@@ -45,6 +45,13 @@ public class AmmoNormalizer(
         /// <summary>The core geometry above is published rather than inferred from the cohort.</summary>
         public bool CoreFromBook;
 
+        /// <summary>
+        /// Vickers hardness of what meets the plate. Lead and gilding metal sit near 40
+        /// and never win; the default stands in for "no hard core was published", which
+        /// for these purposes is the same statement.
+        /// </summary>
+        public double CoreHardnessHv = 60;
+
         public readonly List<string> Notes = new();
     }
 
@@ -117,6 +124,11 @@ public class AmmoNormalizer(
                     r.CoreMass = bf.CoreMassFrac > 0 ? Math.Clamp(bf.CoreMassFrac, 0.05, 1) : 1;
                     r.CoreFromBook = true;
                     coreApplied++;
+                }
+
+                if (bf.CoreHardnessHv > 0)
+                {
+                    r.CoreHardnessHv = bf.CoreHardnessHv;
                 }
 
                 r.Notes.Add($"book: {bf.Prototype}");
@@ -507,6 +519,7 @@ public class AmmoNormalizer(
                 Frag = Math.Round(r.FragChance, 4),
                 Ca = Math.Round(r.CoreArea, 4),
                 Cm = Math.Round(r.CoreMass, 4),
+                Hv = Math.Round(r.CoreHardnessHv),
             });
         data["__wound"] = new
         {

@@ -6,6 +6,7 @@ using EFT;
 using EFT.InventoryLogic;
 using HarmonyLib;
 using PLATE.Client.Ballistics;
+using PLATE.Server.Services; // BallisticLimit, compiled into both halves from one file
 using UnityEngine;
 
 namespace PLATE.Client.Patches
@@ -822,17 +823,61 @@ namespace PLATE.Client.Patches
                 uLimit *= localMult;
             }
 
-            // probabilistic band around the threshold (the material is not uniform)
+            // --- Ballistic limit, where the item's construction is known ---
+            //
+            // A class threshold is a statement about a certificate; a ballistic limit is
+            // a statement about a plate. Where the server resolved the item to a real
+            // thickness and a real material, the question stops being "is this энергия
+            // per mm² over the line" and becomes "is this faster than v_bl", and the
+            // energy the plate takes stops being a tuned constant: it is whatever
+            // ½m(v² − v_r²) comes to once Recht-Ipson has answered.
+            var tuning = BallisticLimit.Tuning.Default;
+            var limitCore = new BallisticLimit.Core
+            {
+                MassG = mass * coreMass,
+                DiaMm = dia * Mathf.Sqrt(coreArea),
+                HardnessHv = AmmoDataCache.GetCoreHardness(shot.Ammo?.TemplateId),
+            };
+
+            var haveGeometry = AmmoDataCache.TryBarrier(armor.Item.Template.ToString(),
+                out var barrier);
+            float ratio;
+            float eCost;
+            float v50 = 0f;
+            if (haveGeometry)
+            {
+                // wear and a cracked segment thin the plate rather than lowering a number
+                barrier.ThicknessMm *= duraFactor * localMult;
+                v50 = (float)BallisticLimit.V50(barrier, limitCore, cos, tuning);
+                ratio = v50 > 0f ? v / v50 : 999f;
+            }
+            else
+            {
+                ratio = uHit / Mathf.Max(uLimit, 1e-3f);
+            }
+
+            // probabilistic band around the limit (the material is not uniform)
             var band = Mathf.Max((float)cfg.ThresholdBand, 0.001f);
-            var ratio = uHit / Mathf.Max(uLimit, 1e-3f);
             var pierceChance = Mathf.Clamp01((ratio - (1f - band)) / (2f * band));
             var pierce = pierceChance > 0f && UnityEngine.Random.value < pierceChance;
 
-            // energy price of penetration: work ∝ strength × hole area × thickness, and
-            // the hole is the size of what makes it — a core punches a narrower one and
-            // a bullet that flattened on the way in punches a wider one
-            var eCost = (float)prof.ECostMult * uLimit * hitArea;
-            var eOut = e - eCost;
+            float eOut;
+            if (haveGeometry && v50 > 0f)
+            {
+                // Recht-Ipson: what is left after the plate, plug and all
+                var plug = (float)BallisticLimit.PlugMassG(barrier, limitCore, cos, tuning);
+                var vr = (float)BallisticLimit.ResidualVelocity(v, v50, limitCore.MassG, plug);
+                eOut = 0.5f * (mass / 1000f) * vr * vr;
+                eCost = Mathf.Max(e - eOut, 0f);
+            }
+            else
+            {
+                // energy price of penetration: work ∝ strength × hole area × thickness,
+                // and the hole is the size of what makes it — a core punches a narrower
+                // one and a bullet that flattened on the way in punches a wider one
+                eCost = (float)prof.ECostMult * uLimit * hitArea;
+                eOut = e - eCost;
+            }
 
             if (!pierce || eOut < 1f)
             {
@@ -847,7 +892,9 @@ namespace PLATE.Client.Patches
                 // a stale frame there would put someone else's name on the line
                 Overlay.HitFeed.PushHit(bpc?.Player as Player,
                     $"armor {armor.Template.ArmorMaterial} cl.{armor.ArmorClass}: " +
-                    $"U {uHit:0.#}/{uLimit:0.#} J/mm²" +
+                    (haveGeometry
+                        ? $"{barrier.ThicknessMm:0.0} mm, v {v:0}/{v50:0} m/s"
+                        : $"U {uHit:0.#}/{uLimit:0.#} J/mm²") +
                     (localMult < 1f ? $" (segment x{localMult:0.00})" : "") + " -> block");
                 return false;
             }
@@ -876,7 +923,9 @@ namespace PLATE.Client.Patches
 
             Overlay.HitFeed.PushHit(bpc?.Player as Player,
                 $"armor {armor.Template.ArmorMaterial} cl.{armor.ArmorClass}: " +
-                $"U {uHit:0.#}/{uLimit:0.#}" +
+                (haveGeometry
+                    ? $"{barrier.ThicknessMm:0.0} mm, v {v:0}/{v50:0} m/s"
+                    : $"U {uHit:0.#}/{uLimit:0.#}") +
                 (localMult < 1f ? $" (segment x{localMult:0.00})" : "") +
                 $" -> pierce, -{eCost:0} J, v {v:0}->{vOut:0}, X {x:0.00}->{xOut:0.00}" +
                 (mOut < mass * 0.995f
