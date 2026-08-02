@@ -140,14 +140,30 @@ public class ReferenceBookTests
 
         var filled = ReferenceBook.MergeShippedDefaults(old);
 
-        Assert.Contains("Barrels", filled);
-        Assert.Contains("Weapons", filled);
-        Assert.Contains("ArmorMaterials", filled);
-        Assert.Contains("ArmorPlates", filled);
+        Assert.Contains(filled, f => f.StartsWith("Barrels "));
+        Assert.Contains(filled, f => f.StartsWith("Weapons "));
+        Assert.Contains(filled, f => f.StartsWith("ArmorMaterials "));
+        Assert.Contains(filled, f => f.StartsWith("ArmorPlates "));
         Assert.True(old.Barrels.ContainsKey("Caliber762x51"));
+    }
 
-        // and the section it did have is left exactly as the user had it
-        Assert.Single(old.Shotshells);
+    /// <summary>
+    /// The same trap one level down: a table the file already has is not therefore the
+    /// table this version ships. Armour products are added release by release, and a
+    /// whole-section check means the four an early install has on disk are the four it
+    /// keeps forever. Entries arrive one at a time — and never over one already written,
+    /// because a figure in that file is a decision somebody made.
+    /// </summary>
+    [Fact]
+    public void A_section_that_exists_still_gains_the_entries_added_since()
+    {
+        var mine = new ReferenceBook.ArmorPlateRef { Prototype = "mine", ThicknessMm = 1 };
+        var old = new ReferenceBook.AmmoReference { ArmorPlates = { ["kora_kulon"] = mine } };
+
+        ReferenceBook.MergeShippedDefaults(old);
+
+        Assert.True(old.ArmorPlates.Count > 1, "nothing was added to a table that was not empty");
+        Assert.Same(mine, old.ArmorPlates["kora_kulon"]);
     }
 
     /// <summary>

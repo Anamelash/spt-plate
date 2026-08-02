@@ -238,12 +238,18 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         var filled = MergeShippedDefaults(loaded);
         if (filled.Count > 0)
         {
-            logger.Debug($"[PLATE] {FileName} predates these sections, using the shipped ones: " +
+            logger.Debug($"[PLATE] {FileName} is missing entries the mod ships, added: " +
                          string.Join(", ", filled));
         }
     }
 
-    /// <summary>Fills empty sections from the shipped book; returns what it filled.</summary>
+    /// <summary>
+    /// Adds every shipped entry the file on disk does not already have, and returns
+    /// what was added. Entry by entry rather than section by section: the file on a
+    /// user's machine was written by an older version of the mod, and a whole-section
+    /// check means a table they already have — plates, calibers — never sees anything
+    /// added to it again. What they have written themselves always wins.
+    /// </summary>
     public static List<string> MergeShippedDefaults(AmmoReference loaded)
     {
         AmmoReference? shipped = null;
@@ -251,53 +257,28 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
 
         var filled = new List<string>();
 
-        if (loaded.Shotshells.Count == 0)
+        void Fill<T>(string name, Dictionary<string, T> into, Func<AmmoReference, Dictionary<string, T>> from)
         {
-            loaded.Shotshells = Shipped().Shotshells;
-            filled.Add(nameof(loaded.Shotshells));
+            var added = 0;
+            foreach (var (key, value) in from(Shipped()))
+            {
+                added += into.TryAdd(key, value) ? 1 : 0;
+            }
+
+            if (added > 0)
+            {
+                filled.Add($"{name} +{added}");
+            }
         }
 
-        if (loaded.Grenades.Count == 0)
-        {
-            loaded.Grenades = Shipped().Grenades;
-            filled.Add(nameof(loaded.Grenades));
-        }
-
-        if (loaded.Barrels.Count == 0)
-        {
-            loaded.Barrels = Shipped().Barrels;
-            filled.Add(nameof(loaded.Barrels));
-        }
-
-        if (loaded.Weapons.Count == 0)
-        {
-            loaded.Weapons = Shipped().Weapons;
-            filled.Add(nameof(loaded.Weapons));
-        }
-
-        if (loaded.ArmorMaterials.Count == 0)
-        {
-            loaded.ArmorMaterials = Shipped().ArmorMaterials;
-            filled.Add(nameof(loaded.ArmorMaterials));
-        }
-
-        if (loaded.ArmorPlates.Count == 0)
-        {
-            loaded.ArmorPlates = Shipped().ArmorPlates;
-            filled.Add(nameof(loaded.ArmorPlates));
-        }
-
-        if (loaded.ArmorByClass.Count == 0)
-        {
-            loaded.ArmorByClass = Shipped().ArmorByClass;
-            filled.Add(nameof(loaded.ArmorByClass));
-        }
-
-        if (loaded.SoftArmor.Count == 0)
-        {
-            loaded.SoftArmor = Shipped().SoftArmor;
-            filled.Add(nameof(loaded.SoftArmor));
-        }
+        Fill(nameof(loaded.Shotshells), loaded.Shotshells, s => s.Shotshells);
+        Fill(nameof(loaded.Grenades), loaded.Grenades, s => s.Grenades);
+        Fill(nameof(loaded.Barrels), loaded.Barrels, s => s.Barrels);
+        Fill(nameof(loaded.Weapons), loaded.Weapons, s => s.Weapons);
+        Fill(nameof(loaded.ArmorMaterials), loaded.ArmorMaterials, s => s.ArmorMaterials);
+        Fill(nameof(loaded.ArmorPlates), loaded.ArmorPlates, s => s.ArmorPlates);
+        Fill(nameof(loaded.ArmorByClass), loaded.ArmorByClass, s => s.ArmorByClass);
+        Fill(nameof(loaded.SoftArmor), loaded.SoftArmor, s => s.SoftArmor);
 
         return filled;
     }
