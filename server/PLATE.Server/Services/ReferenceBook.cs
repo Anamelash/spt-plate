@@ -565,28 +565,35 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "SSAPI_ESBI_6_side":        { "Prototype": "ESBI side insert", "Material": "Ceramic", "ThicknessMm": 10, "BackingMm": 10,
                                           "DensityGCm3": 2.52,
                                           "Source": "the ESAPI construction in a side cut; 2.25 lb over 6x8 in is the same 3.30 g/cm2" },
-            // the one panel in the series anybody has measured and published: 365x290x20
-            // and 3.8 kg, alumina tile on a UHMWPE composite. 3.59 g/cm2, of which the
-            // tile is 6 mm and the backer the other 13 - which comes to the 20 quoted.
-            // Its face is what the rest of the Granit masses are read over
-            "granit4rs":                { "Prototype": "Granit-4RS", "Material": "Ceramic", "ThicknessMm": 6, "BackingMm": 13,
-                                          "Source": "365x290x20 mm chest panel, 3.8 kg; alumina on UHMWPE" },
-            "granit4_5class_front":     { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 6.2, "BackingMm": 14,
-                                          "Source": "the Br5 of the line: 314x265 mm, 3.10 kg in size 2" },
-            "granit4_5class_back":      { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 6.2, "BackingMm": 14,
-                                          "Source": "the Br5 of the line: 314x265 mm, 3.10 kg in size 2" },
-            "granitBr4":                { "Prototype": "Granit Br4 (Granit-5A)", "Material": "Ceramic", "ThicknessMm": 5.4, "BackingMm": 12,
-                                          "Source": "314x265 mm, 2.70 kg in size 2; 2.55 in size 1 and 3.05 in size 3" },
-            "granitBr5":                { "Prototype": "Granit Br5", "Material": "Ceramic", "ThicknessMm": 6.2, "BackingMm": 14,
-                                          "Source": "314x265 mm, 3.10 kg in size 2; 2.95 in size 1 and 3.47 in size 3" },
-            "granit":                   { "Prototype": "Granit Br5, first execution", "Material": "Ceramic", "ThicknessMm": 7.2, "BackingMm": 15,
-                                          "Source": "305x263x22 mm, 3.45 kg in size 2; 330x263 and 3.75 kg in size 3" },
+            // A plate's outer rectangle is not the armour. Tekhinkom's panels carry a
+            // frame the certificate does not count, and the rated area is what the
+            // ceramic actually covers: 7.14, 7.56 and 8.46 dm² against outer dimensions
+            // that would suggest 7.5, 8.3 and 9.0. Reading the mass over the rectangle
+            // spread it too thin, and every Granit here was about a tenth light for it.
+            //
+            // The rated areas are the check on themselves. Over them the whole line
+            // comes out at one areal density per class — Br4 at 3.57, 3.57 and 3.61
+            // g/cm² across the three sizes, Br5 at 4.13, 4.10 and 4.10. Over the outer
+            // rectangles that agreement falls apart.
+            "granitBr4":                { "Prototype": "Granit Br4 (Granit-5A)", "Material": "Ceramic", "ThicknessMm": 6, "BackingMm": 12,
+                                          "Source": "2.55 / 2.70 / 3.05 kg over 7.14 / 7.56 / 8.46 dm² rated - 3.6 g/cm² at every size" },
+            "granitBr5":                { "Prototype": "Granit Br5", "Material": "Ceramic", "ThicknessMm": 6.8, "BackingMm": 14,
+                                          "Source": "2.95 / 3.10 / 3.47 kg over 7.14 / 7.56 / 8.46 dm² rated - 4.1 g/cm² at every size" },
+            "granit4_5class_front":     { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 6.8, "BackingMm": 14,
+                                          "Source": "the Br5 of the line, 3.10 kg over 7.56 dm² rated" },
+            "granit4_5class_back":      { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 6.8, "BackingMm": 14,
+                                          "Source": "the Br5 of the line, 3.10 kg over 7.56 dm² rated" },
+            "granit4rs":                { "Prototype": "Granit-4RS", "Material": "Ceramic", "ThicknessMm": 6.8, "BackingMm": 13,
+                                          "Source": "365x290x20 mm and 3.8 kg outside; at the line's 4.1 g/cm² that is 9.3 dm² rated" },
+            "granit":                   { "Prototype": "Granit Br5, first execution", "Material": "Ceramic", "ThicknessMm": 7.7, "BackingMm": 15,
+                                          "Source": "305x263x22 mm, 3.45 kg - the heavy execution, above the rest of the line" },
             "granit4_zhukBr3_3class_front": { "Prototype": "Zhuk-3", "Material": "UHMWPE", "ThicknessMm": 23,
                                           "Source": "300x250 mm SAPI cut, 23 mm, 1.70 kg - all polyethylene, and the mass over that face comes to the 23" },
-            "korund_vmk_6class_front":  { "Prototype": "Korund-VM-K", "Material": "Ceramic", "ThicknessMm": 6.2, "BackingMm": 17,
-                                          "Source": "260x260x23 mm ceramic panel, 2.5 kg" },
-            "korund_vm_k_6class_back":  { "Prototype": "Korund-VM-K", "Material": "Ceramic", "ThicknessMm": 6.2, "BackingMm": 17,
-                                          "Source": "260x260x23 mm ceramic panel, 2.5 kg" },
+            // one size only, and KlASS and its owners agree on the rated 6.0 dm²
+            "korund_vmk_6class_front":  { "Prototype": "Korund-VM-K", "Material": "Ceramic", "ThicknessMm": 7.2, "BackingMm": 16,
+                                          "Source": "2.6 kg over 6.0 dm² rated; 260x260x23 mm outside" },
+            "korund_vm_k_6class_back":  { "Prototype": "Korund-VM-K", "Material": "Ceramic", "ThicknessMm": 7.2, "BackingMm": 16,
+                                          "Source": "2.6 kg over 6.0 dm² rated; 260x260x23 mm outside" },
             "korund_back_6b23_2":       { "Prototype": "6B23 steel panel, 44S", "Material": "ArmoredSteel", "ThicknessMm": 6.3,
                                           "Source": "6.3 mm of 44S steel, rated against the heat-hardened AKM core" },
             "korund":                   { "Prototype": "Korund-VM steel panel", "Material": "ArmoredSteel", "ThicknessMm": 6.3,
