@@ -13,6 +13,9 @@ namespace PLATE.Server.Tests;
 /// </summary>
 public class ReferenceBookTests
 {
+    /// <summary>The shipped book, for fixtures in other files that measure against it.</summary>
+    public static ReferenceBook.AmmoReference ShippedBook() => Shipped();
+
     private static ReferenceBook.AmmoReference Shipped()
     {
         var field = typeof(ReferenceBook).GetField("DefaultReferenceJsonc",
