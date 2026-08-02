@@ -58,6 +58,22 @@ public class ArmorNormalizer(
         ["2x3"] = 254 * 318.0,  // 10x12.5 in, SAPI cut
     };
 
+    /// <summary>Where an item's construction came from, in descending order of trust.</summary>
+    private enum Origin
+    {
+        /// <summary>The real product, from published specifications.</summary>
+        Product,
+
+        /// <summary>The reference construction for its material and rating.</summary>
+        Reference,
+
+        /// <summary>Worked out from the item's own mass.</summary>
+        Mass,
+
+        /// <summary>Nothing applied; it behaves exactly as the game shipped it.</summary>
+        None,
+    }
+
     private sealed class Row
     {
         public required string Product;
@@ -68,8 +84,17 @@ public class ArmorNormalizer(
         public string Prototype = "";
         public string Source = "";
         public string MaterialWas = "";
-        public bool Derived;
+        public Origin From = Origin.None;
+
+        /// <summary>Which reference answered, e.g. "Aramid/2". Empty unless From is Reference.</summary>
+        public string ReferenceKey = "";
+
+        /// <summary>Rating the item declares, when the material's ceiling overrode it.</summary>
+        public int CappedFrom;
     }
+
+    /// <summary>A reference entry together with the key that found it, for the report.</summary>
+    private sealed record Resolved(ReferenceBook.ArmorPlateRef Ref, string Key, int CappedFrom);
 
     public void Run(PlateServerConfig cfg, string modPath)
     {
@@ -143,24 +168,26 @@ public class ArmorNormalizer(
             {
                 if (byClass != null)
                 {
-                    row.Prototype = byClass.Prototype;
-                    row.ThicknessMm = byClass.ThicknessMm;
-                    row.Source = byClass.Source.Length > 0
-                        ? byClass.Source
-                        : $"reference plate for {material} class {cls}";
-                    _thickness[item.Id] = byClass.ThicknessMm;
+                    row.From = Origin.Reference;
+                    row.ReferenceKey = byClass.Key;
+                    row.CappedFrom = byClass.CappedFrom;
+                    row.Prototype = byClass.Ref.Prototype;
+                    row.ThicknessMm = byClass.Ref.ThicknessMm;
+                    row.Source = byClass.Ref.Source;
+                    _thickness[item.Id] = byClass.Ref.ThicknessMm;
                 }
                 else if (derived > 0)
                 {
-                    row.Derived = true;
+                    row.From = Origin.Mass;
                     row.ThicknessMm = derived;
-                    row.Source = "from its own mass";
+                    row.Source = $"{p.Weight ?? 0:N2} kg over a {p.Width}x{p.Height} face";
                     _thickness[item.Id] = derived;
                 }
 
                 continue;
             }
 
+            row.From = Origin.Product;
             row.Prototype = spec.Prototype;
             row.Source = spec.Source;
             row.ThicknessMm = spec.ThicknessMm;
@@ -224,18 +251,21 @@ public class ArmorNormalizer(
     /// polyethylene against 9 mm of helmet shell — so which table answers depends on
     /// which the item is.
     /// </summary>
-    private static ReferenceBook.ArmorPlateRef? ClassReference(
+    private static Resolved? ClassReference(
         ReferenceBook.AmmoReference reference, string itemName, string material, int cls)
     {
         if (itemName.StartsWith("item_equipment_plate_", StringComparison.OrdinalIgnoreCase))
         {
-            return reference.ArmorByClass.TryGetValue($"{material}/{cls}", out var plate)
-                ? plate
+            var plateKey = $"{material}/{cls}";
+            return reference.ArmorByClass.TryGetValue(plateKey, out var plate)
+                ? new Resolved(plate, plateKey, 0)
                 : null;
         }
 
-        return reference.SoftArmor.TryGetValue($"{material}/{SoftRating(material, cls)}", out var r)
-            ? r
+        var rating = SoftRating(material, cls);
+        var softKey = $"{material}/{rating}";
+        return reference.SoftArmor.TryGetValue(softKey, out var soft)
+            ? new Resolved(soft, softKey, rating < cls ? cls : 0)
             : null;
     }
 
@@ -315,36 +345,51 @@ public class ArmorNormalizer(
             sb.AppendLine($"| {name} | {mechanism} | {m.DensityGCm3:N2} g/cm³ | {strength} | {m.Source} |");
         }
 
-        sb.AppendLine();
-        sb.AppendLine($"## Products with a thickness ({known.Count})");
-        sb.AppendLine();
-        sb.AppendLine("A documented product gets its real construction. Everything else that "
-                      + "carries its own mass gets a thickness derived from it — most of the "
-                      + "armour in the game is invented for it and has no specification to look "
-                      + "up, and mass over density over face area is still physics.");
-        sb.AppendLine();
-        sb.AppendLine("| Product | Prototype | Material | Thickness | Zones | Source |");
-        sb.AppendLine("|---|---|---|---|---|---|");
-        foreach (var r in known.Values.OrderByDescending(r => r.Derived ? 0 : 1).ThenBy(r => r.Product))
-        {
-            var material = r.MaterialWas.Length > 0
-                ? $"{r.MaterialWas} → **{r.Material}**"
-                : r.Material;
-            sb.AppendLine($"| {r.Product} | {r.Prototype} | {material} | {r.ThicknessMm:N1} mm | " +
-                          $"{r.Zones} | {r.Source} |");
-        }
+        var all = known.Values.Concat(unknown.Values).ToList();
 
         sb.AppendLine();
-        sb.AppendLine($"## Still on their class number ({unknown.Count})");
+        sb.AppendLine("## Where each figure came from");
         sb.AppendLine();
-        sb.AppendLine("These behave exactly as before. Each is an invitation to look up the real "
-                      + "product and add its material and thickness to `ammo-reference.jsonc`; the "
-                      + "high classes are worth the most, since that is where the class number is "
-                      + "doing the most guessing.");
+        sb.AppendLine("| Source | Items | Trust |");
+        sb.AppendLine("|---|---|---|");
+        sb.AppendLine($"| The real product | {all.Count(r => r.From == Origin.Product)} | "
+                      + "published specifications for the thing it is modelled on |");
+        sb.AppendLine($"| A reference construction | {all.Count(r => r.From == Origin.Reference)} | "
+                      + "the real armour of that material and rating |");
+        sb.AppendLine($"| Its own mass | {all.Count(r => r.From == Origin.Mass)} | "
+                      + "physics, but from a weight other mods can rewrite |");
+        sb.AppendLine($"| Nothing | {all.Count(r => r.From == Origin.None)} | "
+                      + "behaves exactly as the game shipped it |");
+
+        Section(sb, "From the real product", all.Where(r => r.From == Origin.Product),
+            "Published specifications for the product the item is modelled on. These are the "
+            + "figures to trust, and the ones worth growing.",
+            withReference: false);
+
+        Section(sb, "From a reference construction", all.Where(r => r.From == Origin.Reference),
+            "No documented product, so the item takes the real armour of its material and "
+            + "rating. Most of the armour in the game is invented for it — there is no "
+            + "specification for a \"Cult Termite\" — but there is always a real one doing the "
+            + "same job. `Reference` names exactly which entry answered; where the material has "
+            + "a ceiling its rating cannot lift, the rating it was read at is shown too.",
+            withReference: true);
+
+        Section(sb, "From its own mass", all.Where(r => r.From == Origin.Mass),
+            "Neither a documented product nor a reference, but the item carries a mass, and "
+            + "mass over density over face area is a thickness. Weakest of the three: any mod "
+            + "that scales item weight moves these figures with it.",
+            withReference: false);
+
         sb.AppendLine();
-        sb.AppendLine("| Product | Class | Material | Zones |");
+        sb.AppendLine($"## Not normalized ({all.Count(r => r.From == Origin.None)})");
+        sb.AppendLine();
+        sb.AppendLine("Nothing was applied; these behave exactly as the game shipped them. Each is "
+                      + "an invitation to add its material and thickness to `ammo-reference.jsonc`.");
+        sb.AppendLine();
+        sb.AppendLine("| Item | Class | Material | Zones |");
         sb.AppendLine("|---|---|---|---|");
-        foreach (var r in unknown.Values.OrderByDescending(r => r.Class).ThenBy(r => r.Product))
+        foreach (var r in all.Where(r => r.From == Origin.None)
+                     .OrderByDescending(r => r.Class).ThenBy(r => r.Product))
         {
             sb.AppendLine($"| {r.Product} | {r.Class} | {r.Material} | {r.Zones} |");
         }
@@ -356,6 +401,51 @@ public class ArmorNormalizer(
         catch (Exception ex)
         {
             logger.Warning($"[PLATE] Could not write the armour report: {ex.Message}");
+        }
+    }
+
+    private static void Section(StringBuilder sb, string title, IEnumerable<Row> rows,
+        string blurb, bool withReference)
+    {
+        var list = rows.OrderBy(r => r.Material).ThenByDescending(r => r.Class)
+            .ThenBy(r => r.Product).ToList();
+
+        sb.AppendLine();
+        sb.AppendLine($"## {title} ({list.Count})");
+        sb.AppendLine();
+        sb.AppendLine(blurb);
+        sb.AppendLine();
+
+        if (list.Count == 0)
+        {
+            sb.AppendLine("*(none)*");
+            return;
+        }
+
+        sb.AppendLine(withReference
+            ? "| Item | Material | Class | Reference | Construction | Thickness | Zones |"
+            : "| Item | Material | Class | Construction | Thickness | Zones | Source |");
+        sb.AppendLine(withReference ? "|---|---|---|---|---|---|---|" : "|---|---|---|---|---|---|---|");
+
+        foreach (var r in list)
+        {
+            var material = r.MaterialWas.Length > 0
+                ? $"{r.MaterialWas} → **{r.Material}**"
+                : r.Material;
+
+            if (withReference)
+            {
+                var key = r.CappedFrom > 0
+                    ? $"`{r.ReferenceKey}` (declares {r.CappedFrom})"
+                    : $"`{r.ReferenceKey}`";
+                sb.AppendLine($"| {r.Product} | {material} | {r.Class} | {key} | {r.Prototype} | " +
+                              $"{r.ThicknessMm:N1} mm | {r.Zones} |");
+            }
+            else
+            {
+                sb.AppendLine($"| {r.Product} | {material} | {r.Class} | {r.Prototype} | " +
+                              $"{r.ThicknessMm:N1} mm | {r.Zones} | {r.Source} |");
+            }
         }
     }
 }
