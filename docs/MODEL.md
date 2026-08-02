@@ -321,8 +321,34 @@ can drain blood faster than the heart moves it.
 
 Vanilla bleeding effects are reused rather than replaced, which keeps icons,
 medicine, bot reactions and kill attribution working. The one custom state is
-internal bleeding, which by design has no icon and no field treatment — it stands
-for damage that needs an operating table. It can be switched off per faction.
+internal bleeding, which by design has no icon and no field treatment. It can be
+switched off per faction.
+
+**Internal means into a cavity, not merely untreatable.** The distinction decides
+which wounds qualify, and it is the anatomy that decides, not the severity:
+
+| wound | where the blood goes | in game |
+|---|---|---|
+| destroyed abdomen | peritoneal cavity, aorta / vena cava / iliacs | internal, permanent |
+| BABT under a plate or helmet | thoracic cavity, cranium | internal, permanent |
+| blast barotrauma | lungs, gut | internal, permanent |
+| destroyed limb | out of the hole, femoral or brachial | heavy external, treatable |
+
+A destroyed leg is the textbook indication for a tourniquet, and a junctional or
+awkward one is what a hemostatic is carried for — both are in the game, so that
+wound is a heavy external bleed. Making it permanent instead put a limb wound
+beyond the reach of the exact items that exist to treat it, and double-counted
+the femoral artery, which the rate table already covers on its own.
+
+Internal bleeds are stored one entry per causing hit, with the zone that opened
+them, rather than summed into a single figure — the journal has to be able to
+answer where the blood is going, which a running total cannot.
+
+**Open: intracranial pressure.** Behind-helmet trauma really does cause bleeding
+inside the skull, so the head belongs on the list. Modelling it as a volume drain
+is nonetheless wrong in kind: an intracranial bleed kills by rising pressure in a
+closed box at 100–150 ml, not by hypovolemia over litres. Left as a drain for
+now; a proper ICP state with its own timeline and blackout is a TODO.
 
 ### Wounds
 

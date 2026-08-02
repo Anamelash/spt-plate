@@ -79,8 +79,8 @@ namespace PLATE.Client
         public static ConfigEntry<float> FemoralBleedMlSec;
         public static ConfigEntry<float> CardiacOutputMlSec;
         public static ConfigEntry<float> StomachDestroyedBleed;
-        public static ConfigEntry<float> LegDestroyedBleed;
-        public static ConfigEntry<float> ArmDestroyedBleed;
+        // "Leg/Arm destroyed bleed" retired: a destroyed limb now opens a heavy external
+        // bleed, whose rate comes from BleedHeavyLeg/BleedHeavyArm (or the femoral branch)
         public static ConfigEntry<bool> CrippleEnabled;
         public static ConfigEntry<float> CrippleStaminaCoeff;
         public static ConfigEntry<float> CrippleSpeedLimit;
@@ -332,10 +332,12 @@ namespace PLATE.Client
                 "repairs. Vanilla leaves them running, which under PLATE keeps draining " +
                 "blood out of a limb that was just operated on.");
             InternalBleedPlayer = Bind(sBlood, "Internal bleeding: Player", true,
-                "Internal bleeding for YOU: from a destroyed body part, from behind-armor " +
-                "trauma and from blast barotrauma. It has no wound icon and no field " +
-                "medicine can close it — bandages, tourniquets and surgery do not reach it. " +
-                "Turn off if you would rather every bleed be treatable.");
+                "Internal bleeding for YOU: from a destroyed abdomen, from behind-armor " +
+                "trauma to the torso or head, and from blast barotrauma. All three bleed " +
+                "into a cavity, so there is no wound icon and no field medicine closes " +
+                "them — dressings, tourniquets, hemostatics and surgery all fall short. " +
+                "A destroyed limb is NOT one of these: it bleeds externally and is " +
+                "treatable. Turn off if you would rather every bleed be treatable.");
             InternalBleedPmc = Bind(sBlood, "Internal bleeding: PMC", true,
                 "Same for PMC bots (USEC/BEAR).");
             InternalBleedScav = Bind(sBlood, "Internal bleeding: Scav", true,
@@ -412,13 +414,8 @@ namespace PLATE.Client
                 new AcceptableValueRange<float>(20f, 200f), true);
             StomachDestroyedBleed = Bind(sBlood, "Stomach destroyed bleed, ml per s", 80f,
                 "Internal bleeding with a destroyed stomach (aorta/vena cava). " +
-                "Cannot be stopped by a tourniquet.", new AcceptableValueRange<float>(0f, 200f), true);
-            LegDestroyedBleed = Bind(sBlood, "Leg destroyed bleed, ml per s", 25f,
-                "Destroyed leg: femoral vessel destruction.",
-                new AcceptableValueRange<float>(0f, 200f), true);
-            ArmDestroyedBleed = Bind(sBlood, "Arm destroyed bleed, ml per s", 14f,
-                "Destroyed arm: brachial/axillary vessels.",
-                new AcceptableValueRange<float>(0f, 200f), true);
+                "Bleeds into the abdominal cavity — no dressing, tourniquet or hemostatic " +
+                "reaches it.", new AcceptableValueRange<float>(0f, 200f), true);
             CrippleStaminaCoeff = Bind(sBlood, "Cripple stamina coeff", 0.2f,
                 "Stamina multiplier with a destroyed body part.",
                 new AcceptableValueRange<float>(0.05f, 1f), true);

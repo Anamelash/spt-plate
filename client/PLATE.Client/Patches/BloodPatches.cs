@@ -16,7 +16,7 @@ namespace PLATE.Client.Patches
     ///    flow-rate table (body part, type), self-limited by hypotension.
     /// 2. ActiveHealthController.ApplyDamage — guaranteed LightBleeding for any
     ///    penetrating wound with damage above the threshold.
-    /// 3. DestroyBodyPart(Stomach) — massive internal bleeding.
+    /// 3. DestroyBodyPart — internal bleeding for the abdomen, heavy external for a limb.
     /// 4. Kill — removes the target from tracking.
     /// </summary>
     internal static class BloodPatches
@@ -249,7 +249,7 @@ namespace PLATE.Client.Patches
             var dt = damageInfo.DamageType;
             if (dt == EDamageType.Explosion)
             {
-                TryBlastBarotrauma(__instance, __result > 0f ? __result : damage);
+                TryBlastBarotrauma(__instance, bodyPart, __result > 0f ? __result : damage);
                 return;
             }
 
@@ -312,7 +312,8 @@ namespace PLATE.Client.Patches
         /// Blast-wave barotrauma: a close detonation (high Explosion damage) gives a
         /// chance of internal bleeding, ramping from MinDamage to FullDamage.
         /// </summary>
-        private static void TryBlastBarotrauma(ActiveHealthController ahc, float applied)
+        private static void TryBlastBarotrauma(ActiveHealthController ahc, EBodyPart bodyPart,
+            float applied)
         {
             if (!PlateClientConfig.BlastBarotrauma.Value ||
                 applied < PlateClientConfig.BlastInternalMinDamage.Value ||
@@ -343,7 +344,8 @@ namespace PLATE.Client.Patches
                 var p = Mathf.Clamp01((applied - min) / (full - min));
                 if (UnityEngine.Random.value < p)
                 {
-                    PlateBloodManager.AddInternal(player, PlateClientConfig.BlastInternalMlSec.Value);
+                    PlateBloodManager.AddInternal(player, PlateClientConfig.BlastInternalMlSec.Value,
+                        EInternalBleedSource.Blast, bodyPart);
                     Overlay.HitFeed.PushPanel(
                         $"{Overlay.OverlayHud.NameOf(player)} BLAST BAROTRAUMA " +
                         $"(dmg {applied:0}, p={p:0.00}) -> internal bleed");
@@ -433,8 +435,20 @@ namespace PLATE.Client.Patches
             }
         }
 
-        // --- 3. Destroyed body part = massive internal bleeding ---
+        // --- 3. Destroyed body part = a major vessel is open ---
 
+        /// <summary>
+        /// A destroyed part means its vascular bundle is gone, but where that blood ends
+        /// up decides whether anything can be done about it.
+        ///
+        /// The abdomen bleeds into a cavity — internal, and the raid has no answer to it.
+        /// A limb bleeds out of a hole in the open: femoral or brachial, which is the
+        /// textbook indication for a tourniquet or a hemostatic, and the game stocks both.
+        /// So a destroyed limb gets a heavy external bleed, not an untreatable one — the
+        /// earlier behaviour handed out a permanent drain for a wound whose real-world
+        /// treatment is in every med pouch, and the arterial variant of it was already
+        /// being counted once in the bleed-rate table (see ResolveRate).
+        /// </summary>
         private static void PartDestroyedPostfix(ActiveHealthController __instance,
             EBodyPart bodyPart, EDamageType damageType)
         {
@@ -446,11 +460,19 @@ namespace PLATE.Client.Patches
 
             try
             {
-                var rate = PlateBloodManager.DestroyedPartBleed(bodyPart);
                 var player = __instance.Player;
-                if (rate > 0f && player != null)
+                if (player != null)
                 {
-                    PlateBloodManager.AddInternal(player, rate);
+                    var rate = PlateBloodManager.DestroyedPartBleed(bodyPart);
+                    if (rate > 0f)
+                    {
+                        PlateBloodManager.AddInternal(player, rate,
+                            EInternalBleedSource.PartDestroyed, bodyPart);
+                    }
+                    else if (PlateBloodManager.IsLimb(bodyPart))
+                    {
+                        __instance.DoBleed(true, bodyPart);
+                    }
                 }
 
                 PlateBloodManager.RequestRefresh(player); // push: instant CRIPPLED / jump ban

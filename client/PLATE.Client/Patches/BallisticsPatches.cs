@@ -288,9 +288,9 @@ namespace PLATE.Client.Patches
             var vital = VitalMult(bpc.BodyPartColliderType);
             __instance.Damage = d.DamageHp * vital * DamageScale(bpc.Player as Player);
 
-            Overlay.HitFeed.PushPanel(d.Contact
-                ? $"  W {bpc.BodyPartType}: contact {v:0} m/s -> {__instance.Damage:0.#}"
-                : $"  W {bpc.BodyPartColliderType}: {v:0} m/s, L {d.ChannelMm:0}" +
+            Overlay.HitFeed.PushHit(bpc.Player as Player, d.Contact
+                ? $"W {bpc.BodyPartType}: contact {v:0} m/s -> {__instance.Damage:0.#}"
+                : $"W {bpc.BodyPartColliderType}: {v:0} m/s, L {d.ChannelMm:0}" +
                   (exits ? $"/T {chordMm:0}" : "") +
                   $" mm, PC {d.Pc:0.#}+TC {d.Tc:0.#}" +
                   (vital > 1f ? $" x{vital:0.#}" : "") +
@@ -806,8 +806,10 @@ namespace PLATE.Client.Patches
                 }
 
                 RecordAbsorbedEnergy(armor, e); // all the energy goes into the armor
-                Overlay.HitFeed.PushPanel(
-                    $"  armor {armor.Template.ArmorMaterial} cl.{armor.ArmorClass}: " +
+                // the victim comes from this shot's own collider rather than _shotCtx:
+                // a stale frame there would put someone else's name on the line
+                Overlay.HitFeed.PushHit(bpc?.Player as Player,
+                    $"armor {armor.Template.ArmorMaterial} cl.{armor.ArmorClass}: " +
                     $"U {uHit:0.#}/{uLimit:0.#} J/mm²" +
                     (localMult < 1f ? $" (segment x{localMult:0.00})" : "") + " -> block");
                 return false;
@@ -832,8 +834,8 @@ namespace PLATE.Client.Patches
 
             RecordAbsorbedEnergy(armor, eCost); // the armor absorbed the penetration work
 
-            Overlay.HitFeed.PushPanel(
-                $"  armor {armor.Template.ArmorMaterial} cl.{armor.ArmorClass}: " +
+            Overlay.HitFeed.PushHit(bpc?.Player as Player,
+                $"armor {armor.Template.ArmorMaterial} cl.{armor.ArmorClass}: " +
                 $"U {uHit:0.#}/{uLimit:0.#}" +
                 (localMult < 1f ? $" (segment x{localMult:0.00})" : "") +
                 $" -> pierce, -{eCost:0} J, v {v:0}->{vOut:0}, X {x:0.00}->{xOut:0.00}");
@@ -1072,16 +1074,42 @@ namespace PLATE.Client.Patches
 
             damageInfo.Damage = dmg;
 
-            ApplyBabtEffects(_shotCtx.Victim, bc, bc1, bc2);
-            Overlay.HitFeed.PushPanel(
-                $"  BABT {armor.Template.ArmorMaterial} bc={bc:0.00} bfd={bfd:0}J " +
+            ApplyBabtEffects(_shotCtx.Victim, damageInfo.BodyPartColliderType, bc, bc1, bc2);
+            Overlay.HitFeed.PushHit(_shotCtx.Victim,
+                $"BABT {armor.Template.ArmorMaterial} bc={bc:0.00} bfd={bfd:0}J " +
                 $"D={dCm:0.#}cm bt={armor.BluntThroughput:0.###} -> dmg {dmg:0.#}");
         }
 
         private static int _babtFxFrame;
         private static Player _babtFxVictim;
 
-        private static void ApplyBabtEffects(Player victim, float bc, float bc1, float bc2)
+        /// <summary>
+        /// Limb hitboxes. Behind-armor trauma over one of these is soft armor on an arm
+        /// or a leg: the backface deformation bruises muscle, it does not rupture
+        /// anything into a cavity, so no internal bleed comes out of it. Anything not
+        /// listed counts as core — an unrecognised hitbox is far likelier to be a new
+        /// torso segment than a new limb.
+        /// </summary>
+        private static bool IsLimbZone(EBodyPartColliderType collider)
+        {
+            switch (collider)
+            {
+                case EBodyPartColliderType.LeftThigh:
+                case EBodyPartColliderType.RightThigh:
+                case EBodyPartColliderType.LeftCalf:
+                case EBodyPartColliderType.RightCalf:
+                case EBodyPartColliderType.LeftUpperArm:
+                case EBodyPartColliderType.RightUpperArm:
+                case EBodyPartColliderType.LeftForearm:
+                case EBodyPartColliderType.RightForearm:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static void ApplyBabtEffects(Player victim, EBodyPartColliderType collider,
+            float bc, float bc1, float bc2)
         {
             var ahc = victim?.ActiveHealthController;
             if (ahc == null)
@@ -1116,12 +1144,19 @@ namespace PLATE.Client.Patches
                 Blood.EffectUtil.Add(ahc, PatchTargets.TremorEffect, EBodyPart.Head, 8f, 1f);
             }
 
-            // internal bleeding: probability grows toward BC2 (100% there)
+            // internal bleeding: probability grows toward BC2 (100% there).
+            // Core zones only — a plate over the chest or a helmet transmits into a
+            // cavity, an arm panel does not (TODO: an intracranial bleed is not a
+            // volume problem at all — rising ICP, not hypovolemia; modelled as a drain
+            // for now, see docs/MODEL.md)
             if (PlateClientConfig.BloodEnabled.Value &&
+                !IsLimbZone(collider) &&
                 UnityEngine.Random.value < t &&
                 PlateClientConfig.BabtInternalBleedRate.Value > 0f)
             {
-                Blood.PlateBloodManager.AddInternal(victim, PlateClientConfig.BabtInternalBleedRate.Value);
+                Blood.PlateBloodManager.AddInternal(victim,
+                    PlateClientConfig.BabtInternalBleedRate.Value,
+                    Blood.EInternalBleedSource.Babt, collider: collider);
             }
 
             // severe BABT: lung contusion — winded for a long time
@@ -1277,8 +1312,8 @@ namespace PLATE.Client.Patches
                         : __instance.Vector3_1.normalized;
                     child.Vector3_1 = dir * Mathf.Max(vOut, 0.1f);
 
-                    Overlay.HitFeed.PushPanel(
-                        $"  v_out {vOut:0} m/s after {bpc.BodyPartType}");
+                    Overlay.HitFeed.PushHit(bpc.Player as Player,
+                        $"v_out {vOut:0} m/s after {bpc.BodyPartType}");
                     return;
                 }
 
