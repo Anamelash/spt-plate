@@ -153,7 +153,8 @@ public class ReferenceBookTests
     {
         foreach (var (name, w) in Shipped().Weapons)
         {
-            Assert.InRange(w.LengthMm, 50, 600);
+            // an MP5K is 115 mm at one end and an NSV is 1100 mm at the other
+            Assert.InRange(w.LengthMm, 50, 1200);
             Assert.False(string.IsNullOrWhiteSpace(w.Prototype), $"{name} has no prototype named");
         }
     }
