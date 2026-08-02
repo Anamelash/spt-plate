@@ -106,18 +106,25 @@ public class ArmorNormalizer(
             // density over face area is a thickness. Most of the armour here is invented
             // for the game and has no specification to look up — this is the only honest
             // number available for it, and it is still physics rather than a guess
-            var derived = spec == null ? DeriveThickness(p, material, reference) : 0;
+            var itemName = item.Name ?? "";
+            var derived = spec == null ? DeriveThickness(itemName, p, material, reference) : 0;
             var target = spec != null || derived > 0 ? known : unknown;
 
-            if (!target.TryGetValue(product, out var row))
+            // a documented product is one plate however many zones wear it, but two
+            // plates that merely share a product name are two plates: "granit4" covers a
+            // front and a side of different mass, and collapsing them keeps whichever
+            // was read last
+            var rowKey = derived > 0 ? itemName : product;
+
+            if (!target.TryGetValue(rowKey, out var row))
             {
                 row = new Row
                 {
-                    Product = product,
+                    Product = derived > 0 ? Shorten(itemName) : product,
                     Material = material,
                     Class = (int)(p.ArmorClass ?? 0),
                 };
-                target[product] = row;
+                target[rowKey] = row;
             }
 
             row.Zones++;
@@ -162,9 +169,17 @@ public class ArmorNormalizer(
     /// (ρ·A). Returns 0 when the item has no mass of its own — soft armour built into a
     /// vest weighs nothing here, its mass lives on the vest.
     /// </summary>
-    private static double DeriveThickness(TemplateItemProperties p, string material,
-        ReferenceBook.AmmoReference reference)
+    private static double DeriveThickness(string itemName, TemplateItemProperties p,
+        string material, ReferenceBook.AmmoReference reference)
     {
+        // plates only. The face-area convention is about plates, and a balaclava run
+        // through it came out as 17 mm of polyethylene: its mass is fabric spread over
+        // a head, not a hard element spread over a plate
+        if (!itemName.StartsWith("item_equipment_plate_", StringComparison.OrdinalIgnoreCase))
+        {
+            return 0;
+        }
+
         var kg = p.Weight ?? 0;
         if (kg <= 0 || !reference.ArmorMaterials.TryGetValue(material, out var m) ||
             m.DensityGCm3 <= 0)
@@ -182,6 +197,15 @@ public class ArmorNormalizer(
         var hardGrams = kg * 1000.0 * m.HardMassFraction;
         var densityGMm3 = m.DensityGCm3 / 1000.0;
         return hardGrams / (densityGMm3 * areaMm2);
+    }
+
+    /// <summary>Drops the shared prefix so the report reads as plate names.</summary>
+    private static string Shorten(string itemName)
+    {
+        const string platePrefix = "item_equipment_plate_";
+        return itemName.StartsWith(platePrefix, StringComparison.OrdinalIgnoreCase)
+            ? itemName.Substring(platePrefix.Length)
+            : itemName;
     }
 
     /// <summary>
