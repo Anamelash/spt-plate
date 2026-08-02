@@ -255,16 +255,22 @@ public class ReferenceBookTests
 
         foreach (var (name, plate) in Shipped().ArmorPlates)
         {
-            if (plate.ThicknessMm <= 0 || plate.Material.Length == 0)
+            if (plate.ThicknessMm <= 0)
             {
                 continue;
             }
+
+            // an entry that gives a thickness has to say what the thickness is of, or
+            // this check cannot run on it and the figure goes unwatched
+            Assert.True(plate.Material.Length > 0, $"{name}: a thickness and no material");
 
             var density = plate.DensityGCm3 > 0
                 ? plate.DensityGCm3
                 : materials[plate.Material].DensityGCm3;
 
-            // mm * g/cm³ -> g/cm² is a tenth
+            // mm * g/cm³ -> g/cm² is a tenth. The top of the range is the Korund-VM
+            // steel panel at 4.95, which is about as much as anyone has ever agreed to
+            // carry over one dm² of themselves
             var arealGCm2 = plate.ThicknessMm * density / 10.0;
             Assert.InRange(arealGCm2, 0.3, 5.0);
         }

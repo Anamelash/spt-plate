@@ -540,14 +540,23 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // shell that measures 7.3 +/- 0.8.
           "ArmorPlates": {
             // --- vests ---
-            "6b5-16":     { "Prototype": "6B5-16, ADU 605T-83", "ThicknessMm": 6.5, "BackingMm": 8,
+            "6b5-16":     { "Prototype": "6B5-16, ADU 605T-83", "Material": "Titan", "ThicknessMm": 6.5, "BackingMm": 8,
                             "Source": "titanium 6.5 mm + 30-layer TSVM-DZh package" },
-            "6b5-15":     { "Prototype": "6B5-15, ADU 14.20.00.000", "ThicknessMm": 13, "BackingMm": 8,
-                            "Source": "boron carbide 13 mm + fabric package" },
-            "6b3TM":      { "Prototype": "6B3TM, ADU 605-80", "ThicknessMm": 1.25, "BackingMm": 8,
-                            "Source": "titanium 1.25 mm anti-fragmentation element" },
-            "kora_kulon": { "Prototype": "Kora-Kulon", "ThicknessMm": 4.3, "BackingMm": 6,
+            "6b5-15":     { "Prototype": "6B5-15, ADU 14.20.00.000", "Material": "Ceramic", "ThicknessMm": 13, "BackingMm": 8,
+                            "DensityGCm3": 2.52,
+                            "Source": "boron carbide 13 mm, 17-20 tiles a side, on a fabric package" },
+            "kora_kulon": { "Prototype": "Kora-Kulon", "Material": "ArmoredSteel", "ThicknessMm": 4.3, "BackingMm": 6,
                             "Source": "steel plate, Br3" },
+
+            // the 6B3TM-01 is two different vests front and back, and the game splits it
+            // the same way: class 4 in front, class 2 behind. One entry for the pair gave
+            // the front the back's plate and made it five times too thin
+            "6b3TM":      { "Prototype": "6B3TM-01, VT-23", "Material": "Titan", "ThicknessMm": 6.5, "BackingMm": 8,
+                            "Source": "12-15 tiles of 6.5 mm VT-23 titanium" },
+            "6b3TM_level2_soft_armor_back": { "Prototype": "6B3TM-01 back, VT-14", "Material": "Titan", "ThicknessMm": 1.25, "BackingMm": 8,
+                            "Source": "the -01 swaps the back for 7 tiles of 1.25 mm VT-14" },
+            "6b3TM_level2_soft_armor_groin_back": { "Prototype": "6B3TM-01 back, VT-14", "Material": "Titan", "ThicknessMm": 1.25, "BackingMm": 8,
+                            "Source": "the -01 swaps the back for 7 tiles of 1.25 mm VT-14" },
 
             // --- plates ---
             "sapi_6_frontback":         { "Prototype": "ESAPI", "Material": "Ceramic", "ThicknessMm": 10, "BackingMm": 12,
@@ -580,6 +589,12 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                           "Source": "260x260x23 mm ceramic panel, 2.5 kg" },
             "korund_back_6b23_2":       { "Prototype": "6B23 steel panel, 44S", "Material": "ArmoredSteel", "ThicknessMm": 6.3,
                                           "Source": "6.3 mm of 44S steel, rated against the heat-hardened AKM core" },
+            "korund":                   { "Prototype": "Korund-VM steel panel", "Material": "ArmoredSteel", "ThicknessMm": 6.3,
+                                          "Source": "Br4 steel; 15.9 dm2 of panel at 6.3 mm is 7.9 kg of the vest's 9.8" },
+            "korund_vm":                { "Prototype": "Korund-VM steel panel", "Material": "ArmoredSteel", "ThicknessMm": 6.3,
+                                          "Source": "Br4 steel; 15.9 dm2 of panel at 6.3 mm is 7.9 kg of the vest's 9.8" },
+            "korund_6b12":              { "Prototype": "6B12 chest plate", "Material": "ArmoredSteel", "ThicknessMm": 6,
+                                          "Source": "the 6B12 chest and abdomen plates are 6 mm of steel; the back one is 2" },
 
             // --- helmets: aramid shells ---
             "Untar":            { "Prototype": "PASGT", "Material": "Aramid", "ThicknessMm": 7.8,
@@ -688,9 +703,9 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             // --- helmets with no ballistic rating at all ---
             // Both are sold against blunt and edged attack. The game gives them a class
             // anyway; what the manufacturer certifies is a 30 J strike and a knife
-            "kolpak_1s_4ml":    { "Prototype": "Kolpak-1S", "ThicknessMm": 3,
+            "kolpak_1s_4ml":    { "Prototype": "Kolpak-1S", "Material": "Aramid", "ThicknessMm": 3,
                                   "Source": "impact helmet: the GOST special class is edged weapons, there is no ballistic rating" },
-            "djeta_psh97":      { "Prototype": "PSh-97 Djeta", "ThicknessMm": 3,
+            "djeta_psh97":      { "Prototype": "PSh-97 Djeta", "Material": "Aramid", "ThicknessMm": 3,
                                   "Source": "police impact helmet, 30 J blunt strike; no ballistic rating" }
           },
 
@@ -763,13 +778,8 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "item_equipment_helmet_galvion_applique": "no mass published for the applique",
             "item_equipment_helmet_k1c_shield": "no construction published",
 
-            // steel panels are the one part of the Russian catalogue nobody prints a
-            // mass for - the ceramic ones are all on the retailers' pages to the gram
-            "korund":                 "steel panel; KlASS publish a class and no mass",
-            "korund_vm":              "steel panel; KlASS publish a class and no mass",
-            "korund_6b12":            "steel panel; the 6B12 mass is quoted for the whole vest",
             "granit4_4class_diy_back": "a cut-down panel, not a product",
-            "granit4_6b33_4class_front": "steel panel; the 6B33 mass is quoted for the whole vest",
+            "granit4_6b33_4class_front": "the 6B33 quotes a vest mass and a class, and no plate",
             "SSAPI_5_side":           "the plain SAPI side, and sources disagree on whether it is alumina or boron carbide",
 
             // eyewear and masks
