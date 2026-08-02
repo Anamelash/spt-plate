@@ -208,6 +208,59 @@ public class ReferenceBookTests
         }
     }
 
+    /// <summary>
+    /// The stand-in plate for a rating has to exist for every rating the game actually
+    /// ships, or the armour it invented falls through to its own mass — which any mod
+    /// that scales weight quietly rewrites.
+    /// </summary>
+    [Fact]
+    public void Every_rating_the_game_ships_has_a_reference_plate()
+    {
+        var byClass = Shipped().ArmorByClass;
+        var materials = Shipped().ArmorMaterials;
+
+        string[] shipped =
+        [
+            "ArmoredSteel/3", "ArmoredSteel/4", "ArmoredSteel/5", "ArmoredSteel/6",
+            "Ceramic/4", "Ceramic/5", "Ceramic/6",
+            "Combined/3", "Combined/4", "Combined/5", "Combined/6",
+            "Titan/4", "Titan/5", "Titan/6",
+            "UHMWPE/3", "UHMWPE/4", "UHMWPE/5", "UHMWPE/6",
+            "Aluminium/4",
+        ];
+
+        foreach (var key in shipped)
+        {
+            Assert.True(byClass.ContainsKey(key), $"no reference plate for {key}");
+            Assert.InRange(byClass[key].ThicknessMm, 1, 60);
+            Assert.True(materials.ContainsKey(key.Split('/')[0]), $"{key}: unknown material");
+        }
+    }
+
+    /// <summary>
+    /// A higher rating in the same material is a thicker plate. If it is not, the class
+    /// reference will make some armour weaker than the armour it outranks.
+    /// </summary>
+    [Fact]
+    public void A_higher_class_of_the_same_material_is_thicker()
+    {
+        var byClass = Shipped().ArmorByClass;
+
+        foreach (var group in byClass.GroupBy(kv => kv.Key.Split('/')[0]))
+        {
+            var ladder = group
+                .Select(kv => (Class: int.Parse(kv.Key.Split('/')[1]), kv.Value.ThicknessMm))
+                .OrderBy(x => x.Class)
+                .ToList();
+
+            for (var i = 1; i < ladder.Count; i++)
+            {
+                Assert.True(ladder[i].ThicknessMm > ladder[i - 1].ThicknessMm,
+                    $"{group.Key}: class {ladder[i].Class} is not thicker than {ladder[i - 1].Class}");
+            }
+        }
+    }
+
     [Fact]
     public void Integral_barrel_weapons_have_plausible_lengths()
     {

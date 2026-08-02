@@ -165,6 +165,12 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         public Dictionary<string, ArmorPlateRef> ArmorPlates { get; set; } = new();
 
         /// <summary>
+        /// Key — "Material/Class". The plate a real one of that rating would be, used for
+        /// the ones the game invented.
+        /// </summary>
+        public Dictionary<string, ArmorPlateRef> ArmorByClass { get; set; } = new();
+
+        /// <summary>
         /// Key — the weapon template's _name. Only for weapons whose barrel does not
         /// come off, so its length cannot be read from a barrel item.
         /// </summary>
@@ -272,6 +278,12 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         {
             loaded.ArmorPlates = Shipped().ArmorPlates;
             filled.Add(nameof(loaded.ArmorPlates));
+        }
+
+        if (loaded.ArmorByClass.Count == 0)
+        {
+            loaded.ArmorByClass = Shipped().ArmorByClass;
+            filled.Add(nameof(loaded.ArmorByClass));
         }
 
         return filled;
@@ -492,6 +504,50 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                             "Source": "titanium 1.25 mm anti-fragmentation element" },
             "kora_kulon": { "Prototype": "Kora-Kulon", "ThicknessMm": 4.3, "BackingMm": 6,
                             "Source": "steel plate, Br3" }
+          },
+
+          // ===== Reference plate per material and class =====
+          // Most of the armour in the game is invented for it, so there is no product to
+          // look up. What there is, for every rating, is a real plate that does the same
+          // job — and that is what an invented one is standing in for. Keyed
+          // "Material/Class"; a documented product always wins over this.
+          "ArmorByClass": {
+            "ArmoredSteel/3": { "Prototype": "thin armour steel, Br3", "ThicknessMm": 4.5 },
+            "ArmoredSteel/4": { "Prototype": "armour steel, Br4",      "ThicknessMm": 5.5 },
+            "ArmoredSteel/5": { "Prototype": "AR500, NIJ III",         "ThicknessMm": 6.35,
+                                "Source": "0.25 in is the standard Level III steel plate" },
+            "ArmoredSteel/6": { "Prototype": "armour steel, III+",     "ThicknessMm": 8.0 },
+
+            "Ceramic/4":      { "Prototype": "alumina, SAPI class",    "ThicknessMm": 7.0 },
+            "Ceramic/5":      { "Prototype": "SAPI, silicon carbide",  "ThicknessMm": 8.5 },
+            "Ceramic/6":      { "Prototype": "ESAPI, boron carbide",   "ThicknessMm": 10.0,
+                                "Source": "ESAPI is 10 mm of boron carbide on a UHMWPE backer" },
+
+            "Combined/3":     { "Prototype": "ceramic face, Br3",      "ThicknessMm": 6.0 },
+            "Combined/4":     { "Prototype": "ceramic face, Br4",      "ThicknessMm": 7.0 },
+            "Combined/5":     { "Prototype": "ceramic face, Br5",      "ThicknessMm": 8.5 },
+            "Combined/6":     { "Prototype": "ceramic face, Br6",      "ThicknessMm": 10.0 },
+
+            "Titan/4":        { "Prototype": "titanium, Br4",          "ThicknessMm": 8.0 },
+            "Titan/5":        { "Prototype": "titanium, Br5",          "ThicknessMm": 10.0 },
+            "Titan/6":        { "Prototype": "titanium, Br6",          "ThicknessMm": 13.0 },
+
+            // polyethylene stops by encapsulating the round, so it needs far more of
+            // itself than a hard face does
+            "UHMWPE/3":       { "Prototype": "UHMWPE monolith, Br3",   "ThicknessMm": 20.0 },
+            "UHMWPE/4":       { "Prototype": "UHMWPE monolith, Br4",   "ThicknessMm": 25.0 },
+            "UHMWPE/5":       { "Prototype": "UHMWPE monolith, NIJ III", "ThicknessMm": 33.0,
+                                "Source": "standalone Level III polyethylene plate, 1.3 in" },
+            "UHMWPE/6":       { "Prototype": "UHMWPE monolith, Br6",   "ThicknessMm": 38.0 },
+
+            "Aluminium/4":    { "Prototype": "aluminium armour, Br4",  "ThicknessMm": 20.0 },
+            "Glass/4":        { "Prototype": "laminated ballistic glass", "ThicknessMm": 25.0 },
+            "Glass/5":        { "Prototype": "laminated ballistic glass", "ThicknessMm": 30.0 },
+            "Glass/6":        { "Prototype": "laminated ballistic glass", "ThicknessMm": 35.0 },
+            "Aramid/3":       { "Prototype": "aramid pack, Br3",       "ThicknessMm": 12.0 },
+            "Aramid/4":       { "Prototype": "aramid pack, Br4",       "ThicknessMm": 16.0 },
+            "Aramid/5":       { "Prototype": "aramid pack, Br5",       "ThicknessMm": 20.0 },
+            "Aramid/6":       { "Prototype": "aramid pack, Br6",       "ThicknessMm": 24.0 }
           },
 
           // Blast anchor: Strength_i = Strength_anchor * (TntG_i / TntG_anchor)^(1/3)

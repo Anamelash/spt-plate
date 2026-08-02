@@ -107,22 +107,32 @@ public class ArmorNormalizer(
             // for the game and has no specification to look up — this is the only honest
             // number available for it, and it is still physics rather than a guess
             var itemName = item.Name ?? "";
-            var derived = spec == null ? DeriveThickness(itemName, p, material, reference) : 0;
-            var target = spec != null || derived > 0 ? known : unknown;
+            var cls = (int)(p.ArmorClass ?? 0);
+
+            // a plate the game invented has no product to look up, but there is a real
+            // plate of the same rating doing the same job, and that is what it stands in
+            // for. Mass only decides it when even that is missing
+            var byClass = spec == null ? ClassReference(reference, material, cls) : null;
+            var derived = spec == null && byClass == null
+                ? DeriveThickness(itemName, p, material, reference)
+                : 0;
+
+            var target = spec != null || byClass != null || derived > 0 ? known : unknown;
 
             // a documented product is one plate however many zones wear it, but two
             // plates that merely share a product name are two plates: "granit4" covers a
             // front and a side of different mass, and collapsing them keeps whichever
             // was read last
-            var rowKey = derived > 0 ? itemName : product;
+            var perItem = derived > 0 || byClass != null;
+            var rowKey = perItem ? itemName : product;
 
             if (!target.TryGetValue(rowKey, out var row))
             {
                 row = new Row
                 {
-                    Product = derived > 0 ? Shorten(itemName) : product,
+                    Product = perItem ? Shorten(itemName) : product,
                     Material = material,
-                    Class = (int)(p.ArmorClass ?? 0),
+                    Class = cls,
                 };
                 target[rowKey] = row;
             }
@@ -131,7 +141,16 @@ public class ArmorNormalizer(
 
             if (spec == null)
             {
-                if (derived > 0)
+                if (byClass != null)
+                {
+                    row.Prototype = byClass.Prototype;
+                    row.ThicknessMm = byClass.ThicknessMm;
+                    row.Source = byClass.Source.Length > 0
+                        ? byClass.Source
+                        : $"reference plate for {material} class {cls}";
+                    _thickness[item.Id] = byClass.ThicknessMm;
+                }
+                else if (derived > 0)
                 {
                     row.Derived = true;
                     row.ThicknessMm = derived;
@@ -197,6 +216,13 @@ public class ArmorNormalizer(
         var hardGrams = kg * 1000.0 * m.HardMassFraction;
         var densityGMm3 = m.DensityGCm3 / 1000.0;
         return hardGrams / (densityGMm3 * areaMm2);
+    }
+
+    /// <summary>The real plate of this rating, or null when we have not named one.</summary>
+    private static ReferenceBook.ArmorPlateRef? ClassReference(
+        ReferenceBook.AmmoReference reference, string material, int cls)
+    {
+        return reference.ArmorByClass.TryGetValue($"{material}/{cls}", out var r) ? r : null;
     }
 
     /// <summary>Drops the shared prefix so the report reads as plate names.</summary>
