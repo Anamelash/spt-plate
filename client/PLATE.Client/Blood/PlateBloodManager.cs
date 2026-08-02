@@ -8,12 +8,64 @@ using UnityEngine;
 
 namespace PLATE.Client.Blood
 {
+    /// <summary>
+    /// What opened an internal bleed. Every source here is a vessel inside a body
+    /// cavity: no dressing, tourniquet or hemostatic reaches those, which is what
+    /// separates them from the external bleeds vanilla already models.
+    /// </summary>
+    internal enum EInternalBleedSource
+    {
+        /// <summary>Cavity vessels of a destroyed body part (stomach: aorta / vena cava).</summary>
+        PartDestroyed,
+
+        /// <summary>Behind-armor blunt trauma: vessels torn under an intact plate.</summary>
+        Babt,
+
+        /// <summary>Blast barotrauma.</summary>
+        Blast,
+    }
+
+    /// <summary>
+    /// One internal bleed, kept per causing hit rather than merged into a running
+    /// total. A single number cannot answer the only question a bug report ever
+    /// asks — where is this blood going.
+    /// </summary>
+    internal struct InternalBleed
+    {
+        public EInternalBleedSource Source;
+
+        /// <summary>Body part, when the source works in those terms (a destroyed part, a blast).</summary>
+        public EBodyPart? Part;
+
+        /// <summary>Hit zone, when the source knows one (BABT).</summary>
+        public EBodyPartColliderType? Collider;
+        public float MlSec;
+        public float StartedAt;
+
+        /// <summary>
+        /// Whichever of the two the source actually knew. Neither is derived from the
+        /// other: the collider-to-part mapping is the game's, not ours, and a guess here
+        /// would put invented anatomy into the one line a bug report is read from.
+        /// </summary>
+        public string Zone =>
+            Collider.HasValue ? Collider.Value.ToString()
+            : Part.HasValue ? Part.Value.ToString()
+            : "?";
+
+        public override string ToString() => $"{MlSec:0.#} ml/s {Source} ({Zone})";
+    }
+
     internal class BloodState
     {
         public Player Player;
         public float Cur;
         public float Max;
-        public float InternalMlSec;      // internal bleedings (not stopped by a tourniquet)
+
+        /// <summary>Open internal bleeds, one entry per causing hit. No field medicine closes these.</summary>
+        public readonly List<InternalBleed> InternalBleeds = new List<InternalBleed>();
+
+        /// <summary>Cached sum over <see cref="InternalBleeds"/> — the tick reads it every frame.</summary>
+        public float InternalMlSec;
         public float PendingExternalMl;  // accumulated by the bleeding patches during the frame
         public float LastExternalDrainAt; // to pause passive regeneration
         public int Tier;                  // 0..3
@@ -121,7 +173,8 @@ namespace PLATE.Client.Blood
                 PlateClientConfig.InternalBleedScav.Value);
         }
 
-        public static void AddInternal(Player player, float mlSec)
+        public static void AddInternal(Player player, float mlSec, EInternalBleedSource source,
+            EBodyPart? part = null, EBodyPartColliderType? collider = null)
         {
             var s = GetOrCreate(player);
             if (s == null || s.Dead)
@@ -134,9 +187,39 @@ namespace PLATE.Client.Blood
                 return;
             }
 
+            var bleed = new InternalBleed
+            {
+                Source = source,
+                Part = part,
+                Collider = collider,
+                MlSec = mlSec,
+                StartedAt = Time.time,
+            };
+            s.InternalBleeds.Add(bleed);
             s.InternalMlSec += mlSec;
-            HitFeed.PushPanel($"{OverlayHud.NameOf(player)} +internal bleeding {mlSec:0.#} ml/s " +
-                              $"(total {s.InternalMlSec:0.#})");
+
+            HitFeed.PushPanel($"{OverlayHud.NameOf(player)} +internal bleeding {bleed} " +
+                              $"(total {s.InternalMlSec:0.#} ml/s)");
+        }
+
+        /// <summary>
+        /// The open internal bleeds, one line. Printed next to every threshold change so
+        /// that a journal shows the cause of the drain right beside the symptom.
+        /// </summary>
+        public static string InternalSummary(BloodState s)
+        {
+            if (s == null || s.InternalBleeds.Count == 0)
+            {
+                return "none";
+            }
+
+            var parts = new string[s.InternalBleeds.Count];
+            for (var i = 0; i < s.InternalBleeds.Count; i++)
+            {
+                parts[i] = s.InternalBleeds[i].ToString();
+            }
+
+            return string.Join(" + ", parts);
         }
 
         /// <summary>
@@ -221,22 +304,26 @@ namespace PLATE.Client.Blood
                 PlateClientConfig.BleedRateScav.Value);
         }
 
-        /// <summary>Internal bleed rate when a body part gets destroyed.</summary>
+        /// <summary>
+        /// Internal bleed rate when a body part gets destroyed.
+        ///
+        /// Only the abdomen qualifies: its vessels (aorta, vena cava, iliacs) bleed into
+        /// a cavity nothing in a med pouch can reach. A destroyed limb bleeds from the
+        /// femoral or brachial bundle, which is exactly what a tourniquet or a hemostatic
+        /// is for — that case is a heavy external bleed instead (see PartDestroyedPostfix),
+        /// and the arterial branch of it already lives in the bleed-rate table.
+        /// </summary>
         public static float DestroyedPartBleed(EBodyPart part)
         {
-            switch (part)
-            {
-                case EBodyPart.Stomach:
-                    return PlateClientConfig.StomachDestroyedBleed.Value;
-                case EBodyPart.LeftLeg:
-                case EBodyPart.RightLeg:
-                    return PlateClientConfig.LegDestroyedBleed.Value;
-                case EBodyPart.LeftArm:
-                case EBodyPart.RightArm:
-                    return PlateClientConfig.ArmDestroyedBleed.Value;
-                default:
-                    return 0f; // head/thorax — vanilla kills instantly anyway
-            }
+            // head/thorax are absent as well — vanilla kills instantly anyway
+            return part == EBodyPart.Stomach ? PlateClientConfig.StomachDestroyedBleed.Value : 0f;
+        }
+
+        /// <summary>Limbs: a destroyed one bleeds externally, and can be treated.</summary>
+        public static bool IsLimb(EBodyPart part)
+        {
+            return part == EBodyPart.LeftLeg || part == EBodyPart.RightLeg ||
+                   part == EBodyPart.LeftArm || part == EBodyPart.RightArm;
         }
 
         public static void TickAll(float dt)
@@ -500,7 +587,8 @@ namespace PLATE.Client.Blood
             ApplyStamina(s);
 
             var bp = (int)PressurePct(s);
-            HitFeed.PushPanel($"{OverlayHud.NameOf(s.Player)} BP {bp}% ({s.Cur:0} ml) -> tier {newTier}");
+            HitFeed.PushPanel($"{OverlayHud.NameOf(s.Player)} BP {bp}% ({s.Cur:0} ml) -> tier {newTier}" +
+                              (s.InternalBleeds.Count > 0 ? $", internal: {InternalSummary(s)}" : ""));
             if (!s.Player.IsYourPlayer)
             {
                 HitFeed.PushFloat(s.Player.ProfileId, s.Player.Position + Vector3.up * 1.6f,

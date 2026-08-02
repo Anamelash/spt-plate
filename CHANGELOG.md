@@ -153,15 +153,17 @@ own resource, and it kills you on its own terms.
   break contact — both of them quietly bleeding out over the next minute is a
   perfectly normal outcome. Winning the gunfight and losing the raid is a thing
   that happens now, to you and to them.
-- **Pack for it.** Bandages and tourniquets are the only thing that closes a
-  bleed, painkillers take the edge off what wounds and fractures do to your
+- **Pack for it.** Dressings, tourniquets and hemostatics are the only thing that
+  closes a bleed, painkillers take the edge off what wounds and fractures do to your
   hands, and a blood transfusion kit (sold by Therapist, craftable at the med
   station) is the only way to put volume back in during a raid. Going in light
   on medical is now a real decision, not a slot you skipped.
 - Fractures come from actual bone hits with energy behind them, not from a
   damage-number lottery.
-- Destroyed body parts cause internal bleeding; nearby explosions can add blast
-  barotrauma.
+- A destroyed abdomen bleeds into the belly, behind-armor trauma to the torso or
+  head bleeds into a cavity, and nearby explosions can add blast barotrauma —
+  none of those three can be closed in the field. A destroyed limb bleeds hard
+  but out in the open, so a tourniquet or a hemostatic still answers it.
 - Blood carries over between raids and regenerates slowly out of raid — walking
   out of one fight half-empty is a problem you take with you into the next one.
 
@@ -202,6 +204,23 @@ broken — results in combination with PLATE. Mods that overhaul the same system
 (Fika) is untested.
 
 ## Release history
+
+### Unreleased
+
+- **A destroyed arm or leg now bleeds externally instead of internally.** It used
+  to open a permanent internal bleed, which put a femoral or brachial wound —
+  the textbook indication for a tourniquet, and what a hemostatic is carried
+  for — beyond the reach of every item that exists to treat it. Black out a leg,
+  patch it, and you were still on a countdown to bleeding out with nothing you
+  could do about it. The wound is still severe; it is now treatable. A destroyed
+  abdomen is unchanged and still internal.
+- Behind-armor trauma only causes internal bleeding on the torso and head. Soft
+  armor over an arm bruises muscle; it does not tear anything into a cavity.
+- Retired the "Leg destroyed bleed" and "Arm destroyed bleed" settings — those
+  wounds now use the ordinary heavy-bleed rates for a leg and an arm.
+- The event journal names the victim on every hit line, and every internal bleed
+  is recorded with the zone that opened it. Anonymous hit lines in a raid full of
+  parallel fights read as yours when they belong to someone across the map.
 
 ### 0.9.5
 

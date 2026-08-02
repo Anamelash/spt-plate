@@ -108,6 +108,20 @@ namespace PLATE.Client.Overlay
             }
         }
 
+        /// <summary>
+        /// A sub-line of one shot: armor, wound channel, BABT, exit speed.
+        ///
+        /// The victim's name belongs on every one of them. Several fights run in
+        /// parallel in any raid and the journal interleaves them frame by frame, so an
+        /// anonymous "  armor Ceramic cl.4 -> block" sitting above your own event reads
+        /// as yours when it belongs to someone across the map. That has already cost one
+        /// bug report its diagnosis.
+        /// </summary>
+        public static void PushHit(EFT.Player victim, string line)
+        {
+            PushPanel($"  {OverlayHud.NameOf(victim)} | {line}");
+        }
+
         public static void PushPanel(string line)
         {
             var stamped = $"[{DateTime.Now:HH:mm:ss.f}] {line}";
