@@ -142,10 +142,70 @@ public class ReferenceBookTests
 
         Assert.Contains("Barrels", filled);
         Assert.Contains("Weapons", filled);
+        Assert.Contains("ArmorMaterials", filled);
+        Assert.Contains("ArmorPlates", filled);
         Assert.True(old.Barrels.ContainsKey("Caliber762x51"));
 
         // and the section it did have is left exactly as the user had it
         Assert.Single(old.Shotshells);
+    }
+
+    /// <summary>
+    /// Each material class is answered by a different penetration mechanism, so each has
+    /// to carry the properties its own mechanism consumes. A ceramic listed with a shear
+    /// strength and no compressive strength reads as zero resistance the moment the
+    /// model starts using it.
+    /// </summary>
+    [Fact]
+    public void Every_armour_material_carries_what_its_class_needs()
+    {
+        var materials = Shipped().ArmorMaterials;
+        Assert.NotEmpty(materials);
+
+        foreach (var (name, m) in materials)
+        {
+            Assert.InRange(m.DensityGCm3, 0.5, 20);
+
+            switch (m.Class)
+            {
+                case "Ductile":
+                    Assert.True(m.YieldMPa > 0 && m.ShearMPa > 0, $"{name}: no strength to punch through");
+                    Assert.True(m.ShearMPa < m.YieldMPa, $"{name}: shear should be below yield");
+                    break;
+                case "Brittle":
+                    Assert.True(m.CompressiveMPa > 0, $"{name}: a ceramic resists in compression");
+                    break;
+                case "Fibrous":
+                    Assert.True(m.FibreTensileMPa > 0, $"{name}: a fibre resists in tension");
+                    Assert.InRange(m.FailureStrain, 0.001, 0.5);
+                    break;
+                default:
+                    Assert.Fail($"{name}: unknown material class '{m.Class}'");
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Thickness is the entire reason the plate table exists — the one physical number
+    /// the game has nowhere — so an entry without it carries nothing.
+    /// </summary>
+    [Fact]
+    public void Every_armour_product_states_a_thickness_and_a_source()
+    {
+        var materials = Shipped().ArmorMaterials;
+
+        foreach (var (name, plate) in Shipped().ArmorPlates)
+        {
+            Assert.InRange(plate.ThicknessMm, 0.5, 60);
+            Assert.False(string.IsNullOrWhiteSpace(plate.Source), $"{name}: no source for the figures");
+
+            if (plate.Material.Length > 0)
+            {
+                Assert.True(materials.ContainsKey(plate.Material),
+                    $"{name}: overrides the material to '{plate.Material}', which is not in the table");
+            }
+        }
     }
 
     [Fact]

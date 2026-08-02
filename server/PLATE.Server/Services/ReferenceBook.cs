@@ -86,6 +86,60 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         public double LengthMm { get; set; }
     }
 
+    /// <summary>
+    /// Physical properties of an armour material. Which of them matter depends on how
+    /// the material fails, so each carries only what its own class of penetration
+    /// mechanics consumes — a shear strength means nothing for a ceramic and a
+    /// compressive strength means nothing for a woven fibre.
+    /// </summary>
+    public class ArmorMaterialRef
+    {
+        /// <summary>Ductile | Brittle | Fibrous — decides which penetration model applies.</summary>
+        public string Class { get; set; } = "Ductile";
+
+        /// <summary>g/cm³.</summary>
+        public double DensityGCm3 { get; set; }
+
+        /// <summary>Ductile: yield strength, MPa.</summary>
+        public double YieldMPa { get; set; }
+
+        /// <summary>Ductile: ultimate shear strength, MPa — the plug-punching term.</summary>
+        public double ShearMPa { get; set; }
+
+        /// <summary>Brittle: compressive strength, MPa — what a ceramic actually resists with.</summary>
+        public double CompressiveMPa { get; set; }
+
+        /// <summary>Fibrous: fibre tensile strength, MPa.</summary>
+        public double FibreTensileMPa { get; set; }
+
+        /// <summary>Fibrous: strain to failure, fraction — how far the cone stretches.</summary>
+        public double FailureStrain { get; set; }
+
+        public string Source { get; set; } = "";
+    }
+
+    /// <summary>
+    /// What a piece of armour is really made of. Keyed by the product, not by the
+    /// in-game class: the class is a consequence of the construction, not its cause,
+    /// and mods move it around freely. One entry covers every zone of the product —
+    /// front, back, side, groin are the same plate.
+    /// </summary>
+    public class ArmorPlateRef
+    {
+        public string Prototype { get; set; } = "";
+
+        /// <summary>Overrides the game's material only when it is wrong; empty = keep it.</summary>
+        public string Material { get; set; } = "";
+
+        /// <summary>Thickness of the hard element, mm. This is what the game has nowhere.</summary>
+        public double ThicknessMm { get; set; }
+
+        /// <summary>Backing package behind the plate, mm of fibre (0 = none).</summary>
+        public double BackingMm { get; set; }
+
+        public string Source { get; set; } = "";
+    }
+
     public class AmmoReference
     {
         /// <summary>Key — the cartridge template's _name in the DB.</summary>
@@ -96,6 +150,12 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
 
         /// <summary>Key — the caliber id (ammoCaliber on the weapon template).</summary>
         public Dictionary<string, BarrelRef> Barrels { get; set; } = new();
+
+        /// <summary>Key — the game's ArmorMaterial id.</summary>
+        public Dictionary<string, ArmorMaterialRef> ArmorMaterials { get; set; } = new();
+
+        /// <summary>Key — the armour product, the item name up to "_level".</summary>
+        public Dictionary<string, ArmorPlateRef> ArmorPlates { get; set; } = new();
 
         /// <summary>
         /// Key — the weapon template's _name. Only for weapons whose barrel does not
@@ -193,6 +253,18 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         {
             loaded.Weapons = Shipped().Weapons;
             filled.Add(nameof(loaded.Weapons));
+        }
+
+        if (loaded.ArmorMaterials.Count == 0)
+        {
+            loaded.ArmorMaterials = Shipped().ArmorMaterials;
+            filled.Add(nameof(loaded.ArmorMaterials));
+        }
+
+        if (loaded.ArmorPlates.Count == 0)
+        {
+            loaded.ArmorPlates = Shipped().ArmorPlates;
+            filled.Add(nameof(loaded.ArmorPlates));
         }
 
         return filled;
@@ -371,6 +443,48 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "weapon_kiba_saiga12k_fa_12g":    { "Prototype": "Saiga-12K FA", "LengthMm": 430 },
             "weapon_toz_toz-106_20g":         { "Prototype": "TOZ-106", "LengthMm": 200 },
             "weapon_aklys_defense_velociraptor_762x35": { "Prototype": "Velociraptor 9\"", "LengthMm": 229 }
+          },
+
+          // ===== Armour materials =====
+          // Class decides which penetration mechanics apply, and therefore which of the
+          // numbers below are even meaningful. A shear strength says nothing about a
+          // ceramic; a compressive strength says nothing about a woven fibre.
+          //   Ductile — metals: the projectile punches a plug and pushes material aside
+          //   Brittle — ceramics: a fracture conoid forms and erodes the projectile
+          //   Fibrous — aramid/UHMWPE: a cone of fibres stretches until it fails
+          "ArmorMaterials": {
+            "ArmoredSteel": { "Class": "Ductile", "DensityGCm3": 7.85, "YieldMPa": 1250, "ShearMPa": 750,
+                              "Source": "RHA / armour steel ~500 HB" },
+            "Titan":        { "Class": "Ductile", "DensityGCm3": 4.43, "YieldMPa": 880,  "ShearMPa": 550,
+                              "Source": "Ti-6Al-4V, 334 HB, UTS 950 MPa" },
+            "Aluminium":    { "Class": "Ductile", "DensityGCm3": 2.70, "YieldMPa": 300,  "ShearMPa": 190,
+                              "Source": "5083/7039 armour plate" },
+            "Ceramic":      { "Class": "Brittle", "DensityGCm3": 3.90, "CompressiveMPa": 2500,
+                              "Source": "Al2O3 alumina" },
+            "Combined":     { "Class": "Brittle", "DensityGCm3": 3.20, "CompressiveMPa": 2600,
+                              "Source": "ceramic face on a composite backing" },
+            "Glass":        { "Class": "Brittle", "DensityGCm3": 2.50, "CompressiveMPa": 1000,
+                              "Source": "laminated ballistic glass" },
+            "Aramid":       { "Class": "Fibrous", "DensityGCm3": 1.44, "FibreTensileMPa": 2900, "FailureStrain": 0.034,
+                              "Source": "Kevlar 29 / TSVM-DZh" },
+            "UHMWPE":       { "Class": "Fibrous", "DensityGCm3": 0.97, "FibreTensileMPa": 3400, "FailureStrain": 0.035,
+                              "Source": "Dyneema HB grade" }
+          },
+
+          // ===== Armour construction =====
+          // Keyed by the product — the item name up to "_level" — so one entry covers
+          // every zone of it. Thickness is the number the game has nowhere and the whole
+          // reason this table exists. Material is only set where the game has it wrong.
+          // Anything absent keeps the game's own material and falls back to the class.
+          "ArmorPlates": {
+            "6b5-16":     { "Prototype": "6B5-16, ADU 605T-83", "ThicknessMm": 6.5, "BackingMm": 8,
+                            "Source": "titanium 6.5 mm + 30-layer TSVM-DZh package" },
+            "6b5-15":     { "Prototype": "6B5-15, ADU 14.20.00.000", "ThicknessMm": 13, "BackingMm": 8,
+                            "Source": "boron carbide 13 mm + fabric package" },
+            "6b3TM":      { "Prototype": "6B3TM, ADU 605-80", "ThicknessMm": 1.25, "BackingMm": 8,
+                            "Source": "titanium 1.25 mm anti-fragmentation element" },
+            "kora_kulon": { "Prototype": "Kora-Kulon", "ThicknessMm": 4.3, "BackingMm": 6,
+                            "Source": "steel plate, Br3" }
           },
 
           // Blast anchor: Strength_i = Strength_anchor * (TntG_i / TntG_anchor)^(1/3)
