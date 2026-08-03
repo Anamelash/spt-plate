@@ -101,12 +101,8 @@ public class GostPenetrationTests
 
     private static BallisticLimit.Core CoreOf(ArmorStandardTests.Threat t)
     {
-        return new BallisticLimit.Core
-        {
-            MassG = t.MassG * (t.CoreMassFrac > 0 ? t.CoreMassFrac : 1),
-            DiaMm = t.DiaMm * Math.Sqrt(t.CoreAreaFrac > 0 ? t.CoreAreaFrac : 1),
-            HardnessHv = t.CoreHardnessHv,
-        };
+        return BallisticLimit.Driving(t.MassG, t.DiaMm, t.CoreAreaFrac, t.CoreMassFrac,
+            t.CoreHardnessHv);
     }
 
     /// <summary>Perpendicular hit, undamaged plate — the conditions the standard tests at.</summary>
@@ -204,6 +200,42 @@ public class GostPenetrationTests
         var before = 0.5 * (core.MassG / 1000) * t.V * t.V;
         var after = 0.5 * (core.MassG / 1000) * vr * vr;
         Assert.True(after < before * 0.9, "a plate it barely beats should still cost it dearly");
+    }
+
+    /// <summary>
+    /// Writing down what a bullet is made of must never make it worse at getting through
+    /// a plate than knowing nothing about it. A construction is information; if adding it
+    /// costs the round penetration, the construction is being read wrong.
+    ///
+    /// This is the raid check GOST cannot make. Every cartridge in the standard has a
+    /// full-length core, so reading the driving mass as the surviving mass was invisible
+    /// to all seven of them. An M855, whose "core" is a 0.65 g tip riding on a lead body,
+    /// came out of that reading as a 0.65 g projectile at full 5.7 mm calibre and met a
+    /// titanium plate with a ballistic limit of 2847 m/s. Nothing in the game leaves a
+    /// barrel above 1220, so it was not armour, it was a wall.
+    /// </summary>
+    [Theory]
+    [InlineData("ArmoredSteel", 5)]
+    [InlineData("Ceramic", 5)]
+    [InlineData("Titan", 5)]
+    [InlineData("UHMWPE", 5)]
+    [InlineData("Combined", 5)]
+    public void Knowing_a_bullets_construction_never_makes_it_weaker(string material, int gameClass)
+    {
+        var tuning = BallisticLimit.Tuning.Default;
+        var (barrier, thickness) = Plate(material, gameClass);
+
+        foreach (var t in ArmorStandardTests.All)
+        {
+            var known = BallisticLimit.V50(barrier, CoreOf(t), 1.0, tuning);
+            var blind = BallisticLimit.V50(barrier,
+                BallisticLimit.Driving(t.MassG, t.DiaMm, 1, 1, t.CoreHardnessHv), 1.0, tuning);
+
+            Assert.True(known <= blind * 1.02,
+                $"{material} at {thickness:N1} mm stops {t.Cartridge} up to {known:N0} m/s " +
+                $"once its construction is known and only {blind:N0} without it — the " +
+                "construction is being read as a handicap");
+        }
     }
 
     [Fact]

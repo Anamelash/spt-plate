@@ -832,12 +832,8 @@ namespace PLATE.Client.Patches
             // energy the plate takes stops being a tuned constant: it is whatever
             // ½m(v² − v_r²) comes to once Recht-Ipson has answered.
             var tuning = BallisticLimit.Tuning.Default;
-            var limitCore = new BallisticLimit.Core
-            {
-                MassG = mass * coreMass,
-                DiaMm = dia * Mathf.Sqrt(coreArea),
-                HardnessHv = AmmoDataCache.GetCoreHardness(shot.Ammo?.TemplateId),
-            };
+            var limitCore = BallisticLimit.Driving(mass, dia, coreArea, coreMass,
+                AmmoDataCache.GetCoreHardness(shot.Ammo?.TemplateId));
 
             // TemplateId, not Template: the latter is an ItemTemplate object whose
             // ToString is a type name, so it matched nothing and every plate in the game

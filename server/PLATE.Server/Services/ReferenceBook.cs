@@ -299,8 +299,11 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
     /// 4: the ceramic brackets were fitted to a ladder invented for the purpose, and then
     ///    said every real ceramic plate in the book was a third too thin for its own
     ///    class. Refitted onto the plates instead.
+    /// 5: a bullet with no penetrator drives the limit with its whole mass at its own
+    ///    calibre, not with the fraction of it that survives the plate. The ceramic
+    ///    brackets moved with it.
     /// </summary>
-    private const int ShippedVersion = 4;
+    private const int ShippedVersion = 5;
 
     private AmmoReference _cached;
 
@@ -1286,21 +1289,21 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // again: AR500 at 6.35 mm falls inside the Br4 bracket on its own, which is
           // exactly what a Level III steel plate is certified as.
           "ArmorByClass": {
-            "ArmoredSteel/2": { "Prototype": "steel insert, Br1",      "ThicknessMm": 1.8 },
-            "ArmoredSteel/3": { "Prototype": "steel insert, Br2",      "ThicknessMm": 2.8 },
+            "ArmoredSteel/2": { "Prototype": "steel insert, Br1",      "ThicknessMm": 1.4 },
+            "ArmoredSteel/3": { "Prototype": "steel insert, Br2",      "ThicknessMm": 2.4 },
             "ArmoredSteel/4": { "Prototype": "thin armour steel, Br3", "ThicknessMm": 3.6 },
             "ArmoredSteel/5": { "Prototype": "AR500, NIJ III / Br4",   "ThicknessMm": 6.35,
                                 "Source": "0.25 in is the standard Level III steel plate, and it lands inside the Br4 bracket without being moved" },
             "ArmoredSteel/6": { "Prototype": "armour steel, Br5",      "ThicknessMm": 8.5 },
 
             "Ceramic/4":      { "Prototype": "alumina, Br3",           "ThicknessMm": 3.3 },
-            "Ceramic/5":      { "Prototype": "SAPI, Br4",              "ThicknessMm": 5.0,
-                                "Source": "the real SAPI in this book measures 6.1 and the ESAPI 7.2-7.7, both comfortably over their brackets" },
+            "Ceramic/5":      { "Prototype": "SAPI, Br4",              "ThicknessMm": 6.0,
+                                "Source": "the real SAPI in this book measures 6.1 and the ESAPI 7.2-7.7, both over their brackets" },
             "Ceramic/6":      { "Prototype": "ESAPI, boron carbide",   "ThicknessMm": 7.0 },
 
             "Combined/3":     { "Prototype": "ceramic face, Br2",      "ThicknessMm": 2.4 },
             "Combined/4":     { "Prototype": "ceramic face, Br3",      "ThicknessMm": 3.2 },
-            "Combined/5":     { "Prototype": "ceramic face, Br4",      "ThicknessMm": 4.8 },
+            "Combined/5":     { "Prototype": "ceramic face, Br4",      "ThicknessMm": 5.8 },
             "Combined/6":     { "Prototype": "ceramic face, Br5",      "ThicknessMm": 6.6 },
 
             "Titan/4":        { "Prototype": "titanium, Br3",          "ThicknessMm": 5.5 },
@@ -1499,7 +1502,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // Raise this when a figure above is CORRECTED. Adding entries needs no bump —
           // they merge in on their own — but a correction has to be able to overwrite,
           // and on a bump this file is rewritten with the old one kept as a .bak
-          "Version": 4
+          "Version": 5
         }
         """;
 }

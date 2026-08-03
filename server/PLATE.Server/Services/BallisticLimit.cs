@@ -19,10 +19,13 @@ namespace PLATE.Server.Services;
 ///     W  = k · S · π · d · T²
 ///     v_bl = sqrt(2W / m) = T · sqrt(2 k S π d / m)
 ///
-/// Linear in thickness, and falling with the square root of sectional density. Checked
-/// against the rolled-armour ladder in ArmorStandardTests — six thicknesses from 6 to
-/// 16 mm against 7.62 AP — it lands within 3% at every point on one constant. A T^0.75
-/// power law of the Lambert-Jonas kind was 24% out at the thin end of the same data.
+/// Linear in thickness, and falling with the square root of sectional density. The SHAPE
+/// came off the rolled-armour ladder in ArmorStandardTests — six thicknesses from 6 to
+/// 16 mm against 7.62 AP — where it holds to 3% on one constant, against 24% for a
+/// T^0.75 power law of the Lambert-Jonas kind. The constant is anchored somewhere else:
+/// on AR500 at 6.35 mm, the Level III steel plate the game actually contains, just
+/// stopping the 5.45 PP that GOST fires at Бр4. That costs 18% on the ladder and buys
+/// agreement with the armour a player is shot through.
 ///
 /// **What S is** depends on how the barrier fails, which is what ArmorMaterialRef.Class
 /// says: a ductile metal shears, a ceramic crushes, a fibre stretches. Three materials,
@@ -104,6 +107,40 @@ public static class BallisticLimit
         }
     }
 
+    /// <summary>
+    /// What is actually driving the penetration, from the bullet and its construction.
+    ///
+    /// The area fraction decides this, and it decides it for a reason the book already
+    /// states. A fraction below 1 means a core hard enough to keep its shape: it punches,
+    /// the jacket strips at the face and contributes nothing, and the figure of merit is
+    /// the core's own sectional density. A fraction of exactly 1 means there is no
+    /// penetrator — the M855's tip is 40 HRC and the mass behind it is lead, which pushes
+    /// rather than strips — so the bullet arrives as one piece at full calibre.
+    ///
+    /// Reading the M855 the other way, as its 0.65 g tip at 5.7 mm calibre, put its
+    /// ballistic limit against a titanium plate at 2847 m/s. Nothing in the game leaves
+    /// a barrel above 1220, so the round could not have defeated any titanium at all.
+    /// </summary>
+    public static Core Driving(double massG, double diaMm, double coreAreaFrac,
+        double coreMassFrac, double hardnessHv)
+    {
+        var penetrator = coreAreaFrac > 0 && coreAreaFrac < 1;
+        return new Core
+        {
+            // The whole bullet, always. What is behind a core is not ballast: the lead
+            // sleeve of a 7N10 pushes its 1.7 g penetrator through, and reading the
+            // round as 1.7 g of 4.1 mm made it HARDER to stop than the same bullet with
+            // no core described at all — 984 m/s against 797 through the same plate.
+            // Writing down what a bullet is made of must never cost it penetration.
+            MassG = massG,
+
+            // The core is what the plate has to make room for, and only when it is hard
+            // enough to keep its shape. Everything else arrives at its own calibre.
+            DiaMm = penetrator ? diaMm * Math.Sqrt(coreAreaFrac) : diaMm,
+            HardnessHv = hardnessHv,
+        };
+    }
+
     /// <summary>The projectile as the barrier meets it: the core, not the cartridge.</summary>
     public struct Core
     {
@@ -133,8 +170,12 @@ public static class BallisticLimit
 
         public static Tuning Default => new Tuning
         {
-            // the rolled-armour V50 ladder, six thicknesses, within 3% on this one number
-            DuctileK = 2.50,
+            // AR500 at 6.35 mm — the standard Level III steel plate, and a Br4 in GOST
+            // terms — just stopping the 5.45 PP that Br4 is tested with. The rolled
+            // armour V50 ladder comes out 18% high on this, which is the price of
+            // anchoring on the plate the game actually contains rather than on a
+            // 300 HB test coupon
+            DuctileK = 4.40,
             // the ceramic plates the reference book measured from real products - a
             // Granit-4 at 6.8 mm certified Br5, a SAPI at 6.1 - held against the GOST
             // rifle classes. The first pass fitted this to a ladder invented for the
@@ -143,11 +184,11 @@ public static class BallisticLimit
             // depth-of-penetration point wants 0.68; a plate is a strike face on a
             // backer rather than a tile in a fixture, so under it, but not by three and
             // a half times
-            BrittleK = 0.43,
+            BrittleK = 0.75,
             // a 33 mm polyethylene plate certified to stop M80 at 847, and a 7.6 mm
             // aramid package stopping the 9x18 GOST fires at Бр1, once the package's
             // 44% packing is taken out
-            FibrousK = 15.0,
+            FibrousK = 27.5,
             HardnessFloor = 0.5,
             HardnessCeiling = 2.5,
             MinCos = 0.34,
