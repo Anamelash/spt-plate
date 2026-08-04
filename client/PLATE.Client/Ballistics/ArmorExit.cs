@@ -62,9 +62,27 @@ namespace PLATE.Client.Ballistics
         /// <param name="coreMassFrac">Core mass / bullet mass.</param>
         /// <param name="kFrag">Erosion by this barrier of whatever comes through, 0..1.</param>
         /// <param name="kDef">Blunting by this barrier of whatever deformable material is left.</param>
+        /// <param name="stripsJacket">
+        /// Whether this barrier tears the projectile down to its core.
+        ///
+        /// A rigid plate does: the hole is cut by the hard core and the softer jacket
+        /// shears off against its rim and stays behind, which is why bullets recovered
+        /// from steel and ceramic come back as bare cores. A fibre pack has no rim to
+        /// shear against — the fibres are pushed apart and drawn along, and a round that
+        /// defeats soft armour comes out essentially whole. Saying otherwise made a 7.5 mm
+        /// aramid vest take more energy out of a 5.45 than a steel plate would, most of it
+        /// by quietly deleting half the bullet.
+        /// </param>
         public static Exit Compute(float massG, float diaMm, float x, float energyOutJ,
-            float coreAreaFrac, float coreMassFrac, float kFrag, float kDef)
+            float coreAreaFrac, float coreMassFrac, float kFrag, float kDef,
+            bool stripsJacket = true)
         {
+            if (!stripsJacket)
+            {
+                coreAreaFrac = 1f;
+                coreMassFrac = 1f;
+            }
+
             coreAreaFrac = Mathf.Clamp(coreAreaFrac, 0.05f, 1f);
             coreMassFrac = Mathf.Clamp(coreMassFrac, 0.05f, 1f);
 

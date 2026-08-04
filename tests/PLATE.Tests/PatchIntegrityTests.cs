@@ -133,6 +133,25 @@ namespace PLATE.Tests
         }
 
         /// <summary>
+        /// Whether a wound bleeds is decided by writing the chance onto the hit, which
+        /// only works while the hit is what carries it. If the field moves off
+        /// DamageInfoStruct, the write compiles nowhere else and every wound quietly
+        /// falls back to the cartridge's own number — the same silent-no-op shape as the
+        /// template-id bug above, and just as invisible in a raid.
+        /// </summary>
+        [Fact]
+        public void A_hit_still_carries_its_own_bleed_chance()
+        {
+            if (Skip) return;
+
+            var field = typeof(DamageInfoStruct).GetField("HeavyBleedingDelta");
+
+            Assert.NotNull(field);
+            Assert.Equal(typeof(float), field.FieldType);
+            Assert.False(field.IsInitOnly, "the bleed chance has to be writable per hit");
+        }
+
+        /// <summary>
         /// The 0.9.2 regression: hook telemetry attached a second Harmony patch to
         /// every target. Observing something must never modify it.
         /// </summary>
@@ -163,20 +182,29 @@ namespace PLATE.Tests
 
             _game.ApplyAllPatchesOnce();
 
-            // MonoMod cannot detour these outside the Unity runtime — its prepare step
-            // reaches for BCL members net471's mscorlib does not have. Verified working
-            // in game: the client log has never carried a patch failure for them, and
-            // the features they drive demonstrably run. The set is asserted exactly, so
-            // a genuinely new failure still turns this red.
-            var hostLimited = new HashSet<string> { "GuaranteedBleedPostfix" };
+            // MonoMod cannot detour ActiveHealthController.ApplyDamage outside the Unity
+            // runtime — its prepare step reaches for BCL members net471's mscorlib does
+            // not have. It is the target that cannot be detoured here, not the patch:
+            // whichever of our hooks reaches it first takes the error, and the rest
+            // attach to the already-patched method and report success. So the assertion
+            // is on the count and the membership rather than on a particular name, which
+            // would only be encoding the order Apply() happens to run in.
+            //
+            // Verified working in game: the client log has never carried a patch failure
+            // for any of them, and the features they drive demonstrably run.
+            var onApplyDamage = new HashSet<string>
+            {
+                "GuaranteedBleedPostfix",
+                "CentralWoundPostfix",
+                "overlay:HealthApplyDamagePostfix",
+            };
 
             var actual = new HashSet<string>(PatchStats.FailedLabels());
 
-            Assert.True(actual.SetEquals(hostLimited),
-                "patch application changed. Unexpected failures: " +
-                string.Join(", ", actual.Except(hostLimited)) +
-                "; expected-but-now-passing: " +
-                string.Join(", ", hostLimited.Except(actual)) +
+            Assert.True(actual.Count == 1 && actual.IsSubsetOf(onApplyDamage),
+                "patch application changed. Failures outside ApplyDamage: " +
+                string.Join(", ", actual.Except(onApplyDamage)) +
+                "; total failures: " + actual.Count + " (" + string.Join(", ", actual) + ")" +
                 Environment.NewLine +
                 string.Join(Environment.NewLine, PatchStats.Report()));
         }

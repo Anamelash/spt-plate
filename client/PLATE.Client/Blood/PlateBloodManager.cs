@@ -23,6 +23,13 @@ namespace PLATE.Client.Blood
 
         /// <summary>Blast barotrauma.</summary>
         Blast,
+
+        /// <summary>
+        /// A solid organ opened up. The liver is the case it exists for: the
+        /// retrohepatic vena cava runs through it, which is why its wounds kill — there
+        /// is nothing to press on.
+        /// </summary>
+        Organ,
     }
 
     /// <summary>
@@ -66,7 +73,13 @@ namespace PLATE.Client.Blood
 
         /// <summary>Cached sum over <see cref="InternalBleeds"/> — the tick reads it every frame.</summary>
         public float InternalMlSec;
-        public float PendingExternalMl;  // accumulated by the bleeding patches during the frame
+        /// <summary>
+        /// Accumulated by the bleeding patches during the frame, kept apart by region.
+        /// Not for the arithmetic — the total is all the drain needs — but for the one
+        /// question the whole zone design has to answer: is 67% of the blood coming out
+        /// of the torso, the way it does in the combat mortality data.
+        /// </summary>
+        public readonly float[] PendingExternalMl = new float[4];
         public float LastExternalDrainAt; // to pause passive regeneration
         public int Tier;                  // 0..3
         public float NextEffectRefresh;
@@ -149,7 +162,8 @@ namespace PLATE.Client.Blood
         /// External bleeding accumulates during the frame and is applied in the tick —
         /// this way the total loss (external + internal) is capped by cardiac output.
         /// </summary>
-        public static void QueueExternalDrain(Player player, float ml)
+        public static void QueueExternalDrain(Player player, float ml,
+            Ballistics.BleedRegion region)
         {
             var s = GetOrCreate(player);
             if (s == null || s.Dead)
@@ -157,7 +171,8 @@ namespace PLATE.Client.Blood
                 return;
             }
 
-            s.PendingExternalMl += ml;
+            var i = (int)region;
+            s.PendingExternalMl[i >= 0 && i < s.PendingExternalMl.Length ? i : 0] += ml;
             s.LastExternalDrainAt = Time.time;
         }
 
@@ -346,6 +361,123 @@ namespace PLATE.Client.Blood
             }
         }
 
+        // --- Raid tally: the acceptance check for the whole zone design ---
+        //
+        // The combat mortality series this was built against measured 35.2% of deaths at
+        // the moment of wounding and 52.1% over the minutes and hours that followed, and
+        // of the bleeding that killed the second group, 67.3% came out of the torso
+        // against 19.2% junctional and 13.5% from limbs. Those proportions are not an
+        // input anywhere in the model — they are what a correctly placed set of zones
+        // should produce on its own. So they get counted and printed, and if they come
+        // out wrong the zones are wrong.
+
+        private static readonly float[] DrainedByRegion = new float[4];
+        private static int _deathsFromWounds;
+        private static int _deathsFromBleeding;
+
+        public static void CountDeath(bool fromBleeding)
+        {
+            if (fromBleeding)
+            {
+                _deathsFromBleeding++;
+            }
+            else
+            {
+                _deathsFromWounds++;
+            }
+        }
+
+        public static System.Collections.Generic.IEnumerable<string> Report()
+        {
+            var deaths = _deathsFromWounds + _deathsFromBleeding;
+            yield return deaths == 0
+                ? "-- deaths: none"
+                : $"-- deaths: {_deathsFromWounds} of wounds " +
+                  $"({100f * _deathsFromWounds / deaths:0}%), " +
+                  $"{_deathsFromBleeding} of blood loss " +
+                  $"({100f * _deathsFromBleeding / deaths:0}%) [measured 35/52]";
+
+            var total = 0f;
+            foreach (var ml in DrainedByRegion)
+            {
+                total += ml;
+            }
+
+            yield return total < 1f
+                ? "-- blood lost: none"
+                : $"-- blood lost {total:0} ml: torso {Share(0, total)}, " +
+                  $"junction {Share(1, total)}, limbs {Share(2, total)}, " +
+                  $"head {Share(3, total)} [measured 67/19/13]";
+        }
+
+        private static string Share(int region, float total)
+        {
+            return $"{100f * DrainedByRegion[region] / total:0}%";
+        }
+
+        public static void ResetTally()
+        {
+            for (var i = 0; i < DrainedByRegion.Length; i++)
+            {
+                DrainedByRegion[i] = 0f;
+            }
+
+            _deathsFromWounds = 0;
+            _deathsFromBleeding = 0;
+        }
+
+        /// <summary>
+        /// Charges the blood that actually came out back to where it came from. Under the
+        /// cardiac-output cap every source is throttled by the same factor, so each one's
+        /// share of the loss is its share of the rate.
+        /// </summary>
+        private static void AttributeDrain(BloodState s, float applied, float wanted, float mult)
+        {
+            var scale = wanted > 1e-6f ? applied / wanted : 0f;
+
+            var externalWanted = 0f;
+            for (var i = 0; i < s.PendingExternalMl.Length; i++)
+            {
+                var ml = s.PendingExternalMl[i] * mult;
+                externalWanted += ml;
+                DrainedByRegion[i] += ml * scale;
+                s.PendingExternalMl[i] = 0f;
+            }
+
+            // the internal side arrives as one number; split it across the open bleeds in
+            // proportion to their rates, which is what made it that number
+            var internalApplied = (wanted - externalWanted) * scale;
+            if (internalApplied <= 0f || s.InternalMlSec <= 1e-6f)
+            {
+                return;
+            }
+
+            foreach (var bleed in s.InternalBleeds)
+            {
+                DrainedByRegion[(int)RegionOf(bleed)] +=
+                    internalApplied * bleed.MlSec / s.InternalMlSec;
+            }
+        }
+
+        /// <summary>Where an internal bleed sits, from whichever of the two the source knew.</summary>
+        private static Ballistics.BleedRegion RegionOf(InternalBleed bleed)
+        {
+            if (bleed.Collider.HasValue)
+            {
+                return Ballistics.WoundBleeding.Region(bleed.Collider.Value);
+            }
+
+            switch (bleed.Part)
+            {
+                case EBodyPart.Head: return Ballistics.BleedRegion.Head;
+                case EBodyPart.LeftArm:
+                case EBodyPart.RightArm:
+                case EBodyPart.LeftLeg:
+                case EBodyPart.RightLeg: return Ballistics.BleedRegion.Limb;
+                default: return Ballistics.BleedRegion.Torso;
+            }
+        }
+
         private static void TickOne(BloodState s, float dt)
         {
             // cripples: push model (RequestRefresh on damage/fracture/splint/surgery) +
@@ -373,10 +505,21 @@ namespace PLATE.Client.Blood
             // no matter how many wounds there are, blood physically cannot drain faster.
             // The cap is scaled by the same multiplier — otherwise a raised bleed rate
             // would do nothing for anyone already bleeding at the physiological ceiling
-            var drain = s.PendingExternalMl * mult + internalMlSec * SelfLimit(s) * dt;
-            s.PendingExternalMl = 0f;
+            var external = 0f;
+            for (var i = 0; i < s.PendingExternalMl.Length; i++)
+            {
+                external += s.PendingExternalMl[i] * mult;
+            }
+
+            var internalMl = internalMlSec * SelfLimit(s) * dt;
+            var drain = external + internalMl;
             var cap = PlateClientConfig.CardiacOutputMlSec.Value * mult * dt;
-            s.Cur = Mathf.Max(0f, s.Cur - Mathf.Min(drain, cap));
+            var applied = Mathf.Min(drain, cap);
+            s.Cur = Mathf.Max(0f, s.Cur - applied);
+
+            // What actually came out, charged back to where it came from. Under the cap
+            // every source is throttled equally, so the shares are the shares of the rate.
+            AttributeDrain(s, applied, drain, mult);
 
             // passive regeneration: only after 5+ s with no external drain and no internal bleeding
             if (internalMlSec <= 0f && Time.time - s.LastExternalDrainAt > 5f && s.Cur < s.Max)

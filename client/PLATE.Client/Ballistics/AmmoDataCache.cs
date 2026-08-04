@@ -30,9 +30,6 @@ namespace PLATE.Client.Ballistics
             /// <summary>Vickers hardness of the core — which of it and the plate gives way first.</summary>
             public double Hv { get; set; } = 60;
 
-            /// <summary>Fragmentation chance (vanilla field) — temporary cavity bonus in the channel model.</summary>
-            public double Frag { get; set; }
-
             /// <summary>Share of large fragments (1/grenade FragmentsCount); shrapnel only.</summary>
             public double? LargeShare { get; set; }
         }
@@ -45,12 +42,26 @@ namespace PLATE.Client.Ballistics
             public double GelStopVelocity { get; set; }
             public double ExpansionDepthFactor { get; set; }
             public double ExpansionAreaFactor { get; set; }
+
+            // Broadside geometry. The defaults matter: an older server does not send
+            // these, and reading them as zero would give every bullet no length and so
+            // no cavity at all.
+            public double YawNeckCalibres { get; set; } = 20;
+            public double YawBroadsideFraction { get; set; } = 0.75;
+            public double BulletDensityGPerCm3 { get; set; } = 10.5;
+            public double BulletFormFactor { get; set; } = 0.65;
+
             public double BodyDepthMm { get; set; }
             public double WoundVolumePerHp { get; set; }
             public double TcVelocityCenter { get; set; }
             public double TcVelocityWidth { get; set; }
             public double TcEnergyPerHp { get; set; }
             public double TcFragBonus { get; set; }
+
+            /// <summary>Velocity at the tumble point above which a jacket lets go, m/s.
+            /// An older server does not send it; 600 is the shipped default.</summary>
+            public double FragVelocityThreshold { get; set; } = 600;
+
             public double EnergyCapPerHp { get; set; }
         }
 
@@ -62,11 +73,15 @@ namespace PLATE.Client.Ballistics
             public double KDef { get; set; }
             public double KFrag { get; set; }
 
-            /// <summary>Local degradation radius around a hit, mm.</summary>
+            /// <summary>Local degradation radius around a hit, mm. Capped at the 51 mm
+            /// the certification standards space their scored shots by.</summary>
             public double DAreaMm { get; set; } = 30;
 
-            /// <summary>Share of U_limit remaining in the zone after each hit.</summary>
-            public double DegradeMult { get; set; } = 0.8;
+            /// <summary>Damage one hit does to the spot it lands on, 0..1 (3.4).</summary>
+            public double SpotDamageQ { get; set; } = 0.4;
+
+            /// <summary>How local the damage stays: thickness at a damaged spot is 1 − x^k.</summary>
+            public double WearExponentK { get; set; } = 2;
 
             /// <summary>Fiber vulnerability to sharp-nosed bullets (X below 0.5).</summary>
             public double SharpVulnMult { get; set; }
@@ -82,8 +97,6 @@ namespace PLATE.Client.Ballistics
             public double ThresholdBand { get; set; } = 0.12;
             public double AngleMinCos { get; set; } = 0.34;
             public double[] ClassULimitJmm2 { get; set; }
-            public double DurabilityFloor { get; set; } = 0.4;
-            public double DegradeFloor { get; set; } = 0.15;
 
             /// <summary>Spread of a deformable bullet on the panel face: area × (1 + this·X).</summary>
             public double ExpansionOnArmor { get; set; } = 0.6;
@@ -134,14 +147,24 @@ namespace PLATE.Client.Ballistics
 
             /// <summary>Fraction of the entry that is actually the material; 1 = solid.</summary>
             public double P { get; set; } = 1;
+
+            /// <summary>Fibre backing behind the face, mm; 0 = single layer.</summary>
+            public double B { get; set; }
+
+            /// <summary>Backing material key; empty = aramid, the dominant case.</summary>
+            public string BM { get; set; }
         }
 
         /// <summary>How a material fails and how strongly, from the reference book.</summary>
         internal class MaterialPhysics
         {
             public string Class { get; set; }
+
+            /// <summary>Ductile only: ShearPlugging | HoleExpansion; empty = plugging.</summary>
+            public string FailureMode { get; set; }
             public double DensityGCm3 { get; set; }
             public double ShearMPa { get; set; }
+            public double YieldMPa { get; set; }
             public double CompressiveMPa { get; set; }
             public double FibreTensileMPa { get; set; }
             public double FailureStrain { get; set; }
@@ -213,19 +236,6 @@ namespace PLATE.Client.Ballistics
             return v <= 0.05 ? 0.05f : v >= 1 ? 1f : (float)v;
         }
 
-        /// <summary>Cartridge fragmentation chance; 0 when there is no data.</summary>
-        public static double GetFrag(string ammoTemplateId)
-        {
-            EnsureLoaded();
-            if (ammoTemplateId != null && _data != null &&
-                _data.TryGetValue(ammoTemplateId, out var e))
-            {
-                return e.Frag;
-            }
-
-            return 0;
-        }
-
         public static bool IsLoaded => _data != null;
 
         /// <summary>Wound channel model constants; null if the server did not provide
@@ -287,8 +297,10 @@ namespace PLATE.Client.Ballistics
             barrier = new BallisticLimit.Barrier
             {
                 Class = m.Class,
+                FailureMode = m.FailureMode,
                 ThicknessMm = plate.T,
                 ShearMPa = m.ShearMPa,
+                YieldMPa = m.YieldMPa,
                 CompressiveMPa = m.CompressiveMPa,
                 FibreTensileMPa = m.FibreTensileMPa,
                 FailureStrain = m.FailureStrain,
@@ -299,7 +311,40 @@ namespace PLATE.Client.Ballistics
                 // server resolved that per item and sent it
                 PackedFraction = plate.P > 0 ? plate.P : 1,
             };
+
+            // the fibre panel behind the face works as its own layer; its properties
+            // come from the same materials table the face's do
+            if (plate.B > 0)
+            {
+                var backingKey = string.IsNullOrEmpty(plate.BM) ? "Aramid" : plate.BM;
+                if (_geometry.Materials.TryGetValue(backingKey, out var bm) && bm != null)
+                {
+                    barrier.BackingMm = plate.B;
+                    barrier.BackingTensileMPa = bm.FibreTensileMPa;
+                    barrier.BackingStrain = bm.FailureStrain;
+                    barrier.BackingPacked = 1;
+                }
+            }
+
             return true;
+        }
+
+        /// <summary>
+        /// The backing layer's material key, or null for a single-layer item. Wear
+        /// needs it: q and k are properties of a LAYER, and the fibre panel behind a
+        /// ceramic face wears like the fibre it is, not like the face.
+        /// </summary>
+        public static string BackingMaterialOf(string armorTemplateId)
+        {
+            EnsureGeometry();
+            if (armorTemplateId == null || _geometry?.Plates == null ||
+                !_geometry.Plates.TryGetValue(armorTemplateId, out var plate) ||
+                plate == null || plate.B <= 0)
+            {
+                return null;
+            }
+
+            return string.IsNullOrEmpty(plate.BM) ? "Aramid" : plate.BM;
         }
 
         private static void EnsureGeometry()

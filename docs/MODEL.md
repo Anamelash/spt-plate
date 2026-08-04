@@ -15,6 +15,8 @@ shipped defaults, not hardcoded truths.
 - [Principle](#principle)
 - [Notation](#notation)
 - [Wound channel](#wound-channel)
+- [Organs](#organs)
+- [Spread](#spread)
 - [Path through the body](#path-through-the-body)
 - [Overpenetration and fragments](#overpenetration-and-fragments)
 - [Penetration](#penetration)
@@ -83,15 +85,41 @@ falls out of the drag law.
 
 ### Permanent cavity
 
-Crushed tissue along the channel, proportional to the volume actually swept:
+Crushed tissue along the channel, proportional to the volume actually swept. The
+channel is not one width from end to end: a projectile enters point-forward and,
+if it is long enough and travels far enough, turns and goes on broadside.
 
 ```
-PC = A · (1 + ExpansionAreaFactor · X) · min(L, T) / WoundVolumePerHp
+A_nose = A · (1 + ExpansionAreaFactor · X)          expansion, from the moment of entry
+A_side = max(A_nose, YawBroadsideFraction · L_b · d)  after the turn
+PC     = (A_nose · min(P, N) + A_side · max(P − N, 0)) / WoundVolumePerHp
 ```
 
-`min(L, T)` holds whether the projectile exits or stops inside: a bullet caught
-by bone still only wounds the tissue it passed through, and no channel can be
-longer than the body in front of it.
+`P = min(L, T)` is the path actually travelled in this body part, and it holds
+whether the projectile exits or stops inside: a bullet caught by bone still only
+wounds the tissue it passed through.
+
+`N` is the travel before the turn — `YawNeckCalibres · d` as a median, drawn
+log-normally per shot in a raid (see [Spread](#spread)). `L_b` is the
+projectile's length, which is not in any template, so it comes from the one thing
+always known about a bullet — how much mass sits behind its calibre:
+
+```
+L_b = m / (A · ρ · f)
+```
+
+with `ρ` the mean density of a jacketed bullet and `f` how much of its bounding
+cylinder it fills once the ogive and boat tail are taken out. That puts 7.62×51
+M80 at 28.8 mm against a measured 28.9 and 5.56×45 M855 at 23.0 against 23.0.
+
+Two things fall out of the geometry rather than being written down. A round ball
+comes out the same area whichever way it faces — the square around a circle is
+1.27 times its area and a tumbling projectile averages three quarters of its
+widest face — so buckshot has no broadside to turn into. And a fully expanded
+bullet is short and blunt, so `A_side` never exceeds `A_nose` for it either.
+
+Known limit: one density for every bullet, so a mild-steel core reads short —
+5.45×39 7N6 comes out at 20.4 mm against a measured 24.8.
 
 ### Temporary cavity
 
@@ -116,9 +144,28 @@ and most of it is spent in the first hand's width of tissue.
 ```
 
 A rifle bullet crossing a 250 mm chest leaves about 80% of its energy behind, not
-the 25% its share of the channel would suggest. `frag` is the round's
-fragmentation chance: fragmentation converts stretching into tearing, so the
-tissue no longer springs back.
+the 25% its share of the channel would suggest.
+
+`frag` converts stretching into tearing — fragments puncture the stretched wall
+of the cavity so the tissue no longer springs back — and it is **derived, not
+read from the vanilla FragmentationChance field**. A bullet breaks up where it
+turns broadside, because that is where the envelope takes the full load; it only
+breaks if it is still fast enough there; and only the deformable share breaks —
+a hard core never does:
+
+```
+v_neck = v · exp(−neck / λ)
+frag   = X · (1 − CoreMassFrac)     if the turn comes inside the body
+                                    and v_neck > FragVelocityThreshold
+       = 0                          otherwise
+```
+
+The threshold sits at the bottom of the published 600–700 m/s band for
+thin-jacketed ball, read at the tumble point rather than at impact. That one
+rule reproduces the gelatin literature without a per-cartridge opinion: M193 and
+M855 arrive at their turn above 700 m/s and shed their lead; the 7.62×39 PS has
+already slowed to under 500 by its turn and comes through whole; a monolith has
+nothing to shed; no pistol round is ever fast enough.
 
 ### Ceiling and the contact case
 
@@ -140,6 +187,94 @@ not from the body part: brain zones (eyes, parietal, back of head, ears) carry t
 largest multiplier, neck is next, jaw is grievous but survivable. The head is
 several distinct colliders in EFT, and treating them as one is what makes helmet
 and head hits feel arbitrary.
+
+## Organs
+
+There is no heart among BSG's hitboxes, but there are boxes in the right places,
+and an organ is a share of one. The middle third of `RibcageUp` is the heart and
+the mediastinum behind it; the right third of `RibcageLow` is the liver; a thin
+`SpineTop` or `SpineDown` collider is the cord. Lungs get no zone of their own,
+because nearly the whole ribcage is lung and a multiplier on everything is a
+multiplier on nothing — in the AIS table one lobe of lung *is* the reference the
+other zones are scored against, so it is already there at 1.0.
+
+Which local axis of a box runs across the body is not a constant, so it is
+resolved at the moment of a hit: the axis nearest the character's own up is
+height, the one nearest their right is width, the remainder is depth. The same
+comparison gives the sign, which is what keeps the liver on the body's own right
+when the target turns around. `SpineTop` is two boxes under one name — a 17 mm
+plate and half a metre of upper back — and the thickness tells them apart.
+
+**Direct hit.** What decides it is how far the channel ran *inside* the zone
+against how deep the zone is:
+
+```
+path_in_zone > depth_zone / 2
+```
+
+That is the distinction the trauma scales draw: a tangential wound of the
+myocardium that does not breach the endocardium is survivable, a perforated
+ventricle is not. The cord is the exception — 13–17 mm of collider has no
+half-depth to be short of, so anything that comes out the far side has been
+through it.
+
+**Cavity reach.** The channel can miss an organ and the stretch still reach it.
+The cavity radius comes from the energy given up per unit length:
+
+```
+dE/dx = π · r² · σ
+```
+
+One constant, tied to published gelatin diameters: 7.62×51 lands near 60 mm of
+radius and 9×19 near 30. Overlap is how far that reaches into the zone,
+normalised on the narrowest way across it — the cord is 226 mm wide and 17 mm
+thick, and it is the 17 that a cavity has to sweep to engulf it.
+
+**Severity** comes from the ratio of AIS squares against one lobe of lung: heart
+and mediastinum 2.8, cord 2.3, liver 1.8. Squares, because AIS is an ordinal
+scale and two moderate wounds must stay lighter than one severe.
+
+**Death is dealt as damage**, never as a scripted kill. A fatal zone raises the
+hit to what the body part had left — a floor, not a replacement, so a category
+multiplier cannot save a pierced heart and the ordinary calculation still wins
+where it is larger. Everything downstream then works by itself: the kill is
+attributed to the shot, and the kill feed, the statistics and other mods all see
+an ordinary hit. The game only dies of head or thorax, so a fatal wound in the
+abdominal pool reaches the chest as a second damage event of its own — which is
+anatomically the honest reading anyway, since a severed cord or a torn vena cava
+kills the brain that stops being supplied, not the abdomen.
+
+**Rolls.** A cavity that passed beside the heart can still stop it, and the liver
+can be torn off its ligaments; neither is certain, and both need rifle velocities
+— they are scaled by the same high-velocity sigmoid the temporary cavity uses, so
+a pistol practically never does either. One organ is several collider boxes, so
+the draw is made once per shot per organ and re-tested against each meeting: that
+comes out at the best chance the shot ever had, rather than at two rolls or at
+whichever box came first.
+
+## Spread
+
+Two identical-looking hits differ, and the difference has to come from where it
+comes from in reality rather than from a multiplier of `N(1, σ)` on the result.
+Everything here is drawn once per projectile and carried through overpenetration
+children with the travelled distance taken off, so a bullet that turned in an arm
+arrives at the chest already sideways.
+
+- **Where it turns** — log-normal about the cartridge's median. Log-normal
+  because a neck cannot be negative and its published spread is multiplicative:
+  one cartridge's neck length varies twofold in gelatin. This is the single most
+  variable quantity in wound ballistics, and it is why the same round behaves
+  differently in an arm and in a chest — not because a die was rolled, but
+  because the channel is a different length.
+- **Tissue** — ribs, cartilage and diaphragm are not gelatin, so the channel
+  length and the energy left behind move together by ±15%.
+- **Where the organs are** — the game has one skeleton and people do not, so the
+  zones shift sideways per shot. That turns "hit the heart" from a step at the
+  edge of a box into a gradient.
+
+Armour is deliberately outside all of this. It has its own probability band
+around the ballistic limit, and mixing the two would leave the certification
+tests meaning nothing.
 
 ## Path through the body
 
@@ -228,9 +363,147 @@ hole through a solid means shearing its perimeter through its own thickness, so
 over the core's face, so `π·d²/4·T`. Only the fiber in a pack works, so a sewn
 package is scaled by how much of it is fiber rather than air.
 
+A ductile metal has two ways to give way, and **which one applies is a property
+of the alloy, carried as data (`FailureMode`), never an outcome of arithmetic**:
+
+```
+ShearPlugging:  W = K_d · S_shear · π·d·T²        v_bl ∝ T
+HoleExpansion:  W = K_h · σ_y · π·d²/4 · T        v_bl ∝ √T
+```
+
+What decides the mode is the alloy's **strain-hardening reserve**, read as UTS
+over yield. Plugging is adiabatic shear: it needs the deformation to localise
+into a band, and an alloy whose hardening is exhausted — quenched, aged,
+cold-worked — lets it. RHA (1000/900 = 1.11), Ti-6Al-4V (1.08), AR500 (1.32) and
+6082-T651 (1.12) all plug, and the 6082 obliquity trial confirms the plug law's
+`sec θ` scaling to 1.5%. An alloy with reserve left hardens wherever a band
+tries to start, so no band forms and the material flows aside instead:
+structural mild steel at 450/250 = 1.8 is the corpus's one flowing metal. That
+is also why 6 mm of mild steel stops "7.62 AP" nearly as well as 6 mm of RHA in
+the papers (304.5 against 320 m/s): the flow path it forces on the core is the
+expensive one, and no cost-based rule could ever say so — an earlier version of
+this model chose the mechanism by `min()` over the two works, and the mild
+ladder refuted it from its thinnest point.
+
+The split pays twice. `K_h` is derived from the mild ladder alone (all seven
+points, geometric mean; no hardness factor in the branch — flow resistance is
+the plate's yield stress, already in the term) and `K_d` from the RHA ladder
+alone, and the two calibrations cannot reach each other. Every mild point then
+lands inside its own band, and the RHA-over-mild ratios come out at 0.90–0.99 of
+the published ones with no shared constant behind them. `K_h = 6.6` also has a
+physical address: cavity-expansion theory prices opening a hole at 3–5 times the
+yield stress over its volume.
+
+**What remains open, recorded rather than fitted away.** The per-row solutions
+for `K_h` hold at 5.6–6.4 from 4.7 to 16 mm and rise to 8.4–9.0 at 20–25 mm:
+past `T/d ≈ 2.6` the flow is *confined* — deep cavity expansion costs more than
+thin-plate flow — and one constant cannot carry both regimes. That is the mild
+shape test's remaining red, deeper than any wearable plate, closable by a
+confinement term with data behind it.
+
 The hardness ratio is the term that separates a mild steel core from a hardened
 one out of the same cartridge case: a core softer than the plate upsets on the
 face and stops being a punch.
+
+**The fibre mode, and the two datasets that disagree about it.** Fibre used to be
+the one failure mode with no published ladder at all — its constant came off two
+certificates, and nothing measured whether the *law* was right. It has one now:
+ten para-aramid points, two constructions of one Twaron fibre, shot to STANAG 2920
+with the 1.10 g .22 FSP (Kośla et al., *Materials* 2022, 15(6), 2314). Each point
+publishes an areal density as well as a thickness, so the packing fraction the
+model needs is measured rather than assumed — the sewn packs come out at 0.48 fibre
+by volume and the pressed laminate at 0.61.
+
+What the ladder says:
+
+- The woven ladder's **shape holds**: the model tracks it to a spread of 1.09
+  across 3.6–10 mm, which is the first evidence that `π·d²/4·T` is the right form
+  for a pack at all.
+- The laminate ladder's shape **does not**: its error climbs from 1.06 at 2.2 mm to
+  1.25 at 6.8 mm. Part of that may be packing rather than thickness — its last
+  point is 17% denser than the rest of its own ladder — and a laminate ladder at
+  constant packing would separate the two.
+- The constant it derives is **23.1 against the 27.5 the certificates demand**.
+  That direction is the finding. A certificate is one-sided — the plate stopped the
+  round, so the limit is *at least* the test velocity — so 27.5 is a floor, and a
+  floor sitting above a two-sided measurement means the model is short of work
+  somewhere. Moving `FibrousK` onto the ladder was tried: it puts a dozen certified
+  plates below their own test velocity, which is not a recalibration but a model
+  claiming real armour does not work.
+
+So the constant stays where the certificates put it, the ladder rows carry the miss
+in the open (two of the ten are red), and what closes it is a thickness law that
+fits both — thin fragments and 21–33 mm bullet-rated plates — not a number chosen
+between them. The other half of the same evidence is that fibre still reads the
+small fast bullet and the big slow one in the wrong order (M193 against M80), which
+is about the `d²` area law rather than the thickness law, and which this ladder
+cannot settle because it is one projectile.
+
+**Obliquity, measured.** The `1/cos θ` path length is not a small assumption: for a
+plate that fails by plugging it says `v_bl` rises *exactly* as `sec θ`, that the
+gain is the same for steel, aluminium and titanium alike (the material cancels),
+and that a fibre pack gains only `√sec θ`. It was the last input in the armour model
+with nothing published behind it, and it moves outcomes harder than any constant
+here — a raid log had one vest reading `v_bl` from 767 to 1528 m/s on neighbouring
+hits, all of it angle.
+
+Two datasets now test it, both from the REL ballistic-limit database (Ryan et al.,
+*Defence Technology* 2023; Mendeley `10.17632/4f92y6jzzh.2`, CC BY 4.0):
+
+| angle | measured `v_bl`/`v_bl`(0°) | `sec θ` |
+|---|---|---|
+| 15° | 1.030 | 1.035 |
+| 30° | 1.158 | 1.155 |
+| 45° | 1.433 | 1.414 |
+
+— 20 mm of 6082-T651 against the 7.62 APM2, all four angles in one trial
+(Forrestal, Børvik, Warren & Chen, *Experimental Mechanics* 54: 471–481, 2014), and
+the bare cores of the same bullets give 1.041 / 1.161 / 1.407. The secant law is
+right to within 1.5% over the whole range.
+
+The material-cancels claim gets its own test from twelve other pairs — ten
+aluminium rows across seven alloys, plus one ultra-high-hardness steel at two
+thicknesses, from four studies, each plate shot at 0° and 30°. They scatter from
+1.06 to 1.16 about a
+mean of 1.11, with the model's 1.155 at the top of that range: an angled plate in
+the game is a few percent stronger than the average trial found. That is recorded
+rather than fitted away, because one number falling out of the geometry is worth
+more than an exponent fitted to the mean of twelve alloys nobody wears.
+
+**Where it stops.** The published series ends at 45°. The cosine floor is 0.34,
+about 70°, so everything between 45° and the floor is extrapolation on a law
+verified over half that range, and nothing measures the fibre mode's `√sec θ` at
+any angle at all.
+
+### What mass the limit is computed against
+
+The same trial settled a question the model had been answering wrong. Forrestal
+fired complete APM2 bullets and, separately, their stripped 5.3 g cores into the
+same plate: the limits came out within a few percent of each other — 501 against
+514 at normal incidence, 718 against 723 at 45° — so half the bullet's mass makes
+no difference to whether it gets through a metal plate. The jacket stays at the
+face.
+
+```
+m_ductile = m_core + JacketCarry · (m_bullet − m_core),  JacketCarry = 0.05
+m_brittle = m_fibrous = m_bullet
+```
+
+`JacketCarry` is `(514/501)² − 1` spread over the mass that is not core: five
+percent. The split by failure mode is not a convenience — the trial is a **metal
+plate**, and a tile does not get punched, it shatters and takes the whole
+projectile with it, while a fibre pack catches what arrives. Reading those two at
+the core's mass alone produces answers the standards themselves refute: a Level IV
+tile stopping .30-06 AP more easily than M80 ball, and the ceramic class rungs
+falling under their own certificates. What would extend the measurement: Forrestal's
+experiment against a tile and against a pack.
+
+The rule it replaced — *the whole bullet, always* — was defended on the grounds
+that describing a 7N10 as its 1.7 g core made the round harder to stop than the
+same round with no core described. That is still true, and it is no longer a
+defence: the undescribed reading over-credits a bullet with mass its core never
+delivers, and the measurement says so. Every mode constant was fitted against the
+old rule and every one of them was derived again.
 
 Below `v_bl` the plate holds. Above it, Recht–Ipson gives what carries on, and the
 plug punched out of the plate leaves with it:
@@ -241,6 +514,39 @@ v_r = m/(m + m_plug) · √(v² − v_bl²)
 
 The energy the armor took is no longer a constant to tune. It is `½m(v² − v_r²)`,
 and it falls out of the limit.
+
+### The class an item can hold
+
+A class is a certificate a construction earned, and the game hands out ratings its
+materials cannot reach: 125 of the aramid packages sewn into vests are stamped
+class 3, which with aramid alone would take on the order of 200 mm of it. That is
+why carriers are sold as Br1 or Br2 and the rifle protection lives in the plates.
+
+The ceiling is a property of the form, not of the item:
+
+| Form | aramid, UHMWPE | polycarbonate | metal, ceramic |
+|---|---|---|---|
+| sewn package | 2 | — | uncapped |
+| pressed shell, visor, mask | 3 | 2 | uncapped |
+| plate | uncapped | — | uncapped |
+
+Pressing the same fibre into a resin-bonded shell buys one rung and no more: past
+that a helmet stops getting thicker and starts getting a metal or ceramic element,
+and that element is a product in its own right. Metal and ceramic are not capped —
+a heavier helmet really is a thicker shell — and neither is a plate, which is where
+rifle protection lives and whose thickness answers for it in the ballistic limit
+directly.
+
+The construction has always been read at the ceiling. What the item carries is now
+read there too, because everything that reads a class rather than a thickness — the
+fragment gate, the fallback threshold below, the item card, other mods — believed
+the label. An aramid package rated 3 was being modelled as the class 2 package it is
+and gated fragments as though it were a class 3 plate.
+
+The one exemption is a hard element the game files under some other slot, and it is
+data rather than a rule: the Velocity SLAAP is 18 mm of polyethylene against the
+7.3 mm of the thickest shell anyone fields — a rifle-rated applique that bolts onto
+a helmet — so the reference book marks it a plate and its rating stands.
 
 ### The class threshold, for armor with no construction on file
 
@@ -319,19 +625,43 @@ down and aramid does not.
 
 ### Local damage and wear
 
-Armor remembers where it has been hit. Around each impact, within a
-material-specific radius `DAreaMm`, the local threshold is multiplied by
-`DegradeMult` per prior hit, with a floor:
+A worn plate is not uniformly thinner — it is intact where nothing hit it and
+broken where something did. The old model multiplied the whole plate by a smooth
+durability factor, which made a plate at 50% strength half a plate everywhere;
+wear is now **probabilistic with one curve and two inputs**.
 
-```
-U_limit ← U_limit · max(DegradeMult^n, DegradeFloor)
-```
+The curve: a spot carrying damage `x` (0..1) presents `1 − x^k` of its
+thickness. `k` is how local the material keeps its damage — aramid at 4 loses
+the cut fibres and nothing beside them, soft ductile metal and UHMWPE sit at 3,
+hard steel and titanium at 2, ceramic at 1.5 because the crack web spreads and a
+struck tile is rubble.
 
-This is what separates materials in play. Ceramic has the highest threshold, the
-smallest `DegradeMult` and the widest damage radius — it cracks in tiles, and the
-second hit into the same tile meets rubble. Armor steel has a narrow radius and a
-high multiplier: the gong takes dozens of hits. UHMWPE and aramid sit between,
-with the sharp-core vulnerability above.
+The inputs:
+
+- **Seen damage.** Armor remembers where it has been hit; a new hit within
+  `DAreaMm` of recorded ones is answered by geometry, nothing to roll:
+  `x = 1 − (1−q)^n` over the `n` hits recorded there, `q` being the damage one
+  hit does to a spot (ceramic 0.90, hard steel/titanium 0.50, soft
+  ductile/UHMWPE 0.40, aramid 0.30). After one recorded hit a ceramic tile
+  presents 15% of itself, hard steel 75%, UHMWPE 94%, aramid 99%.
+- **Unseen damage.** The item entered the raid worn, or the hit memory (64
+  records) overflowed. The chance of striking a damaged spot **is** the missing
+  durability; a struck spot reads `x = max(missing, q)` — max, because a roll
+  that said "you found damage" means at least one hit landed there, and with it
+  the two paths meet at the boundary instead of telling two stories about one
+  plate. A clean roll meets the full plate.
+
+On a two-layer barrier `q` and `k` belong to the **layer**: one draw decides the
+event, and the ceramic face answers it as ceramic while the fibre panel behind
+answers as fibre — which is how a composite keeps stopping rifle rounds on a
+cracked tile's backing, degraded but not gone.
+
+The damage radius has an anchor the rest of the numbers lack: both certification
+standards space their scored shots so that damage zones do not interact — NIJ
+0101.06 demands 51 mm between hits — so no material's `DAreaMm` exceeds 51. The
+`q` values are assumptions pending manufacturers' multi-hit data (which exists,
+but for *spaced* hits, not one spot), and are marked as such in the config, on a
+par with the certification criterion's `P_pass`.
 
 Durability loss is driven by absorbed energy rather than by hit count:
 
@@ -428,9 +758,32 @@ now; a proper ICP state with its own timeline and blackout is a TODO.
 ### Wounds
 
 Any penetrating wound above a damage threshold bleeds, bypassing the vanilla
-probability roll — a hole in you is a hole blood comes out of. Heavy bleeding
-keeps its own roll on top. Fractures come from actual bone hits with energy behind
-them rather than from a damage-number lottery.
+probability roll — a hole in you is a hole blood comes out of. Fractures come from
+actual bone hits with energy behind them rather than from a damage-number lottery.
+
+Whether it bleeds *badly* is decided by what the channel crossed, not by what was
+fired. A round does not carry a bleeding rate around with it: it cuts whatever was
+in front of it. A channel of diameter `d` over a length `L` sweeps a plane of
+`d·L`, and the vessels it opens are the ones that crossed that plane — a Poisson
+process in the length of vessel per unit volume:
+
+```
+swept  = sqrt(4 · V_cavity · P / π)
+P(art) = 1 − exp(−density_region · swept)
+```
+
+The cartridge is still in it, but through the channel it actually cut. Only the
+density knows any anatomy, and it is kept in the regions the combat mortality data
+is kept in: general torso, junctional (neck, groin, shoulder — where a vessel runs
+and a tourniquet has nothing to squeeze against), limb, head. Calibrated so a
+rifle round across a chest lands about where the old per-cartridge chance was.
+
+The great vessels are deliberately absent from that term. The aorta and the vena
+cava are in the mediastinum, and the retrohepatic vena cava runs *through* the
+liver — which is why those wounds kill and why there is nothing to press on. They
+open an internal bleed instead, scaled by how much of the organ was involved, and
+no bandage, tourniquet or hemostatic reaches it. Counting them in both places
+would have been the same vessels twice, once in a form a field kit closes.
 
 ## Ammunition normalization
 
@@ -451,6 +804,29 @@ centre-mass hit rather than a best case.
 The depth is `BodyDepthMm` in the server config. It only ever affects the
 displayed value and the fallback damage when the physics model is off; a real hit
 deposits along the collider chord it actually crosses.
+
+The number is therefore **a ranking, not a contract**. It exists so two cartridges
+can be compared under identical conditions; it is not a promise about any
+particular raid hit, and a hit that lands above or below it is the model working,
+not a bug. How far off it can be, and why:
+
+- **The chord.** The card assumes 250 mm of tissue. A grazing hit crosses a few
+  centimetres and deposits almost nothing; an oblique shot through a torso can
+  cross 400 mm and deposit more than the card. This alone spans roughly 0.1× to
+  1.5× the card value.
+- **Distance.** The card is at muzzle velocity from 5 m. At 200 m a rifle round
+  has lost enough velocity that both the crush and the stretch terms are down —
+  tens of percent, more for light fast bullets.
+- **Anatomy.** Organ zones multiply what the chord deposits: the same chest chord
+  reads differently through lung, liver or heart. Limb hits stop in bone or exit
+  early.
+- **What armour left of the bullet.** After a plate, the round arrives slower,
+  deformed and sometimes lighter; the card knows nothing about armour.
+
+So "the card says 110 and the raid log says 95" is not a defect report — it is a
+hit at range, or off-centre, or through less body than the reference chord. A
+defect report is a raid hit whose damage cannot be reproduced from its own logged
+physical state (`events.log` carries the full layout per hit).
 
 ### Bullet construction
 
@@ -474,8 +850,10 @@ but 40 HRC of steel tip upsets on the face of the panel and 58 HRC does not.
 
 For cartridges the book does not name — modded ammunition, mostly — `X` is inferred
 as a percentile blend within the caliber cohort (specific damage positive, specific
-penetration negative, fragmentation chance), and the core is read off how far the
-round's penetration sits above what its energy density buys. At the cohort median
+penetration negative; the vanilla fragmentation chance used to be a third component
+and is gone — the model derives fragmentation itself, and feeding the game's
+opinion of it back into `X` would be circular), and the core is read off how far
+the round's penetration sits above what its energy density buys. At the cohort median
 that comes out monolithic, which is the truth for most of them. Cohorts smaller
 than a threshold fall back to a global regression.
 
@@ -507,28 +885,158 @@ The free constants were fixed against a small number of anchors rather than tune
 to feel:
 
 - channel depth: 9 mm FMJ reaching roughly half a metre of ordnance gelatin
-- permanent cavity per HP: 9×19 PST landing near its vanilla damage
-- temporary cavity per HP: 7.62×39 PS landing near its vanilla damage
+- permanent and temporary cavity per HP: the combat-mortality research figure of
+  about **2.3 rifle hits to the torso (85 HP) to incapacitation** — roughly 37 HP
+  a hit. The two constants (`WoundVolumePerHp` 381 mm³, `TcEnergyPerHp` 74 J) are
+  one calibration and move together. They used to be anchored to the vanilla
+  damage of two cartridges (9×19 PST ≈ 54, 7.62×39 PS ≈ 57), which calibrated the
+  model to the game's own invented numbers; against the research anchor the
+  permanent-cavity share roughly doubles and the stretch share falls to about a
+  third, so pistol rounds (almost all PC) gain relative to rifle rounds (much of
+  whose damage is TC). This is a whole-balance change, and its verification is a
+  raid, not an argument.
 - penetration scale: M61, M995 and PS mapping close to their vanilla ratings
 - armor classes: the specific energy of each GOST class's test cartridge
 - blast: one reference grenade's vanilla strength against its real charge
 
-Anchoring to vanilla for two cartridges is deliberate. The model is meant to
-change the *shape* of the damage curve — how it responds to distance, armor and
-geometry — not to make every number unrecognisable.
+The armor constants follow a stricter rule — **strengths are published, free
+constants come one per failure mechanism**, derived in a fixed order so that no
+constant absorbs another's data (the derivation is repeated by CalibrationTests
+against the shipped values):
+
+0. **The projectile first.** Every constant below is fitted through a core, so the
+   core has to be right before any of them mean anything: 5.3 g at 6.2484 mm and
+   **570 HV**, measured, where the ladders used to assume 730 HV — which is what
+   the same database measures for *tungsten carbide*. Hardened steel AP cores come
+   in at 570 (.30 M2 AP), 595 (14.5 B-32) and 630 (.50 M2 AP). Re-reading it, plus
+   the jacket-carry rule above, moved `DuctileK` from 4.69 to **2.64** and the
+   hardness exponent from 1.32 to **1.96** without either changing what an AP round
+   does to a plate — the two errors had been cancelling.
+1. `DuctileK` from the RHA V50 ladder alone; the steel-certified Russian plates and
+   titanium's own ladder point are then checks, not inputs.
+2. `HoleGrowthK` from the mild-steel ladder — which identified it only as a
+   bound; see "The ballistic limit" for what that ladder's shape actually says.
+3. The hardness exponent from what separates hard plate from mild against the
+   same core — and, new with the measured core, its two **bounds** from the only
+   evidence that speaks to them. Every ladder in the fixture is an AP core, so the
+   ladders say nothing about a lead bullet against a hard plate (the ceiling,
+   **2.08**) or a hardened core against a soft plate (the floor, 0.30, anchored on
+   a 7N21 against aluminium and bounded above by the RHA ladder's own factor, past
+   which a softer plate would out-earn a harder one).
+
+   The ceiling was 4.5 and its anchor was **circular**: the two steel pistol rungs
+   it stood on are *computed*, solved from their own class's cartridge at this very
+   clamp, so any ceiling produces a thickness that clears the certificate and the
+   certificate confirms nothing. Sweeping the clamp from 4.5 to 1.0 moves not one
+   certified product in the corpus — they are ceramic, fibre, or met by an AP core
+   the clamp never reaches. What pins it is the single certificate where a soft core
+   meets a hard plate: a 0.25-inch AR500 plate against six shots of M80 ball, 9.5 g
+   of lead alloy at 847 m/s into 580 HV steel. That plate holds down to 2.077 and
+   fails below, so 2.08 is the floor it demands and the value sits on it, as
+   `FibrousK` sits on its own. At 4.5 the same plate read 47% over its certificate,
+   and 6.5 mm of titanium stopped a .50 BMG. The two computed pistol rungs were
+   re-solved at the new clamp: 1.3 → 1.9 mm and 1.7 → 2.5 mm.
+4. `BrittleK` from the bare-tile DOP point read one-sided ("the limit is at or
+   above the velocity fired"), with the ceramic certificates pinning where in
+   the tile's band the constant sits. Since the backing became its own layer,
+   the tile and the certificates agree — the 2.5× they used to disagree by was
+   the backing's work hiding inside the constant.
+5. `FibrousK` on the certificates it has to satisfy, read as a floor rather than
+   a fit — 28.8, with the sewn Бр2 package binding. It is no longer the mode with
+   no ladder: ten para-aramid points now sit under it and derive 23.1, and the
+   ladder cannot become the anchor until the thickness law is fixed, because on its
+   own value a dozen certified plates stop holding their class. See "The ballistic
+   limit"; this is now the model's best-documented weakness rather than its
+   least-documented one.
+6. The **packing exponent**, fitted against all of the fibre evidence at once —
+   ladders at 0.48–0.72 packing, pressed plates at 1.0, sewn packages at 0.44 —
+   and landing on **1.0**, which is to say the linear law the model already had.
+   The two aramid ladders on their own solve 0.38 and agree with each other
+   exactly at it; the same value moves every pressed plate from 12% away to 32%
+   away, and the difference between a woven cloth and a unidirectional laminate is
+   not only packing. What would settle it: one construction at three packings.
+
+**What the fixture has never seen: a heavy large-calibre projectile.** Every point
+behind every constant above is a 3.5–10.7 g core of 5.6–7.8 mm. A .50 BMG is 42 g
+at 12.7 mm — four times the mass and one and a half times the calibre of anything
+the model was fitted through — and against it the model reads plates far stronger
+than they are. Two measurements say so, in the same direction:
+
+- The model's own `v50` ratio between .50 M2 AP and .30-06 M2 AP against one plate
+  is **0.65–0.74**. Published penetration says a .50 AP defeats about twice the RHA
+  a .30-06 AP does at the same range, which for a plugging plate (`v_bl ∝ T`) makes
+  the ratio **0.50**.
+- Nothing worn on a body stops a .50 BMG, and the model has 13 mm of 6B5-15's
+  ceramic holding one at 985 m/s head-on — above the 847 it arrives at, at every
+  angle — and an ESAPI at 835, a coin flip. It also puts the 1980s 6B5-15 above a
+  Level IV ESAPI, which is its own tell.
+
+The gap is a factor of about 1.5 in `v50`, and it is not the hardness clamp: the
+brittle branch has no hardness term at all and misses by the same margin. It is the
+extrapolation itself. What closes it is `v50` rows at .50 calibre — the REL database
+that supplied the obliquity trials above has them — read into the ladder alongside
+the 7.62 rows, so that the `d` and `m` dependence is measured across a range instead
+of assumed from one end of it.
+
+**The obliquity the model is fed, as opposed to the law it feeds.** The secant law
+is verified to 45°; what reaches it is the surface normal of whatever hitbox the
+game's own raycast struck (`HitNormal` is `RaycastHit_0.normal` and nothing else).
+Over 330 armour hits in one raid that angle never once came in under 14°, and its
+median was 33°. No surface that ever faces the shooter squarely can produce that —
+a cylinder hit uniformly across its width puts about 17% of hits inside 10°. Since
+`v50 ∝ 1/cos θ` in every branch, a 33° median is a flat **+19% on every limit in the
+game**, and the 60° tail doubles them. Whether the game's hitboxes are genuinely
+that sloped or the plate zones are being struck on faces that are not the plate's is
+open, and it is measured by the angle now printed on every armour line in the event
+log rather than argued about.
+
+The wound constants used to be anchored to vanilla for two cartridges, on the
+argument that the model should change the shape of the damage curve rather than
+every number. That argument lost: a model whose scale is calibrated to invented
+numbers inherits their invention, and the research anchor above replaced it. The
+sketch this came from carried a `TissueElasticity` term for the stretch damage;
+in the model that role is split between two things that already exist — the
+Fackler velocity sigmoid (whether stretch tears at all) and the organ-zone
+severities from the AIS tables (how much a given tissue minds being stretched:
+`KHeart`, `KLiver`, `KSpine` against the lung baseline). It is deliberately not a
+third, separate knob.
 
 ## What is deliberately not modelled
 
-- **Organs.** The game exposes only BSG's hitboxes, and there is no heart or lung
-  among them. Zone multipliers over the colliders that do exist are as close as a
-  mod can get.
-- **Yaw and tumbling.** Real wound channels depend heavily on when a bullet yaws.
-  There is no data per cartridge to drive it and no way to observe it in game, so
-  expansiveness stands in for the whole family of "does it stay point-forward".
+- **Organ shape.** The zones are thirds of BSG's boxes, not anatomy: no
+  ellipsoids, no per-organ geometry, and the same organ comes out a different size
+  depending on which of a body part's boxes the bullet went into. The one thing
+  that is resolved properly is which way round a box is.
+- **A neck length per cartridge.** Where a bullet turns is modelled, but the
+  median it is drawn about is one constant in calibres for every round. Published
+  gelatin necks run from about twelve calibres to over thirty, and closing that
+  needs a measured neck per cartridge that no template carries.
 - **Bone geometry.** Bone is a probability per collider scaled by energy, not a
   skeleton.
 - **Ricochet angles** beyond the floor on the cosine term; vanilla handles the
-  bounce itself.
+  bounce itself. The secant law the floor sits on is verified to 45° and
+  extrapolated from there — see "The ballistic limit" — and no published series
+  we could find reaches 60°, where a hard core stops perforating and starts
+  glancing off.
+- **Obliquity for a fibre pack.** The path lengthens by `1/cos θ` there too, so
+  the pack gains `√sec θ`, and nothing measures it. Textile armour is reported to
+  behave differently in kind from plate at angle — the projectile can push fibres
+  aside instead of loading them — so this is an assumption inherited from the
+  plate case rather than a result. What would close it: one soft package shot at
+  0°, 30° and 45° with the same fragment.
+- **Ceramic telling a lead core from a hardened one.** The phenomenon is real —
+  alumina shatters a lead bullet and loses to a 60 HRC core — but at 1500 HV a
+  ceramic outranks every core in the game, so the hardness ratio pinned to its
+  ceiling for all of them and had become a flat 2.5× on the strength: a constant
+  wearing physics' clothes, unable to distinguish the cores it existed to
+  distinguish. It is removed rather than kept decorative. What would bring it
+  back: one ceramic tile shot against cores of two hardnesses (a lead-cored ball
+  and an AP of the same calibre), giving the two points the exponent needs.
+- **Sewn versus consolidated backing.** The fibre panel behind a plate's face is
+  modelled at laminate packing; a stitched package behind a Russian plate is
+  looser than that. The book's backing thicknesses were derived from areal
+  density at laminate density, so the arithmetic is self-consistent, but a
+  measured package density per product would replace an assumption with a fact.
 
 ## Sources
 
@@ -542,6 +1050,16 @@ geometry — not to make every number unrecognisable.
 - **Clinical literature on behind-armor blunt trauma** in military medicine, with
   the backface-deformation limits used in armor certification.
 - **GOST body-armor protection classes** and their certification test cartridges.
+- **Kośla, Kubiak, Łandwijt, Urbaniak & Kucharska-Jastrzabek**, *Materials* 15(6)
+  2314 (2022) — V50 against the STANAG 2920 .22 FSP for ten para-aramid packages,
+  by areal density and thickness: the fibre mode's ladder.
+- **Forrestal, Børvik, Warren & Chen**, *Experimental Mechanics* 54: 471–481
+  (2014) — 6082-T651 against the 7.62 APM2 at 0°, 15°, 30° and 45°, bullets and
+  bare cores: the obliquity law and the jacket's contribution to it.
+- **Ryan, Nguyen, Gallardy, Cimpoeru et al.**, REL ballistic-limit database
+  (*Defence Technology* 2023; Mendeley `10.17632/4f92y6jzzh.2`, CC BY 4.0) — 1084
+  measured V50s in aluminium, titanium and steel, including the 0°/30° pairs the
+  material-independence of the obliquity term is checked against.
 - **Ordnance gelatin test data** (10% tissue simulant) for penetration depth.
 - **Open-source prototype specifications** for shell loads, pellet counts, grenade
   fragment mass and velocity, and explosive charge weights; plus the cube-root

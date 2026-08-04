@@ -322,6 +322,36 @@ public class ReferenceBookTests
     }
 
     /// <summary>
+    /// A strength without a provenance is indistinguishable from a fitted one. "Source
+    /// is non-empty" does not guard that — the old book passed it with "450 MPa shear",
+    /// which restates the number without saying where it came from. What this test
+    /// demands is the origin itself: either a derivation rule written with the
+    /// convention's "·" (0.45·UTS and its kin) or the name of a document from the fixed
+    /// list below. The list is the convention: extending it is a reviewed change, not a
+    /// way past the test.
+    /// </summary>
+    [Fact]
+    public void Every_armour_material_strength_names_its_origin()
+    {
+        // documents the book is allowed to cite; each name is a real, findable source
+        string[] documents =
+        [
+            "SSAB", "ASM", "MMPDS", "MIL-DTL", "CoorsTek", "Saint-Gobain", "Ashby",
+            "DuPont", "Dyneema", "GOST", "STANAG",
+        ];
+
+        foreach (var (name, m) in Shipped().ArmorMaterials)
+        {
+            var derived = m.Source.Contains('·');
+            var cited = documents.Any(m.Source.Contains);
+
+            Assert.True(derived || cited,
+                $"{name}: Source says \"{m.Source}\" — a number, maybe, but not where " +
+                "it came from. State the derivation rule (with '·') or name the document");
+        }
+    }
+
+    /// <summary>
     /// Thickness is the entire reason the plate table exists — the one physical number
     /// the game has nowhere — so an entry without it carries nothing.
     /// </summary>
@@ -416,11 +446,23 @@ public class ReferenceBookTests
             "Aluminium/4",
         ];
 
+        var book = Shipped();
         foreach (var key in shipped)
         {
             Assert.True(byClass.ContainsKey(key), $"no reference plate for {key}");
-            Assert.InRange(byClass[key].ThicknessMm, 1, 60);
+
+            // through the resolver: a represented rung's thickness is its product's
+            var resolved = book.ResolveByClass(key);
+            Assert.InRange(resolved.ThicknessMm, 1, 60);
             Assert.True(materials.ContainsKey(key.Split('/')[0]), $"{key}: unknown material");
+
+            // a rung that names a product must name one that exists and matches
+            if (byClass[key].SameAs.Length > 0)
+            {
+                Assert.True(book.ArmorPlates.ContainsKey(byClass[key].SameAs),
+                    $"{key} borrows from '{byClass[key].SameAs}', which is not in the book");
+                Assert.Equal(key.Split('/')[0], resolved.Material);
+            }
         }
     }
 
@@ -431,12 +473,14 @@ public class ReferenceBookTests
     [Fact]
     public void A_higher_class_of_the_same_material_is_thicker()
     {
-        var byClass = Shipped().ArmorByClass;
+        var book = Shipped();
+        var byClass = book.ArmorByClass;
 
         foreach (var group in byClass.GroupBy(kv => kv.Key.Split('/')[0]))
         {
             var ladder = group
-                .Select(kv => (Class: int.Parse(kv.Key.Split('/')[1]), kv.Value.ThicknessMm))
+                .Select(kv => (Class: int.Parse(kv.Key.Split('/')[1]),
+                    book.ResolveByClass(kv.Key).ThicknessMm))
                 .OrderBy(x => x.Class)
                 .ToList();
 
@@ -563,6 +607,32 @@ public class ReferenceBookTests
     }
 
     /// <summary>
+    /// A class ceiling is a statement about a form — plies stitched together, prepreg
+    /// pressed into a shell — and a hard element is not one of them. The Velocity SLAAP
+    /// bolts onto a helmet and is rated for rifle fire, so the shell ceiling has nothing
+    /// to say about the class it is sold at, and the book has to say so in data rather
+    /// than in a comment.
+    /// </summary>
+    [Fact]
+    public void A_hard_element_in_a_helmet_slot_is_not_read_as_a_shell()
+    {
+        var book = Shipped();
+        var slaap = book.ArmorPlates["item_equipment_helmet_gentex_slaap_gray"];
+
+        Assert.True(slaap.Plate);
+        Assert.True(slaap.ThicknessMm > book.HelmetShells["UHMWPE/3"].ThicknessMm,
+            "an applique the ceiling does not reach has to be visibly not a shell");
+
+        // and it is a construction, not a lever: the flag lifts a rating, so an entry
+        // that carries it has to have the thickness to answer for the one it keeps
+        foreach (var (key, entry) in book.ArmorPlates)
+        {
+            Assert.True(!entry.Plate || entry.ThicknessMm > 0,
+                $"{key}: called a plate with no thickness to show for it");
+        }
+    }
+
+    /// <summary>
     /// Sometimes the maker publishes what a thing stops and nothing about what it is
     /// made of. That rating is still better than the game's — Fort certify the Kiver-M
     /// at 1+ and the game prints 3 — so the reference is read at theirs.
@@ -614,7 +684,11 @@ public class ReferenceBookTests
         }
     }
 
-    /// <summary>Runs the normalizer's own lookup, which is private to it.</summary>
+    /// <summary>
+    /// Runs the normalizer's own lookup, which is private to it — through the ceiling,
+    /// as the normalizer does: the lookup is handed a rating the material can hold, and
+    /// the item is re-rated to the same figure.
+    /// </summary>
     private static double Resolve(ReferenceBook.AmmoReference reference,
         string item, string material, int cls)
     {
@@ -622,7 +696,8 @@ public class ReferenceBookTests
             BindingFlags.NonPublic | BindingFlags.Static);
         Assert.NotNull(method);
 
-        var resolved = method!.Invoke(null, [reference, item, material, cls, cls]);
+        var rating = Math.Min(cls, ArmorNormalizer.ClassCeiling(item, material));
+        var resolved = method!.Invoke(null, [reference, item, material, rating]);
         Assert.NotNull(resolved);
 
         var plate = (ReferenceBook.ArmorPlateRef)resolved!.GetType()

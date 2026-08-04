@@ -26,10 +26,10 @@ namespace PLATE.Tests
             ExpansionDepthFactor = 0.4,
             ExpansionAreaFactor = 1.35,
             BodyDepthMm = 250,
-            WoundVolumePerHp = 710,
+            WoundVolumePerHp = 381,
             TcVelocityCenter = 600,
             TcVelocityWidth = 80,
-            TcEnergyPerHp = 28,
+            TcEnergyPerHp = 74,
             TcFragBonus = 0.5,
             EnergyCapPerHp = 7,
         };
@@ -126,6 +126,69 @@ namespace PLATE.Tests
             var area = Math.PI * DiaMm * DiaMm / 4.0;
             var expected = area * (1 + p.ExpansionAreaFactor * X) * chord / p.WoundVolumePerHp;
             Assert.Equal(expected, d.Pc, 1);
+        }
+
+        /// <summary>
+        /// The old single cross-section is exactly the case where the projectile never
+        /// turns, and that is not a coincidence worth losing: every number the model
+        /// produced before the split is still reachable by saying the neck is longer
+        /// than the wound.
+        /// </summary>
+        [Fact]
+        public void A_projectile_that_never_turns_cuts_the_channel_it_always_did()
+        {
+            var p = Params();
+            const float chord = 250f;
+
+            var straight = ClientWoundModel.Compute(MassG, DiaMm, V, X, 0f, chord, p,
+                neckMm: float.MaxValue);
+            var area = Math.PI * DiaMm * DiaMm / 4.0;
+
+            Assert.Equal(area * (1 + p.ExpansionAreaFactor * X) * chord / p.WoundVolumePerHp,
+                straight.Pc, 1);
+        }
+
+        /// <summary>
+        /// Where it turns is what makes two identical-looking hits differ. Same
+        /// cartridge, same velocity, same chest — the one that went broadside a hand's
+        /// width in cuts a bigger cavity than the one that carried on nose-first.
+        /// </summary>
+        [Fact]
+        public void Turning_inside_the_part_widens_the_channel()
+        {
+            var p = Params();
+            const float chord = 250f;
+
+            var early = ClientWoundModel.Compute(MassG, DiaMm, V, X, 0f, chord, p, neckMm: 80f);
+            var late = ClientWoundModel.Compute(MassG, DiaMm, V, X, 0f, chord, p, neckMm: 400f);
+
+            Assert.True(early.Pc > late.Pc,
+                $"turning early cut {early.Pc:0.#} against {late.Pc:0.#} for never turning");
+        }
+
+        /// <summary>
+        /// Denser tissue is a shorter channel, and a shorter channel leaves more of the
+        /// energy behind. The scale has to move the depth and the deposition together —
+        /// they come from the same drag law and two of them disagreeing would be two
+        /// models.
+        /// </summary>
+        [Fact]
+        public void Tissue_density_moves_the_channel_and_the_deposition_together()
+        {
+            var p = Params();
+
+            var dense = ClientWoundModel.ChannelMm(MassG, DiaMm, V, X, p, 0.85f);
+            var loose = ClientWoundModel.ChannelMm(MassG, DiaMm, V, X, p, 1.15f);
+            Assert.True(dense < loose);
+
+            const float chord = 250f;
+            var inDense = ClientWoundModel.Compute(MassG, DiaMm, V, X, 0f, chord, p,
+                tissueScale: 0.85f);
+            var inLoose = ClientWoundModel.Compute(MassG, DiaMm, V, X, 0f, chord, p,
+                tissueScale: 1.15f);
+
+            Assert.True(inDense.DepositFrac > inLoose.DepositFrac,
+                "denser tissue took less of the energy over the same distance");
         }
 
         /// <summary>

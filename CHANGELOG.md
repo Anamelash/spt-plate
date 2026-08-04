@@ -42,8 +42,35 @@ projectile actually brought in. Consequences you will feel:
 - **Bullet fragmentation splits the bullet's mass.** Each fragment continues as
   its own small projectile; fragments that cannot exit the current body part
   deposit their energy there. No bonus damage appears out of thin air.
+- **Whether a bullet fragments is derived, not read from the card.** The vanilla
+  `FragmentationChance` field takes no part in the wound formulas any more: a
+  bullet breaks up where it turns broadside, if it is still faster there than a
+  thin jacket can bear (600–700 m/s published band), and only its deformable
+  share breaks — a hard core never does. M193 and M855 fragment at their speeds,
+  7.62×39 PS, monoliths and pistol rounds do not, with no per-cartridge opinion
+  involved.
 - The damage and penetration numbers on item cards remain as reference — the
-  actual result is always computed from physics at impact.
+  actual result is always computed from physics at impact. The card value is one
+  defined test (a perpendicular centre-chest hit at muzzle velocity, 250 mm of
+  tissue) and exists to rank cartridges against each other; a raid hit routinely
+  lands anywhere from a small fraction of it (graze, extremity) to half again
+  above it (long oblique torso chord), and that spread is the model working as
+  designed, not an error. See MODEL.md, "What the number on the card means".
+- **Armour wear is probabilistic, not a smooth discount.** A worn plate is
+  intact where nothing hit it and broken where something did: the chance a hit
+  finds a damaged spot equals the missing durability, and a found spot loses
+  thickness by a per-material law — a ceramic tile struck twice in the same
+  place is rubble (15% left), hard steel keeps 75%, an aramid pack barely
+  notices (99%). Repeat hits into remembered impact points are resolved by
+  geometry, no dice. On composite plates the face and the backing wear each by
+  their own law.
+- **The damage scale is anchored to research, not to vanilla.** The two wound
+  constants used to be tuned so two reference cartridges landed near their
+  vanilla damage; they are now set from the combat-mortality figure of ~2.3
+  rifle hits to the torso to incapacitation (~37 HP a hit). Crush damage roughly
+  doubles per unit of cavity and stretch damage falls to about a third per
+  joule, so heavy slow bullets gain relative to light fast ones and pistol
+  calibres close some of the gap to rifles. Expect every damage number to move.
 
 *What this is based on:* the standard quadratic drag law — a projectile slowing
 down in tissue loses velocity exponentially, so how deep it reaches is driven by
@@ -55,6 +82,52 @@ only turns destructive once impact velocity crosses the classic high-velocity
 wound boundary, come from Fackler's wound-ballistics work: elastic tissue
 survives being stretched slowly, so a slow heavy bullet cuts while a fast light
 one tears.
+
+## Anatomy: where the bullet went, not just which limb
+
+**Vanilla:** a body part is a bucket of hit points with a flat multiplier. Every
+chest hit is the same chest hit, and how badly a wound bleeds is a number
+attached to the cartridge — the same round bleeds identically through a thigh and
+through the middle of a chest.
+
+**PLATE:** the hitboxes the game already has are read as anatomy. The middle third
+of the upper ribcage is the heart and the great vessels behind it; the right third
+of the lower ribcage is the liver; the thin spine collider is the cord. Which way
+round a hitbox is gets worked out at the moment of the hit, so the liver stays on
+the target's own right whichever way they are facing. Consequences you will feel:
+
+- **Centre mass is genuinely worse than the edge of it.** A channel that runs
+  deeper than halfway through the heart or across the cord kills — not by a
+  scripted death, but by damage equal to what the body part had left, so the kill
+  feed, the statistics and other mods see an ordinary hit.
+- **A near miss still counts.** The stretch cavity of a rifle round can reach an
+  organ the bullet itself missed, which raises the damage and can stop a heart or
+  tear a liver loose. A pistol practically never does either — it has no cavity
+  worth the name.
+- **Some wounds cannot be bandaged.** An opened liver or a torn great vessel
+  bleeds internally, and no bandage, tourniquet or hemostatic reaches it. That is
+  a death in tens of seconds rather than instantly, which is where the casualty
+  data puts most of it.
+- **Bleeding is decided by what was cut.** How much of a plane the channel swept
+  and what vessels run where it swept it, instead of a per-cartridge number. A
+  clipped forearm and a crossed torso are no longer the same wound.
+- **Rifle rounds tumble.** A long bullet enters point-first and goes broadside
+  after a stretch of tissue, so it cuts a narrow channel and then a wide one. The
+  same round is therefore a different wound in an arm and in a chest. Buckshot and
+  fully expanded bullets do not tumble, and the model works that out from their
+  shape rather than being told.
+- **Two identical hits are not identical.** Where a bullet turns, what tissue it
+  crossed and exactly where a person's organs sit all vary shot to shot — drawn
+  once per shot, so a wound that passes through two body parts stays one wound.
+
+*What this is based on:* the Abbreviated Injury Scale and the way Injury Severity
+Score squares it — ordinal severities, so two moderate wounds must stay lighter
+than one severe. Which injuries are unsurvivable comes from a combat autopsy
+series of 4,596 deaths, which also measured the split between deaths at the
+moment of wounding and deaths over the following minutes, and where on the body
+the fatal bleeding came from. The cavity radius is anchored on published gelatin
+profiles, and bullet lengths are derived from mass and calibre — which reproduces
+the measured lengths of 7.62×51 M80 and 5.56×45 M855 to a tenth of a millimetre.
 
 ## Armor: a physical barrier, not a dice roll
 
@@ -70,6 +143,21 @@ the projectile has to defeat it with specific energy:
   particular core, and not by a rating. Every cartridge GOST R 50744-95 names is
   fired at a plate of its own class in the test suite and must be stopped, and at
   the plate one class down, where it must get through.
+- **A class is what a construction earns, not a label it wears.** Aramid stops
+  where aramid stops. A package sewn out of it cannot be rated past class 2 whatever
+  the carrier is sold as — getting to class 4 with fabric alone would take around
+  200 mm of it — and pressing the same fibre into a helmet shell buys exactly one
+  rung more. Vanilla stamps class 3 on 125 of the aramid packages built into vests
+  (the Fort Redut-M and Redut-T, the Fort Defender 2, the NFM THOR, the IOTV Gen4,
+  the HighCom Trooper, the 6B13 and 6B43, the Gzhel, the Crye carriers and most of
+  the rest), class 4 on polycarbonate visors, and class 10 on a development
+  balaclava — 141 items in all. They now carry the class their construction holds.
+  How they stop a bullet does not change — the model was
+  already reading them as the packages they are — but the number on the card stops
+  promising rifle protection that was never in the vest, and the anti-fragment
+  threshold, which scales with the class, stops being computed off a rating the
+  fabric does not have. Nothing hard is touched: plates keep their class, and so do
+  appliques that are rifle-rated in their own right, like the Gentex SLAAP.
 - **Protection classes are anchored to the real GOST protection standard,** and
   are the fallback for armor nothing is known about. Bottom-tier "class 1" junk
   headwear (construction helmets and the like) is fragment protection only — it
@@ -103,8 +191,14 @@ the projectile has to defeat it with specific energy:
   that defeats a plate arrives on the far side as 0.65 g of steel penetrator.
   Ceramic then grinds down what is left; aramid does not. There is no separate
   "mitigation percent".
-- **Angle matters.** An oblique hit faces more effective material; steep angles
-  push the interaction toward ricochet mechanics.
+- **Angle matters, and by a measured amount.** An oblique hit faces more material
+  along its path, so a plate stops `1/cos θ` more velocity: 16% more at 30°, 41%
+  more at 45°. That is not a guess — published trials that shot one plate at 0°,
+  15°, 30° and 45° found 3%, 16% and 43%, and a dozen further pairs of plates —
+  seven aluminium alloys and an ultra-hard steel at two thicknesses — put the 30°
+  gain between 6% and 16%, which is the model's other claim about angle: the gain
+  does not depend on what the plate is made of. Steep
+  angles beyond that push the interaction toward ricochet mechanics.
 - **Worn armor protects worse,** and durability loss itself is now driven by
   the energy the armor absorbed — brittle materials wear out in a few stops,
   steel lasts.
@@ -243,8 +337,93 @@ broken — results in combination with PLATE. Mods that overhaul the same system
 
 ## Release history
 
-### Unreleased
+### 0.10.0
 
+- **The body now has an inside.** The hitboxes the game already ships are read as
+  anatomy: the middle third of the upper chest is the heart and the great vessels,
+  the right third of the lower chest is the liver, the thin spine collider is the
+  cord — worked out at the moment of the hit, so the liver stays on the target's
+  own right whichever way they face. A channel deep enough through the heart or
+  across the cord kills, delivered as ordinary damage the kill feed and other mods
+  understand; the stretch cavity of a rifle round can stop a heart the bullet
+  itself missed; an opened liver or torn great vessel bleeds internally, beyond
+  any bandage. Full account in the "Anatomy" section above.
+- **Rifle bullets tumble.** A long bullet cuts a narrow channel until it turns
+  broadside, then a wide one, and where it turns — if it is still fast enough —
+  its deformable share breaks up. The vanilla `FragmentationChance` field takes
+  no part in the formulas any more: M193 and M855 fragment because of what they
+  are made of, monoliths and pistol rounds do not. Bullet length is derived from
+  mass and calibre, and lands on the measured lengths of M80 and M855 to a tenth
+  of a millimetre.
+- **No two hits are the same wound.** Where the bullet turns, how dense the
+  tissue is and where exactly the organs sit are drawn once per shot; whatever
+  continues past the first body part inherits the draw, so a bullet that turned
+  in an arm arrives in the chest already broadside.
+- **How a wound bleeds is decided by what it cut.** The per-cartridge bleed
+  chance is overwritten on every hit by geometry: the plane the channel swept
+  through the flesh times the vessels that actually run there — torso, junction
+  (neck, groin, shoulder), limb and head each carry their own vessel density.
+- **The damage scale is re-anchored from vanilla parity to combat mortality:**
+  about 2.3 rifle hits to the torso to incapacitation, ~37 HP a hit
+  (`WoundVolumePerHp` 710 → 381, `TcEnergyPerHp` 28 → 74). Heavy slow bullets
+  gain relative to light fast ones; expect every damage number to move.
+- **Armour wear is a place, not a percentage.** The smooth durability discount
+  (`DurabilityFloor`, `DegradeFloor`, per-material `DegradeMult`) is retired. A
+  worn plate is intact where nothing hit it and broken where something did: the
+  chance a hit finds a damaged spot equals the missing durability, and a found
+  spot loses thickness by a per-material law — ceramic struck twice in the same
+  place is rubble, steel keeps three quarters, an aramid pack barely notices.
+  Repeat hits into remembered impact points are resolved by geometry, no dice.
+- **Ductile metal now fails two ways, chosen by its metallurgy.** Shear plugging
+  (work grows with thickness squared) versus ductile hole growth (linear in
+  thickness) — a property of the alloy on record, not whichever mechanism is
+  cheaper; the mass doing the work against a metal plate is the core plus the 5%
+  of the jacket that rides it through (Forrestal's measurement). The mechanism
+  constants are re-derived from published ladders rather than hand-set:
+  `DuctileK` 4.40 → 2.64, `BrittleK` 0.75 → 1.04, `FibrousK` 27.5 → 28.8, new
+  `HoleGrowthK` 6.60.
+- **The armour reference book records constructions, not solved numbers.**
+  Ceramic composite plates are split into their real face and backing (a SAPI is
+  ~9 mm of silicon carbide on ~12 mm of UHMWPE, not 21 mm of "ceramic"); class
+  ladder steps point at a real certified product where one exists, and the rest
+  are re-solved against what a certificate actually demands — zero penetrations
+  out of five, which puts the required V50 about 9% over the test velocity.
+  Every material strength in the book now names its source document.
+- **A fabric pack no longer quietly deletes half the bullet.** Stripping the
+  jacket off a bullet takes a hard edge; a sewn aramid pack has none, so what
+  comes through it is the whole bullet, not a bare core. The same vest was
+  previously being credited with removing half the incoming energy.
+- **The raid-end journal audits the model against the literature it stands on:**
+  a table of organ-zone encounters, and where the blood actually went — deaths
+  from wounds versus bleed-outs against the measured 35/52 split, and blood loss
+  by body region against the measured 67/19/13 distribution.
+- **A hard plate no longer gets an unearned bonus against a soft bullet.** The
+  hardness term — how much a plate is worth for being harder than the core hitting
+  it — was clamped at 4.5x, and that clamp stood on two computed figures rather than
+  on anything measured: the steel pistol plates it was anchored to have their
+  thickness *solved by this same model*, so any clamp value looked confirmed. It has
+  been re-derived against the one published certificate where a soft core meets a
+  hard plate — a quarter-inch AR500 plate against six shots of M80 ball — which puts
+  it at 2.08. Consequences in a raid: ball and hollow-point ammunition now does to
+  steel and titanium plates roughly what its energy says it should. A .50 BMG no
+  longer bounces off a 6.5 mm titanium class-4 plate carrying seven times the energy
+  that plate is certified against; pistol rounds against thin steel are unchanged,
+  because the two steel pistol plates were re-solved at the new clamp (1.3 → 1.9 mm
+  and 1.7 → 2.5 mm) and still stop exactly what their class says.
+- The hit log now records the impact angle on every armour line, and flags when the
+  grazing floor rather than the geometry set it. Angle moves a ballistic limit
+  harder than any constant in the model — 70° costs a plate three times its
+  thickness — and it was the one input a raid log could not show.
+- **Soft armor no longer claims a class its fabric cannot reach.** The aramid
+  packages built into vests ship stamped class 3 — 125 of them, from the Fort
+  Redut-M to the IOTV Gen4 — and a sewn package tops out at 2; the same rule takes
+  polycarbonate visors down from 4 and a development balaclava down from 10.
+  They already behaved like the packages they are, because the construction was
+  read at the ceiling; now the class on the item says so too, which also stops the
+  anti-fragment threshold being computed off a rating the fabric does not have.
+  Plates keep their class, and so does a rifle-rated applique like the Gentex SLAAP.
+- Retired the `GostArmor` module switch. It was a stub that never did anything, and
+  what it promised is now part of the armour normalizer.
 - **A destroyed arm or leg now bleeds externally instead of internally.** It used
   to open a permanent internal bleed, which put a femoral or brachial wound —
   the textbook indication for a tourniquet, and what a hemostatic is carried
@@ -317,6 +496,14 @@ hand-tuned game feel. The principal sources:
 - **Fackler**, wound ballistics — the permanent crush cavity versus temporary
   stretch cavity distinction and the velocity boundary above which stretch
   becomes destructive. Basis of the wound channel model.
+- **AIS (Abbreviated Injury Scale)** and the **Injury Severity Score** that squares
+  it — ordinal severities per organ, which is why the zone multipliers are ratios
+  of squares rather than of the grades themselves. Basis of the organ severities.
+- **Eastridge et al.**, *Journal of Trauma* 73:S431 (2012) — 4,596 combat
+  fatalities: the anatomical list of injuries incompatible with life, the split
+  between deaths at the moment of wounding and deaths over the following minutes,
+  and where on the body the potentially survivable bleeding came from. Basis of
+  the fatal-zone list and of the balance the blood model is checked against.
 - **Sturdivan, Viano & Champion**, *Journal of Trauma* (2004) — the Blunt
   Criterion and injury-risk curves for blunt and ballistic chest impact; with
   the blunt ballistic impact research from **Wayne State University** (Bir,

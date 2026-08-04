@@ -31,11 +31,14 @@ public class PlateServerConfig
         /// <summary>Barrel muzzle velocity from barrel length (including mod-added weapons).</summary>
         public bool BarrelNormalizer { get; set; } = true;
 
-        /// <summary>Armour material and thickness from the real product it is modelled on.</summary>
+        /// <summary>
+        /// Armour material, thickness and class from the real product it is modelled on.
+        /// This is also where an item stamped with a class its material cannot hold —
+        /// the sewn aramid packages the game rates 3 — is brought back to the class its
+        /// construction earns; the separate GostArmor flag that used to promise that
+        /// was never implemented and is gone.
+        /// </summary>
         public bool ArmorNormalizer { get; set; } = true;
-
-        /// <summary>GOST armor class normalization (disabled by default).</summary>
-        public bool GostArmor { get; set; } = false;
     }
 
     /// <summary>
@@ -102,12 +105,12 @@ public class PlateServerConfig
         /// (test cartridge PM, 5.2 J/mm²); above — Br2..Br5, estimated.</summary>
         public double[] ClassULimitJmm2 { get; set; } = { 2.5, 5.2, 12, 40, 65, 90 };
 
-        /// <summary>Threshold degradation with wear: U_eff = U·(floor + (1−floor)·durability%).</summary>
-        public double DurabilityFloor { get; set; } = 0.4;
-
-        /// <summary>Lower bound of local U_limit degradation in the hit zone
-        /// (a shattered ceramic segment still holds at least this fraction of the threshold).</summary>
-        public double DegradeFloor { get; set; } = 0.15;
+        // Wear is no longer a smooth multiplier (the old DurabilityFloor/DegradeFloor
+        // pair). A worn plate is not uniformly thinner — it is intact where nothing
+        // hit it and broken where something did — so wear is probabilistic: the
+        // chance of striking a damaged spot equals the missing durability, and a
+        // struck spot loses thickness by 1 − x^k with per-material k and q
+        // (MaterialProfile below). See MODEL.md, "Local damage and wear".
 
         /// <summary>
         /// How far a fully deformable bullet spreads against the face of a panel before
@@ -126,47 +129,47 @@ public class PlateServerConfig
             ["Aramid"] = new()
             {
                 ULimitMult = 0.85, ECostMult = 0.50, KDef = 0.05, KFrag = 0.00,
-                DAreaMm = 60, DegradeMult = 0.80, SharpVulnMult = 0.25, JPerDurability = 400,
+                DAreaMm = 51, SpotDamageQ = 0.30, WearExponentK = 4, SharpVulnMult = 0.25, JPerDurability = 400,
             },
             // UHMWPE: fibers work in tension; sharp noses pierce the pack, a penetrating bullet stays intact
             ["UHMWPE"] = new()
             {
                 ULimitMult = 1.00, ECostMult = 0.35, KDef = 0.02, KFrag = 0.00,
-                DAreaMm = 50, DegradeMult = 0.85, SharpVulnMult = 0.35, JPerDurability = 450,
+                DAreaMm = 45, SpotDamageQ = 0.40, WearExponentK = 3, SharpVulnMult = 0.35, JPerDurability = 450,
             },
             // steel: ductile, penetration is expensive, lead gets flattened; the hole is local — a "gong"
             ["ArmoredSteel"] = new()
             {
                 ULimitMult = 1.15, ECostMult = 0.85, KDef = 0.50, KFrag = 0.10,
-                DAreaMm = 15, DegradeMult = 0.90, SharpVulnMult = 0.00, JPerDurability = 700,
+                DAreaMm = 15, SpotDamageQ = 0.50, WearExponentK = 2, SharpVulnMult = 0.00, JPerDurability = 700,
             },
             // titanium: the bullet "bogs down" — extreme energy absorption
             ["Titan"] = new()
             {
                 ULimitMult = 1.00, ECostMult = 1.00, KDef = 0.35, KFrag = 0.05,
-                DAreaMm = 20, DegradeMult = 0.85, SharpVulnMult = 0.00, JPerDurability = 500,
+                DAreaMm = 20, SpotDamageQ = 0.50, WearExponentK = 2, SharpVulnMult = 0.00, JPerDurability = 500,
             },
             ["Aluminium"] = new()
             {
                 ULimitMult = 0.90, ECostMult = 0.60, KDef = 0.30, KFrag = 0.05,
-                DAreaMm = 25, DegradeMult = 0.80, SharpVulnMult = 0.00, JPerDurability = 350,
+                DAreaMm = 25, SpotDamageQ = 0.40, WearExponentK = 3, SharpVulnMult = 0.00, JPerDurability = 350,
             },
             // ceramic: highest threshold, shatters cores, but cracks tile by tile —
             // a repeat hit on the segment meets rubble
             ["Ceramic"] = new()
             {
                 ULimitMult = 1.25, ECostMult = 0.70, KDef = 0.60, KFrag = 0.35,
-                DAreaMm = 80, DegradeMult = 0.25, SharpVulnMult = 0.00, JPerDurability = 150,
+                DAreaMm = 51, SpotDamageQ = 0.90, WearExponentK = 1.5, SharpVulnMult = 0.00, JPerDurability = 150,
             },
             ["Glass"] = new()
             {
                 ULimitMult = 0.80, ECostMult = 0.50, KDef = 0.40, KFrag = 0.15,
-                DAreaMm = 100, DegradeMult = 0.20, SharpVulnMult = 0.00, JPerDurability = 100,
+                DAreaMm = 51, SpotDamageQ = 0.90, WearExponentK = 1.5, SharpVulnMult = 0.00, JPerDurability = 100,
             },
             ["Combined"] = new()
             {
                 ULimitMult = 1.00, ECostMult = 0.65, KDef = 0.30, KFrag = 0.10,
-                DAreaMm = 40, DegradeMult = 0.60, SharpVulnMult = 0.10, JPerDurability = 300,
+                DAreaMm = 45, SpotDamageQ = 0.60, WearExponentK = 2, SharpVulnMult = 0.10, JPerDurability = 300,
             },
         };
 
@@ -192,13 +195,36 @@ public class PlateServerConfig
             /// </summary>
             public double KFrag { get; set; }
 
-            /// <summary>Radius of local degradation around the hit, mm
-            /// (ceramic — a whole "tile" segment, steel — only the hole rim).</summary>
+            /// <summary>
+            /// Radius of local degradation around the hit, mm (ceramic — a whole
+            /// "tile" segment, steel — only the hole rim). The ceiling of the scale
+            /// has an anchor: both certification standards space their scored shots
+            /// so that damage zones do not interact — NIJ 0101.06 demands 51 mm
+            /// between hits — so no material's zone may exceed 51. That is one
+            /// spacing for all products, i.e. an upper bound set by the worst
+            /// material; the ladder below it is still chosen, and says so.
+            /// </summary>
             public double DAreaMm { get; set; } = 30;
 
-            /// <summary>Fraction of U_limit remaining in the zone after each hit
-            /// (multiplies; the floor is Armor.DegradeFloor).</summary>
-            public double DegradeMult { get; set; } = 0.8;
+            /// <summary>
+            /// Damage one hit does to the SPOT it lands on, 0..1 — not to the plate.
+            /// Seen damage accumulates geometrically per hit in the same spot:
+            /// x = 1 − (1−q)^n; unseen damage (worn plate entering the raid, or hit
+            /// memory overflow) is rolled with p = missing durability and reads
+            /// x = max(missing, q), because a rolled "you hit a damaged spot" means
+            /// at least one hit landed there. An ASSUMPTION, like every q: the data
+            /// that would replace it is makers' multi-hit ratings, and those are for
+            /// SPACED hits, not one spot. Marked accordingly.
+            /// </summary>
+            public double SpotDamageQ { get; set; } = 0.4;
+
+            /// <summary>
+            /// How local the damage stays: effective thickness at a damaged spot is
+            /// 1 − x^k. High k (aramid 4) — cut fibres in the spot, neighbours
+            /// intact; low k (ceramic 1.5) — the crack web spreads, a struck tile is
+            /// rubble. From the resolution of 3.4.
+            /// </summary>
+            public double WearExponentK { get; set; } = 2;
 
             /// <summary>Vulnerability to sharp-nosed bullets (fibers get pushed apart):
             /// U_limit × (1 − this·clamp01((0.5−X)·2)).</summary>
@@ -228,8 +254,29 @@ public class PlateServerConfig
         /// <summary>How much expansion shortens the channel: multiplier (1 − this·X).</summary>
         public double ExpansionDepthFactor { get; set; } = 0.4;
 
-        /// <summary>How much expansion/tumbling widens the channel: cross-section A·(1 + this·X).</summary>
+        /// <summary>How much expansion widens the channel before the projectile turns:
+        /// cross-section A·(1 + this·X). At X=1 that is 1.53 calibres of diameter,
+        /// against the 1.55-1.7 a real expanding bullet opens to. Tumbling is no longer
+        /// in here — it is a separate area that switches on after the neck.</summary>
         public double ExpansionAreaFactor { get; set; } = 1.35;
+
+        /// <summary>Median travel before the projectile goes broadside, in calibres.
+        /// Published gelatin necks run from ~12 calibres for 5.45x39 to over 30 for
+        /// 7.62x39; without a measured neck per cartridge, one constant in the middle.</summary>
+        public double YawNeckCalibres { get; set; } = 20;
+
+        /// <summary>Share of full broadside a tumbling projectile presents on average —
+        /// it turns through the whole circle rather than staying side-on. 0.75 puts
+        /// 7.62x51 M80 at 3.5 times its calibre area once it has turned.</summary>
+        public double YawBroadsideFraction { get; set; } = 0.75;
+
+        /// <summary>Mean density of a jacketed bullet, g/cm³ (lead core, copper jacket) —
+        /// what turns mass and calibre into a length.</summary>
+        public double BulletDensityGPerCm3 { get; set; } = 10.5;
+
+        /// <summary>How much of its bounding cylinder a bullet fills, once the ogive nose
+        /// and boat tail are taken out. 0.65 puts M80 at 28.8 mm against a measured 28.9.</summary>
+        public double BulletFormFactor { get; set; } = 0.65;
 
         /// <summary>
         /// Tissue depth of the reference shot the card damage is quoted for, mm.
@@ -241,8 +288,11 @@ public class PlateServerConfig
         public double BodyDepthMm { get; set; } = 250;
 
         /// <summary>mm³ of permanent cavity volume per 1 HP of damage.
-        /// Anchor: 9x19 PST -> ~54 (vanilla).</summary>
-        public double WoundVolumePerHp { get; set; } = 710;
+        /// Anchor: the combat-mortality research figure of ~2.3 rifle hits to the
+        /// torso (85 HP) to incapacitation, ~37 HP per hit — replacing the old
+        /// vanilla-damage anchor (9x19 PST -> ~54), which calibrated the model to the
+        /// game's own invented numbers.</summary>
+        public double WoundVolumePerHp { get; set; } = 381;
 
         // --- Temporary pulsating cavity (stretch) ---
 
@@ -254,12 +304,24 @@ public class PlateServerConfig
         public double TcVelocityWidth { get; set; } = 80;
 
         /// <summary>J of deposited TC energy per 1 HP.
-        /// Anchor: 7.62x39 PS -> ~57 (vanilla).</summary>
-        public double TcEnergyPerHp { get; set; } = 28;
+        /// Anchor: the same 2.3-hits-to-incapacitation figure as WoundVolumePerHp —
+        /// the two are one calibration and move together. The old anchor was
+        /// 7.62x39 PS -> ~57 (vanilla).</summary>
+        public double TcEnergyPerHp { get; set; } = 74;
 
-        /// <summary>TC bonus for fragmentation: multiplier (1 + this·FragmentationChance) —
-        /// fragments turn stretching into tearing.</summary>
+        /// <summary>TC bonus for fragmentation: multiplier (1 + this·frag) — fragments
+        /// turn stretching into tearing. frag is DERIVED from construction, not read
+        /// from the vanilla FragmentationChance field: a bullet breaks up where it
+        /// turns, if it is still fast enough there, and only its deformable,
+        /// non-core share breaks.</summary>
         public double TcFragBonus { get; set; } = 0.5;
+
+        /// <summary>Velocity at the tumble point above which a jacketed bullet's
+        /// envelope fails and it fragments, m/s. Published threshold band for
+        /// thin-jacketed ball is 600–700; the bottom of the band, read at the tumble
+        /// point rather than at impact, reproduces which cartridges actually
+        /// fragment in gelatin (M193/M855 yes, 7.62x39 PS and pistol ball no).</summary>
+        public double FragVelocityThreshold { get; set; } = 600;
 
         /// <summary>Energy budget: damage no higher than E0 / this (J per HP at full
         /// deposition). Trims slow fat projectiles and light birdshot.</summary>
@@ -278,13 +340,15 @@ public class PlateServerConfig
         /// <summary>Maximum PenetrationDamageMod for pure AP (X=0).</summary>
         public double PdmMax { get; set; } = 0.35;
 
-        /// <summary>Weights of the expansiveness index X.</summary>
+        /// <summary>
+        /// Weights of the expansiveness index X. There used to be a third component —
+        /// the vanilla FragmentationChance — removed with 3.6: that field is the
+        /// game's opinion, not physics, and the model now derives fragmentation from
+        /// construction, which would make feeding it back into X circular. The two
+        /// remaining weights are symmetric, so the cohort median still reads 0.5.
+        /// </summary>
         public double WeightSpecificDamage { get; set; } = 0.45;
         public double WeightSpecificPenetration { get; set; } = 0.45;
-        public double WeightFragmentation { get; set; } = 0.25;
-
-        /// <summary>FragmentationChance normalization into X: clamp01(FragChance / this divisor).</summary>
-        public double FragChanceNormalizer { get; set; } = 0.30;
 
         /// <summary>Minimum caliber cohort size; fewer — global regression.</summary>
         public int MinCaliberCohort { get; set; } = 4;

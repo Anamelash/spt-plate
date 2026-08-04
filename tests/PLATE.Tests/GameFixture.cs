@@ -24,6 +24,14 @@ namespace PLATE.Tests
 
         public string ManagedDir { get; }
 
+        // xunit gives every test class its own fixture instance and runs the classes in
+        // parallel, but what the fixture sets up — the logger, the bound config, the
+        // assembly resolver — is process-global. Three classes racing to bind the same
+        // static config put entries from one ConfigFile into another and threw on the
+        // duplicate. Once per process, under a lock.
+        private static readonly object Gate = new object();
+        private static bool _prepared;
+
         public GameFixture()
         {
             ManagedDir = Path.Combine(GameDir.Path, "EscapeFromTarkov_Data", "Managed");
@@ -35,15 +43,24 @@ namespace PLATE.Tests
                 return;
             }
 
-            // Assembly-CSharp drags in the rest of the Unity assemblies; the test host
-            // has no probing path for them
-            AppDomain.CurrentDomain.AssemblyResolve += ResolveFromManaged;
+            lock (Gate)
+            {
+                if (_prepared)
+                {
+                    return;
+                }
 
-            Plugin.Log = Logger.CreateLogSource("PLATE.Tests");
+                // Assembly-CSharp drags in the rest of the Unity assemblies; the test host
+                // has no probing path for them
+                AppDomain.CurrentDomain.AssemblyResolve += ResolveFromManaged;
 
-            var cfgPath = Path.Combine(Path.GetTempPath(),
-                "plate-tests-" + Guid.NewGuid().ToString("N") + ".cfg");
-            PlateClientConfig.Bind(new ConfigFile(cfgPath, true));
+                Plugin.Log = Logger.CreateLogSource("PLATE.Tests");
+
+                var cfgPath = Path.Combine(Path.GetTempPath(),
+                    "plate-tests-" + Guid.NewGuid().ToString("N") + ".cfg");
+                PlateClientConfig.Bind(new ConfigFile(cfgPath, true));
+                _prepared = true;
+            }
         }
 
         private Assembly ResolveFromManaged(object sender, ResolveEventArgs args)

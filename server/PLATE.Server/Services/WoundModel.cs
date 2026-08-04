@@ -14,22 +14,29 @@ namespace PLATE.Server.Services;
 /// Temporary cavity: tissue is elastic — it survives slow stretching.
 /// Effectiveness grows as a sigmoid of impact velocity centered on the classic
 /// "high-velocity wound" boundary (~600 m/s, Fackler). Fragmentation converts
-/// stretching into tearing — a bonus multiplier from FragmentationChance.
+/// stretching into tearing — and it is DERIVED, not read from the vanilla
+/// FragmentationChance field: a bullet breaks up where it turns broadside,
+/// because that is where the envelope takes the full load, and it only breaks if
+/// it is still faster there than the jacket can bear. What breaks is the
+/// deformable share; a hard core never fragments.
 /// </summary>
 public static class WoundModel
 {
     public record Result(double Damage, double Pc, double Tc, double DepthMm, double DepositFrac)
     {
         public bool EnergyCapped { get; init; }
+
+        /// <summary>Derived fragmentation degree, 0..1 — for the report.</summary>
+        public double Frag { get; init; }
     }
 
     /// <param name="massG">Projectile mass, g.</param>
     /// <param name="diaMm">Diameter, mm.</param>
     /// <param name="v">Impact velocity (muzzle velocity on the server), m/s.</param>
     /// <param name="x">Expansiveness index 0..1.</param>
-    /// <param name="fragChance">Fragmentation chance (vanilla field) for the TC bonus.</param>
+    /// <param name="coreMassFrac">Mass share of the hard core, which never breaks up.</param>
     public static Result Compute(double massG, double diaMm, double v, double x,
-        double fragChance, PlateServerConfig.AmmoNormalizerSection a)
+        double coreMassFrac, PlateServerConfig.AmmoNormalizerSection a)
     {
         var area = Math.PI * diaMm * diaMm / 4.0;          // mm²
         var e0 = 0.5 * (massG / 1000.0) * v * v;           // J
@@ -50,16 +57,42 @@ public static class WoundModel
         var lambda = Math.Max(a.GelDepthK * sd * (1 - a.ExpansionDepthFactor * x), 1e-3);
         var phi = 1 - Math.Exp(-2 * inBody / lambda);
 
-        // Permanent cavity: channel volume including expansion/tumbling
-        var areaEff = area * (1 + a.ExpansionAreaFactor * x);
-        var pc = areaEff * inBody / a.WoundVolumePerHp;
+        // Permanent cavity: narrow while the projectile is still nose-first, wide once it
+        // has turned. The card quotes the median neck — no dice on a display number.
+        var yaw = YawTuning(a);
+        var pc = YawModel.CavityVolumeMm3(
+            YawModel.NoseAreaMm2(diaMm, x, a.ExpansionAreaFactor),
+            YawModel.SideAreaMm2(massG, diaMm, x, yaw),
+            YawModel.MedianNeckMm(diaMm, a.YawNeckCalibres),
+            inBody) / a.WoundVolumePerHp;
+
+        // Fragmentation: the envelope fails where the bullet turns, if it is still
+        // fast enough there. The same drag law that gives the deposition gives the
+        // velocity at the tumble point; a bullet that exits before turning never
+        // fragments, and a hard core never does regardless.
+        var neck = YawModel.MedianNeckMm(diaMm, a.YawNeckCalibres);
+        var vNeck = v * Math.Exp(-neck / lambda);
+        var frag = neck <= inBody && vNeck > a.FragVelocityThreshold
+            ? x * (1 - Math.Clamp(coreMassFrac, 0, 1))
+            : 0.0;
 
         // Temporary cavity: velocity sigmoid × deposited energy
         var eff = 1.0 / (1.0 + Math.Exp(-(v - a.TcVelocityCenter) / a.TcVelocityWidth));
-        var tc = eff * e0 * phi * (1 + a.TcFragBonus * fragChance) / a.TcEnergyPerHp;
+        var tc = eff * e0 * phi * (1 + a.TcFragBonus * frag) / a.TcEnergyPerHp;
 
         var budget = e0 / a.EnergyCapPerHp;
         var damage = Math.Min(pc + tc, budget);
-        return new Result(damage, pc, tc, depth, phi) { EnergyCapped = pc + tc > budget };
+        return new Result(damage, pc, tc, depth, phi)
+        {
+            EnergyCapped = pc + tc > budget,
+            Frag = frag,
+        };
+    }
+
+    /// <summary>The broadside constants, as the config holds them.</summary>
+    public static YawModel.Tuning YawTuning(PlateServerConfig.AmmoNormalizerSection a)
+    {
+        return new YawModel.Tuning(a.ExpansionAreaFactor, a.YawNeckCalibres,
+            a.YawBroadsideFraction, a.BulletDensityGPerCm3, a.BulletFormFactor);
     }
 }

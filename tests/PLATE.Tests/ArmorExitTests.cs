@@ -17,6 +17,46 @@ namespace PLATE.Tests
     /// </summary>
     public class ArmorExitTests
     {
+        /// <summary>
+        /// What a raid found. A 5.45 PP defeating a 7.5 mm aramid vest was coming out at
+        /// half its mass and three quarters of its calibre, because the core split was
+        /// applied to every barrier alike. The energy price of the hole was 234 J; the
+        /// mass that quietly disappeared was worth another 600.
+        ///
+        /// A rigid plate does strip a jacket — the hole's rim shears it off, which is why
+        /// bullets recovered from steel come back as bare cores. Woven fibre has no rim.
+        /// The material profile has said so since it was written ("a penetrating bullet
+        /// stays intact", KFrag 0); the core split overrode it without saying anything.
+        /// </summary>
+        [Fact]
+        public void A_fibre_pack_has_no_rim_to_shear_a_jacket_against()
+        {
+            // 5.45x39 PP as the book has it: a hardened core at about half the mass
+            const float mass = 3.7f;
+            const float dia = 5.6f;
+            const float energy = 1181f;
+
+            var throughPlate = ArmorExit.Compute(mass, dia, 0.15f, energy, 0.54f, 0.49f,
+                kFrag: 0f, kDef: 0.05f, stripsJacket: true);
+            var throughPack = ArmorExit.Compute(mass, dia, 0.15f, energy, 0.54f, 0.49f,
+                kFrag: 0f, kDef: 0.05f, stripsJacket: false);
+
+            Assert.Equal(mass, throughPack.MassG, 3);
+            Assert.Equal(dia, throughPack.DiaMm, 3);
+            Assert.Equal(0f, throughPack.JacketEnergyJ, 3);
+
+            // and it still keeps the jacket it did not lose, so it stays as deformable as
+            // it went in rather than coming out the far side as a solid
+            Assert.True(throughPack.X > 0.1f, $"the pack hardened the bullet to {throughPack.X:0.00}");
+            Assert.Equal(0f, throughPlate.X, 3);
+
+            // the whole of the finding in one number: the same vest, twice the energy
+            var pack = 0.5f * (throughPack.MassG / 1000f) * throughPack.V * throughPack.V;
+            var plate = 0.5f * (throughPlate.MassG / 1000f) * throughPlate.V * throughPlate.V;
+            Assert.True(pack > 1.9f * plate,
+                $"a soft pack passed {pack:0} J where a plate passed {plate:0}");
+        }
+
         // 7.62x51 M993 as the reference book has it: a WC-Co core at 0.49 of the
         // bullet's face and 0.71 of its mass, against the M80 in the same calibre
         private const float Mass = 8.1f;

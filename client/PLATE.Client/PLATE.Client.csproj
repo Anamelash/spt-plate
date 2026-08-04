@@ -35,6 +35,8 @@
     -->
     <Compile Include="..\..\server\PLATE.Server\Services\BallisticLimit.cs"
              Link="Ballistics\BallisticLimit.cs" />
+    <Compile Include="..\..\server\PLATE.Server\Services\YawModel.cs"
+             Link="Ballistics\YawModel.cs" />
   </ItemGroup>
 
   <!-- All game assemblies are referenced by HintPath from the install and not copied to the output -->

@@ -44,6 +44,15 @@ public class ArmorNormalizer(
     private readonly Dictionary<string, double> _density = new();
 
     /// <summary>
+    /// Fibre backing behind the face, per item: thickness in mm and the material key.
+    /// Only items whose book entry states a backing appear here.
+    /// </summary>
+    private readonly Dictionary<string, (double Mm, string Material)> _backing = new();
+
+    /// <summary>How many items carried a class their construction cannot hold.</summary>
+    private int _reRated;
+
+    /// <summary>
     /// "6b5-16_level3_soft_armor_front" and "granit4_5class_back" both name a product.
     /// No word boundary after the marker: what follows it is an underscore, which is a
     /// word character, so \b never matches there and the cut silently never happens.
@@ -112,7 +121,7 @@ public class ArmorNormalizer(
         /// <summary>Which reference answered, e.g. "Aramid/2". Empty unless From is Reference.</summary>
         public string ReferenceKey = "";
 
-        /// <summary>Rating the item declares, when the material's ceiling overrode it.</summary>
+        /// <summary>Rating the item shipped with, when the material's ceiling took it down.</summary>
         public int CappedFrom;
 
         /// <summary>What the search for this one turned up, when it was not a figure.</summary>
@@ -120,7 +129,7 @@ public class ArmorNormalizer(
     }
 
     /// <summary>A reference entry together with the key that found it, for the report.</summary>
-    private sealed record Resolved(ReferenceBook.ArmorPlateRef Ref, string Key, int CappedFrom);
+    private sealed record Resolved(ReferenceBook.ArmorPlateRef Ref, string Key);
 
     public void Run(PlateServerConfig cfg, string modPath)
     {
@@ -170,7 +179,6 @@ public class ArmorNormalizer(
             // reference is read at their rating, and out of their material
             var stated = spec is { ThicknessMm: <= 0 } ? spec : null;
             spec = stated == null ? spec : null;
-            var rating = stated is { Rating: > 0 } ? stated.Rating : cls;
 
             var was = "";
             if (stated != null && stated.Material.Length > 0 && stated.Material != material)
@@ -181,11 +189,30 @@ public class ArmorNormalizer(
                     material, out var known2) ? known2 : p.ArmorMaterial;
             }
 
+            // A class is what a construction earns, not a label it wears. The reference
+            // has always been READ at what the material can reach — the sewn aramid
+            // package the game stamps class 3 has behaved like the class 2 package it is
+            // since the ceiling went in — but the number on the item still said 3, and
+            // everything that reads a class rather than a thickness believed it: the
+            // fragment gate, the fallback threshold, the item card, other mods. The label
+            // now follows the physics. Material comes first, because the ceiling is a
+            // property of the material and the reference book has just corrected it.
+            var ceiling = spec is { Plate: true } ? int.MaxValue : ClassCeiling(itemName, material);
+            var declared = cls;
+            var rating = Math.Min(stated is { Rating: > 0 } ? stated.Rating : cls, ceiling);
+
+            if (cls > ceiling)
+            {
+                cls = ceiling;
+                p.ArmorClass = cls;
+                _reRated++;
+            }
+
             // a plate the game invented has no product to look up, but there is a real
             // plate of the same rating doing the same job, and that is what it stands in
             // for. Mass only decides it when even that is missing
             var byClass = spec == null
-                ? ClassReference(reference, itemName, material, rating, cls)
+                ? ClassReference(reference, itemName, material, rating)
                 : null;
             var derived = spec == null && byClass == null
                 ? DeriveThickness(itemName, p, material, reference)
@@ -209,6 +236,7 @@ public class ArmorNormalizer(
                     MaterialWas = was,
                     Kind = Classify(itemName),
                     Class = cls,
+                    CappedFrom = cls < declared ? declared : 0,
                     Note = Note(reference, itemName, product),
                 };
                 target[rowKey] = row;
@@ -222,12 +250,15 @@ public class ArmorNormalizer(
                 {
                     row.From = Origin.Reference;
                     row.ReferenceKey = byClass.Key;
-                    row.CappedFrom = byClass.CappedFrom;
                     row.Prototype = stated?.Prototype.Length > 0 ? stated.Prototype : byClass.Ref.Prototype;
                     row.ThicknessMm = byClass.Ref.ThicknessMm;
                     row.Source = byClass.Ref.Source;
                     _thickness[item.Id] = byClass.Ref.ThicknessMm;
                     _density[item.Id] = byClass.Ref.DensityGCm3;
+                    if (byClass.Ref.BackingMm > 0)
+                    {
+                        _backing[item.Id] = (byClass.Ref.BackingMm, byClass.Ref.BackingMaterial);
+                    }
 
                     if (stated != null)
                     {
@@ -251,6 +282,10 @@ public class ArmorNormalizer(
             row.ThicknessMm = spec.ThicknessMm;
             _thickness[item.Id] = spec.ThicknessMm;
             _density[item.Id] = spec.DensityGCm3;
+            if (spec.BackingMm > 0)
+            {
+                _backing[item.Id] = (spec.BackingMm, spec.BackingMaterial);
+            }
 
             // the game is right about the material far more often than not, so this
             // corrects the exceptions rather than overriding everything
@@ -268,7 +303,8 @@ public class ArmorNormalizer(
         Summary = $"{known.Count}/{known.Count + unknown.Count} armour products";
         logger.Debug($"[PLATE] ArmorNormalizer: {known.Count} products with construction data, " +
                      $"{unknown.Count} on their class, " +
-                     $"{_thickness.Count} items carrying a thickness for the ballistic limit");
+                     $"{_thickness.Count} items carrying a thickness for the ballistic limit, " +
+                     $"{_reRated} re-rated to what their material can hold");
     }
 
     /// <summary>
@@ -297,6 +333,8 @@ public class ArmorNormalizer(
                 : 0;
             var own = _density.TryGetValue(id, out var d) ? d : 0;
 
+            var backing = _backing.TryGetValue(id, out var bk) ? bk : (Mm: 0.0, Material: "");
+
             plates[id.ToString()] = new
             {
                 T = Math.Round(thickness, 3),
@@ -305,6 +343,11 @@ public class ArmorNormalizer(
                 // how much of this entry is actually the material and how much is the air
                 // between its layers; 1 for anything solid
                 P = own > 0 && fibre > 0 ? Math.Round(Math.Min(own / fibre, 1), 4) : 1,
+
+                // the fibre panel behind the face; empty material means aramid, the
+                // dominant case for Russian packages and helmet liners
+                B = Math.Round(backing.Mm, 3),
+                BM = backing.Material ?? "",
             };
         }
 
@@ -313,8 +356,10 @@ public class ArmorNormalizer(
             kv => (object)new
             {
                 kv.Value.Class,
+                kv.Value.FailureMode,
                 kv.Value.DensityGCm3,
                 kv.Value.ShearMPa,
+                kv.Value.YieldMPa,
                 kv.Value.CompressiveMPa,
                 kv.Value.FibreTensileMPa,
                 kv.Value.FailureStrain,
@@ -422,27 +467,25 @@ public class ArmorNormalizer(
     /// polyethylene, an 11 mm pressed shell, a 7 mm sewn package — so which table
     /// answers matters more than the rating does.
     /// </summary>
-    /// <param name="cls">The rating to read at — the maker's where they state one.</param>
-    /// <param name="declared">What the game prints on it, for the report.</param>
+    /// <param name="rating">
+    /// The rating to read at — the maker's where they state one, and already inside
+    /// what the material can hold either way.
+    /// </param>
     private static Resolved? ClassReference(ReferenceBook.AmmoReference reference,
-        string itemName, string material, int cls, int declared)
+        string itemName, string material, int rating)
     {
-        if (itemName.StartsWith("item_equipment_plate_", StringComparison.OrdinalIgnoreCase))
-        {
-            var plateKey = $"{material}/{cls}";
-            return reference.ArmorByClass.TryGetValue(plateKey, out var plate)
-                ? new Resolved(plate, plateKey, cls < declared ? declared : 0)
-                : null;
-        }
-
-        var shell = IsRigid(itemName, material);
-        var table = shell ? reference.HelmetShells : reference.SoftArmor;
-        var rating = Math.Min(cls, Ceiling(material, shell));
         var key = $"{material}/{rating}";
 
-        return table.TryGetValue(key, out var entry)
-            ? new Resolved(entry, key, rating < declared ? declared : 0)
-            : null;
+        if (itemName.StartsWith("item_equipment_plate_", StringComparison.OrdinalIgnoreCase))
+        {
+            // through the resolver: a rung that names a representative product IS that
+            // product's construction, backing and all
+            var plate = reference.ResolveByClass(key);
+            return plate != null ? new Resolved(plate, key) : null;
+        }
+
+        var table = IsRigid(itemName, material) ? reference.HelmetShells : reference.SoftArmor;
+        return table.TryGetValue(key, out var entry) ? new Resolved(entry, key) : null;
     }
 
     /// <summary>
@@ -490,6 +533,24 @@ public class ArmorNormalizer(
             Kind.VestComponent or Kind.Plate => false,
             _ => !Woven.Any(w => itemName.Contains(w, StringComparison.OrdinalIgnoreCase)),
         };
+    }
+
+    /// <summary>
+    /// The highest class this item can hold, given what it is made of and the form it
+    /// is made in. <see cref="int.MaxValue"/> where nothing caps it.
+    ///
+    /// A plate is exempt, and deliberately: the hard insert is where the rifle
+    /// protection lives, a 23 mm pressed polyethylene Zhuk really is certified Br3, and
+    /// a plate that is rated above its construction is caught by its thickness in the
+    /// ballistic limit rather than by a ceiling here. A hard element the game files
+    /// under some other slot is exempt too, but only where the reference book says so
+    /// (<see cref="ReferenceBook.ArmorPlateRef.Plate"/>) — the name cannot tell.
+    /// </summary>
+    public static int ClassCeiling(string itemName, string material)
+    {
+        return Classify(itemName) == Kind.Plate
+            ? int.MaxValue
+            : Ceiling(material, IsRigid(itemName, material));
     }
 
     /// <summary>
@@ -561,8 +622,8 @@ public class ArmorNormalizer(
         var short_ = new List<(Row Row, double Needs)>();
         foreach (var row in all.Where(r => r.From == Origin.Product && r.ThicknessMm > 0))
         {
-            if (!reference.ArmorByClass.TryGetValue($"{row.Material}/{row.Class}", out var rung) ||
-                rung.ThicknessMm <= 0)
+            var rung = reference.ResolveByClass($"{row.Material}/{row.Class}");
+            if (rung == null || rung.ThicknessMm <= 0)
             {
                 continue;
             }
@@ -703,6 +764,18 @@ public class ArmorNormalizer(
                       + "the item is modelled on, then the real armour of its material and rating, "
                       + "then physics off a weight other mods can rewrite, then nothing at all.");
 
+        if (_reRated > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"{_reRated} items shipped with a class their material cannot hold in "
+                          + "the form they are made in — a sewn aramid package stamped class 3, a "
+                          + "polycarbonate visor stamped 4 — and now carry the class it can. The "
+                          + "class column shows both. Nothing else about them changed: the "
+                          + "construction was already being read at the ceiling, and this is the "
+                          + "label catching up with it. Plates are exempt; a rifle plate rated "
+                          + "above its construction is answered by its thickness, not by a rule.");
+        }
+
         WriteClassAudit(sb, reference, all);
 
         var onReference = all.Where(r => r.From == Origin.Reference).ToList();
@@ -792,8 +865,7 @@ public class ArmorNormalizer(
             + "figures to trust, and the ones worth growing.",
         Origin.Reference =>
             "No documented product, so the item takes the real armour of its material and "
-            + "rating. `Reference` names exactly which entry answered; where the material has "
-            + "a ceiling its rating cannot lift, the rating it was read at is shown too.",
+            + "rating. `Reference` names exactly which entry answered.",
         Origin.Mass =>
             "Neither a documented product nor a reference, but the item carries a mass, and "
             + "mass over density over face area is a thickness. Weakest of the three: any mod "
@@ -802,6 +874,16 @@ public class ArmorNormalizer(
             "Nothing was applied; these behave exactly as the game shipped them. Each is an "
             + "invitation to add its material and thickness to `ammo-reference.jsonc`.",
     };
+
+    /// <summary>
+    /// The class the item now carries, and the one it shipped with where the material's
+    /// ceiling took it down. Read the same way as the material column: what the game
+    /// said, then what it is.
+    /// </summary>
+    private static string Rating(Row r)
+    {
+        return r.CappedFrom > 0 ? $"{r.CappedFrom} → **{r.Class}**" : r.Class.ToString();
+    }
 
     private static void Section(StringBuilder sb, Origin origin, IEnumerable<Row> rows)
     {
@@ -825,7 +907,7 @@ public class ArmorNormalizer(
             sb.AppendLine("|---|---|---|---|");
             foreach (var r in list)
             {
-                sb.AppendLine($"| {r.Product} | {r.Material} | {r.Class} | {r.Zones} |");
+                sb.AppendLine($"| {r.Product} | {r.Material} | {Rating(r)} | {r.Zones} |");
             }
 
             return;
@@ -845,15 +927,12 @@ public class ArmorNormalizer(
 
             if (withReference)
             {
-                var key = r.CappedFrom > 0
-                    ? $"`{r.ReferenceKey}` (declares {r.CappedFrom})"
-                    : $"`{r.ReferenceKey}`";
-                sb.AppendLine($"| {r.Product} | {material} | {r.Class} | {key} | {r.Prototype} | " +
-                              $"{r.ThicknessMm:N1} mm | {r.Note} |");
+                sb.AppendLine($"| {r.Product} | {material} | {Rating(r)} | `{r.ReferenceKey}` | " +
+                              $"{r.Prototype} | {r.ThicknessMm:N1} mm | {r.Note} |");
             }
             else
             {
-                sb.AppendLine($"| {r.Product} | {material} | {r.Class} | {r.Prototype} | " +
+                sb.AppendLine($"| {r.Product} | {material} | {Rating(r)} | {r.Prototype} | " +
                               $"{r.ThicknessMm:N1} mm | {r.Zones} | {r.Source} |");
             }
         }

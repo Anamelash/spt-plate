@@ -159,8 +159,14 @@ namespace PLATE.Client.Patches
                     EffectRateCache.Add(__instance, boxed);
                 }
 
+                // the region this bleed sits in: the wound collider if the shot that
+                // caused it is still remembered, otherwise what the body part says
+                var region = state.LastHitCollider.TryGetValue(__instance.BodyPart, out var mark)
+                    ? Ballistics.WoundBleeding.Region(mark.Collider)
+                    : RegionOfPart(__instance.BodyPart);
+
                 PlateBloodManager.QueueExternalDrain(player,
-                    (float)boxed * PlateBloodManager.SelfLimit(state) * deltaTime);
+                    (float)boxed * PlateBloodManager.SelfLimit(state) * deltaTime, region);
             }
             catch (Exception ex)
             {
@@ -224,6 +230,25 @@ namespace PLATE.Client.Patches
 
                 default:
                     return PlateClientConfig.BleedHeavyTorso.Value;
+            }
+        }
+
+        /// <summary>
+        /// Fallback when the wound that opened this bleed is no longer remembered. The
+        /// legs are the awkward case: a thigh is junctional and a calf is not, and the
+        /// part alone cannot tell them apart — junction is the safer read, since that is
+        /// where the vessel that made it a heavy bleed most likely was.
+        /// </summary>
+        private static Ballistics.BleedRegion RegionOfPart(EBodyPart part)
+        {
+            switch (part)
+            {
+                case EBodyPart.Head: return Ballistics.BleedRegion.Head;
+                case EBodyPart.LeftArm:
+                case EBodyPart.RightArm: return Ballistics.BleedRegion.Limb;
+                case EBodyPart.LeftLeg:
+                case EBodyPart.RightLeg: return Ballistics.BleedRegion.Junction;
+                default: return Ballistics.BleedRegion.Torso;
             }
         }
 
@@ -800,6 +825,12 @@ namespace PLATE.Client.Patches
             {
                 var player = __instance.Player;
                 PlateBloodManager.MarkDead(player?.ProfileId);
+
+                // Which of the two ways a wound kills. The design has a measured target
+                // for the split — 35% at the moment of wounding against 52% over the
+                // minutes that follow — and this is the only place it can be counted.
+                PlateBloodManager.CountDeath(damageType == EDamageType.HeavyBleeding);
+
                 if (player != null)
                 {
                     Overlay.HitFeed.PushPanel(

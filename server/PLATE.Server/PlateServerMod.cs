@@ -63,8 +63,6 @@ public class PlateServerMod(
             }
         }
 
-        // TODO: GostArmor.Apply(tables, ...)
-
         // One line on success; anything that went wrong has already logged itself as a
         // warning or an error with the full detail. Per-module specifics are Debug.
         var applied = new[]
@@ -158,16 +156,17 @@ public class PlateServerMod(
             // published barrel-length ladders). Weapon packs and live-values backports
             // ship modifiers that are not physical, and they feed straight into damage.
             "BarrelNormalizer": true,
-            // Armour material and thickness from the real product the item is modelled on
+            // Armour material, thickness and class from the real product the item is
+            // modelled on. Also brings an item stamped with a class its material cannot
+            // hold — the sewn aramid packages the game rates 3 — back to the class its
+            // construction earns.
             "ArmorNormalizer": true,
             // Grenade fragments/blast brought to prototype specs (ammo-reference.jsonc)
             "GrenadePhysics": true,
             // Globals tweaks for the blood system: bleedings no longer damage HP
             // (blood drains into the client module's BloodVolume), Fresh Wound lasts to raid end.
             // Requires the PLATE client — otherwise bleedings become harmless!
-            "BloodGlobals": true,
-            // GOST armor classes (helmets >=4 -> 3). Low priority, disabled.
-            "GostArmor": false
+            "BloodGlobals": true
           },
 
           // ===== Barrels: v = v_inf*L/(L+C), Le Duc =====
@@ -199,16 +198,27 @@ public class PlateServerMod(
             // centre of the chest of a gelatin manikin at 5 m. 250 mm is the chest depth
             // of an adult male. In a raid the path is the real collider chord instead.
             "BodyDepthMm": 250,
-            // Permanent cavity: mm³ of channel volume per 1 HP. Anchor: 9x19 PST -> ~54
-            "WoundVolumePerHp": 710,
+            // Permanent cavity: mm³ of channel volume per 1 HP. Anchor: ~2.3 rifle
+            // hits to the torso (85 HP) to incapacitation per combat-mortality
+            // research, ~37 HP a hit — not the game's own damage numbers
+            "WoundVolumePerHp": 381,
             // Temporary pulsating cavity: eff = 1/(1+exp(−(v−center)/width)) —
             // sigmoid at the high-velocity wound boundary (~600 m/s, Fackler)
             "TcVelocityCenter": 600,
             "TcVelocityWidth": 80,
-            // J of deposited temporary-cavity energy per 1 HP. Anchor: 7.62x39 PS -> ~57
-            "TcEnergyPerHp": 28,
-            // Fragmentation converts stretch into tearing: (1 + this·FragmentationChance)
+            // J of deposited temporary-cavity energy per 1 HP. Same anchor as
+            // WoundVolumePerHp - the two move together
+            "TcEnergyPerHp": 74,
+            // Fragmentation converts stretch into tearing: (1 + this·frag). frag is
+            // DERIVED - a bullet breaks up where it turns, if it is still faster there
+            // than the threshold below, and only its deformable non-core share breaks.
+            // The vanilla FragmentationChance field takes no part in it (3.6)
             "TcFragBonus": 0.5,
+            // Velocity at the tumble point above which a jacket lets go, m/s.
+            // Published band 600-700 for thin-jacketed ball; the bottom of the band,
+            // read at the tumble point, reproduces which cartridges fragment in
+            // gelatin (M193/M855 yes, 7.62x39 PS and pistol ball no)
+            "FragVelocityThreshold": 600,
             // Energy budget: damage no higher than E0/this. Trims slow buckshot and light birdshot
             "EnergyCapPerHp": 7,
             // J per 1 HP of damage (only for WoundChannelModel=false). Anchor: PS 2036 J -> 57
@@ -220,12 +230,11 @@ public class PlateServerMod(
             "PenetrationBlend": 0.5,
             // Maximum PenetrationDamageMod for pure AP (expansiveness index X=0).
             "PdmMax": 0.35,
-            // Component weights of the expansiveness index X
+            // Component weights of the expansiveness index X. The old third component
+            // (vanilla FragmentationChance) is gone with 3.6: the model derives
+            // fragmentation itself, and feeding the game's opinion into X was noise
             "WeightSpecificDamage": 0.45,       // percentile of specific damage (HP/J)
             "WeightSpecificPenetration": 0.45,  // percentile of specific penetration (negative)
-            "WeightFragmentation": 0.25,        // fragmentation chance contribution
-            // Fragmentation normalization: clamp01(FragmentationChance / this value)
-            "FragChanceNormalizer": 0.30,
             // Minimum rounds per caliber for percentiles; fewer — global regression
             "MinCaliberCohort": 4,
             // Penetration: pen units per J/mm² of cross-section. Anchors: M61 75->64, M995 64->53, PS 44.6->35
@@ -270,10 +279,11 @@ public class PlateServerMod(
             // anti-fragmentation junk (construction helmets: spent shot/fragments only,
             // does NOT stop a pistol bullet); class 2 = GOST Br1 (PM, 5.2); above — Br2..Br5
             "ClassULimitJmm2": [2.5, 5.2, 12, 40, 65, 90],
-            // Wear: U_eff = U·(floor + (1-floor)·durability%)
-            "DurabilityFloor": 0.4,
-            // Floor of local degradation (a shattered segment holds at least this fraction)
-            "DegradeFloor": 0.15,
+            // Wear is probabilistic, not a smooth multiplier (3.4): a worn plate is
+            // intact where nothing hit it and broken where something did. Chance of
+            // striking a damaged spot = missing durability; a struck spot keeps
+            // 1 - x^WearExponentK of its thickness, with x from SpotDamageQ.
+            // Per-material values live in the profiles below.
             // How far a deformable bullet spreads on the face of the panel before it has
             // finished loading it: impact area x (1 + this*X). A core concentrates the
             // energy, deformation spreads it. 0 = every bullet loads its own calibre
@@ -282,20 +292,25 @@ public class PlateServerMod(
             // multipliers (E_cost = ECostMult·U_eff·A_core); KDef — deformation
             // (X_out = X + KDef·X); KFrag — erosion of whatever comes through, a
             // property of the barrier (ceramic grinds a core down, aramid does not);
-            // DAreaMm/DegradeMult — local degradation
-            // around the hit (ceramic cracks tile by tile, "gong" steel stays local);
-            // SharpVulnMult — fiber vulnerability to sharp-nosed bullets
-            // (U × (1 - this·clamp01((0.5-X)·2))); JPerDurability — J of absorbed
-            // energy per 1 durability point (wear from energy, not from ArmorDamage).
+            // DAreaMm — radius of local damage around a hit; its ceiling has an
+            // anchor: the standards space scored shots so damage zones do not
+            // interact, NIJ 0101.06 at 51 mm, so no zone exceeds 51;
+            // SpotDamageQ/WearExponentK — probabilistic wear (3.4): a hit spot
+            // accumulates x = 1-(1-q)^n of damage and keeps 1-x^k of its thickness.
+            // The q values are ASSUMPTIONS pending makers' multi-hit data; k from
+            // the resolution of 3.4 (aramid 4, soft ductile 3, hard ductile 2,
+            // brittle 1.5). SharpVulnMult — fiber vulnerability to sharp-nosed
+            // bullets (U × (1 - this·clamp01((0.5-X)·2))); JPerDurability — J of
+            // absorbed energy per 1 durability point.
             "Materials": {
-              "Aramid":       { "ULimitMult": 0.85, "ECostMult": 0.50, "KDef": 0.05, "KFrag": 0.00, "DAreaMm": 60,  "DegradeMult": 0.80, "SharpVulnMult": 0.25, "JPerDurability": 400 },
-              "UHMWPE":       { "ULimitMult": 1.00, "ECostMult": 0.35, "KDef": 0.02, "KFrag": 0.00, "DAreaMm": 50,  "DegradeMult": 0.85, "SharpVulnMult": 0.35, "JPerDurability": 450 },
-              "ArmoredSteel": { "ULimitMult": 1.15, "ECostMult": 0.85, "KDef": 0.50, "KFrag": 0.10, "DAreaMm": 15,  "DegradeMult": 0.90, "SharpVulnMult": 0.00, "JPerDurability": 700 },
-              "Titan":        { "ULimitMult": 1.00, "ECostMult": 1.00, "KDef": 0.35, "KFrag": 0.05, "DAreaMm": 20,  "DegradeMult": 0.85, "SharpVulnMult": 0.00, "JPerDurability": 500 },
-              "Aluminium":    { "ULimitMult": 0.90, "ECostMult": 0.60, "KDef": 0.30, "KFrag": 0.05, "DAreaMm": 25,  "DegradeMult": 0.80, "SharpVulnMult": 0.00, "JPerDurability": 350 },
-              "Ceramic":      { "ULimitMult": 1.25, "ECostMult": 0.70, "KDef": 0.60, "KFrag": 0.35, "DAreaMm": 80,  "DegradeMult": 0.25, "SharpVulnMult": 0.00, "JPerDurability": 150 },
-              "Glass":        { "ULimitMult": 0.80, "ECostMult": 0.50, "KDef": 0.40, "KFrag": 0.15, "DAreaMm": 100, "DegradeMult": 0.20, "SharpVulnMult": 0.00, "JPerDurability": 100 },
-              "Combined":     { "ULimitMult": 1.00, "ECostMult": 0.65, "KDef": 0.30, "KFrag": 0.10, "DAreaMm": 40,  "DegradeMult": 0.60, "SharpVulnMult": 0.10, "JPerDurability": 300 }
+              "Aramid":       { "ULimitMult": 0.85, "ECostMult": 0.50, "KDef": 0.05, "KFrag": 0.00, "DAreaMm": 51, "SpotDamageQ": 0.30, "WearExponentK": 4,   "SharpVulnMult": 0.25, "JPerDurability": 400 },
+              "UHMWPE":       { "ULimitMult": 1.00, "ECostMult": 0.35, "KDef": 0.02, "KFrag": 0.00, "DAreaMm": 45, "SpotDamageQ": 0.40, "WearExponentK": 3,   "SharpVulnMult": 0.35, "JPerDurability": 450 },
+              "ArmoredSteel": { "ULimitMult": 1.15, "ECostMult": 0.85, "KDef": 0.50, "KFrag": 0.10, "DAreaMm": 15, "SpotDamageQ": 0.50, "WearExponentK": 2,   "SharpVulnMult": 0.00, "JPerDurability": 700 },
+              "Titan":        { "ULimitMult": 1.00, "ECostMult": 1.00, "KDef": 0.35, "KFrag": 0.05, "DAreaMm": 20, "SpotDamageQ": 0.50, "WearExponentK": 2,   "SharpVulnMult": 0.00, "JPerDurability": 500 },
+              "Aluminium":    { "ULimitMult": 0.90, "ECostMult": 0.60, "KDef": 0.30, "KFrag": 0.05, "DAreaMm": 25, "SpotDamageQ": 0.40, "WearExponentK": 3,   "SharpVulnMult": 0.00, "JPerDurability": 350 },
+              "Ceramic":      { "ULimitMult": 1.25, "ECostMult": 0.70, "KDef": 0.60, "KFrag": 0.35, "DAreaMm": 51, "SpotDamageQ": 0.90, "WearExponentK": 1.5, "SharpVulnMult": 0.00, "JPerDurability": 150 },
+              "Glass":        { "ULimitMult": 0.80, "ECostMult": 0.50, "KDef": 0.40, "KFrag": 0.15, "DAreaMm": 51, "SpotDamageQ": 0.90, "WearExponentK": 1.5, "SharpVulnMult": 0.00, "JPerDurability": 100 },
+              "Combined":     { "ULimitMult": 1.00, "ECostMult": 0.65, "KDef": 0.30, "KFrag": 0.10, "DAreaMm": 45, "SpotDamageQ": 0.60, "WearExponentK": 2,   "SharpVulnMult": 0.10, "JPerDurability": 300 }
             }
           },
 

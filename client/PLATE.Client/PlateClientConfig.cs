@@ -53,6 +53,23 @@ namespace PLATE.Client
         public static ConfigEntry<float> DamageScalePmc;
         public static ConfigEntry<float> DamageScaleScav;
         public static ConfigEntry<bool> ArmorLocalDegradation;
+        public static ConfigEntry<bool> OrganZones;
+        public static ConfigEntry<float> OrganTissueStrengthMPa;
+        public static ConfigEntry<float> OrganKHeart;
+        public static ConfigEntry<float> OrganKLiver;
+        public static ConfigEntry<float> OrganKSpine;
+        public static ConfigEntry<float> OrganArrestChance;
+        public static ConfigEntry<float> OrganAvulsionChance;
+        public static ConfigEntry<float> OrganLiverRadiusMm;
+        public static ConfigEntry<float> OrganBleedMlSec;
+        public static ConfigEntry<float> BleedVesselsTorso;
+        public static ConfigEntry<float> BleedVesselsJunction;
+        public static ConfigEntry<float> BleedVesselsLimb;
+        public static ConfigEntry<float> BleedVesselsHead;
+        public static ConfigEntry<float> BleedHeavyMaxChance;
+        public static ConfigEntry<float> YawSpreadSigma;
+        public static ConfigEntry<float> TissueSpread;
+        public static ConfigEntry<float> ZoneShiftMm;
         public static ConfigEntry<float> VitalBrainMult;
         public static ConfigEntry<float> VitalJawMult;
         public static ConfigEntry<float> VitalNeckMult;
@@ -131,6 +148,7 @@ namespace PLATE.Client
         public static ConfigEntry<bool> TrackSelfHits;
         public static ConfigEntry<bool> SelfTestOnLoad;
         public static ConfigEntry<bool> VerboseLog;
+        public static ConfigEntry<bool> AnatomyDebug;
         public static ConfigEntry<bool> PerfTrace;
         public static ConfigEntry<int> ConfigVersion;
 
@@ -230,6 +248,15 @@ namespace PLATE.Client
                 "impact points — ceramic cracks in tile-like segments (a repeat hit on the " +
                 "same segment meets rubble), 'gong' steel only degrades at the edges. " +
                 "Radii and coefficients live in the server config material profiles.");
+            OrganZones = Bind(sBal, "Organ zones", true,
+                "Heart, liver and spinal cord as thirds of the torso hitboxes. A channel " +
+                "that runs deeper than half the zone through the heart or the cord is " +
+                "fatal — dealt as damage equal to what the body part had left, never as a " +
+                "scripted kill, so the kill feed, statistics and other mods see an " +
+                "ordinary hit. Also switches bleeding over to anatomy: whether a wound " +
+                "opens an artery is decided by the plane the channel swept and by the " +
+                "vessels where it swept it, instead of by a number attached to the " +
+                "cartridge. Requires Physical damage model.");
             GrenadeFragmentRange = Bind(sBal, "Grenade fragment range, m", 25f,
                 "Maximum grenade fragment kill range. Vanilla hard-caps it at 5-8 m; " +
                 "real lethal fragments travel tens of meters. Does not stretch blast " +
@@ -252,6 +279,82 @@ namespace PLATE.Client
             VitalNeckMult = Bind(sBal, "Vital multiplier: neck", 2.0f,
                 "Neck multiplier (major vessels; the blood loss itself comes from the blood system).",
                 new AcceptableValueRange<float>(1f, 10f), true);
+            OrganTissueStrengthMPa = Bind(sBal, "Organ: tissue radial strength, MPa", 1.0f,
+                "The one constant behind the temporary cavity radius: dE/dx = pi r^2 sigma. " +
+                "Calibrated on published cavity diameters — 7.62x51 comes out near 60 mm of " +
+                "radius, 9x19 near 30. Lower it and cavities reach further.",
+                new AcceptableValueRange<float>(0.1f, 10f), true);
+            OrganKHeart = Bind(sBal, "Organ: heart severity", 2.8f,
+                "Damage multiplier for a cavity that reaches the heart and mediastinum, at " +
+                "full overlap. From the ratio of AIS squares against one lobe of lung (25/9). " +
+                "A channel straight through the heart does not use this — it is fatal.",
+                new AcceptableValueRange<float>(1f, 10f), true);
+            OrganKLiver = Bind(sBal, "Organ: liver severity", 1.8f,
+                "Same for the liver (AIS 4, 16/9). Applies in full to a channel through it " +
+                "that did not avulse it, and by overlap to one that only stretched it.",
+                new AcceptableValueRange<float>(1f, 10f), true);
+            OrganKSpine = Bind(sBal, "Organ: spinal cord severity", 2.3f,
+                "Same for the cord (AIS 4-5). Only for a cavity beside it — a channel " +
+                "through the plate severs it.",
+                new AcceptableValueRange<float>(1f, 10f), true);
+            OrganArrestChance = Bind(sBal, "Organ: cardiac arrest chance", 0.15f,
+                "Ceiling on traumatic cardiac arrest from a cavity that passed beside the " +
+                "heart. Scaled by how much of the zone the cavity reached and by the " +
+                "high-velocity sigmoid, so pistols practically never do it.",
+                new AcceptableValueRange<float>(0f, 1f), true);
+            OrganAvulsionChance = Bind(sBal, "Organ: liver avulsion chance", 0.35f,
+                "Ceiling on tearing the liver loose — the injury the combat autopsy series " +
+                "lists as unsurvivable. Scaled by the high-velocity sigmoid and by the " +
+                "cavity radius against the organ's own.",
+                new AcceptableValueRange<float>(0f, 1f), true);
+            OrganLiverRadiusMm = Bind(sBal, "Organ: liver radius, mm", 70f,
+                "Half the liver's span. A cavity this wide can tear the whole organ off its " +
+                "ligaments; a narrower one is scaled down in proportion.",
+                new AcceptableValueRange<float>(10f, 200f), true);
+            OrganBleedMlSec = Bind(sBal, "Organ: internal bleed, ml per s", 80f,
+                "Bleed rate from an opened liver — the same rate a destroyed abdomen gets, " +
+                "and for the same reason: the vena cava. Internal, so no bandage, tourniquet " +
+                "or hemostatic reaches it. A cavity that only grazed the organ opens a share " +
+                "of this.",
+                new AcceptableValueRange<float>(0f, 300f), true);
+            BleedVesselsTorso = Bind(sBal, "Bleed vessels: torso, per mm²", 6e-5f,
+                "Major vessels per mm² of the plane a wound channel sweeps, in general " +
+                "torso. Chance of an arterial bleed = 1 - exp(-density × swept), so a " +
+                "longer or wider channel cuts more. Calibrated so a rifle round across a " +
+                "chest lands near where the old per-cartridge chance was.",
+                new AcceptableValueRange<float>(0f, 0.01f), true);
+            BleedVesselsJunction = Bind(sBal, "Bleed vessels: junction, per mm²", 1.8e-4f,
+                "Same for neck, groin and shoulder — where a major vessel runs and a " +
+                "tourniquet has nothing to squeeze against. Three times the torso.",
+                new AcceptableValueRange<float>(0f, 0.01f), true);
+            BleedVesselsLimb = Bind(sBal, "Bleed vessels: limb, per mm²", 2.4e-5f,
+                "Same for calves and forearms away from the bundles. The femoral and " +
+                "brachial cases are handled separately by their own chance.",
+                new AcceptableValueRange<float>(0f, 0.01f), true);
+            BleedVesselsHead = Bind(sBal, "Bleed vessels: head, per mm²", 2.4e-5f,
+                "Same for the head. What kills there is not volume loss.",
+                new AcceptableValueRange<float>(0f, 0.01f), true);
+            BleedHeavyMaxChance = Bind(sBal, "Bleed heavy max chance", 0.95f,
+                "Ceiling on the arterial bleed chance. Nothing is ever certain.",
+                new AcceptableValueRange<float>(0f, 1f), true);
+            YawSpreadSigma = Bind(sBal, "Spread: yaw neck sigma", 0.35f,
+                "How much the travel before a projectile goes broadside varies, as the " +
+                "sigma of a log-normal about the cartridge's median. The single most " +
+                "variable quantity in wound ballistics — one cartridge's neck length " +
+                "varies twofold in gelatin. 0 makes every shot the median one. Drawn once " +
+                "per shot: this is where the difference between two identical hits comes " +
+                "from, instead of a die rolled on the damage.",
+                new AcceptableValueRange<float>(0f, 1f), true);
+            TissueSpread = Bind(sBal, "Spread: tissue density sigma", 0.15f,
+                "How much the tissue along a channel varies from the calibrated average — " +
+                "ribs, cartilage, diaphragm. Moves the channel length, and with it how " +
+                "much energy is left behind.",
+                new AcceptableValueRange<float>(0f, 0.5f), true);
+            ZoneShiftMm = Bind(sBal, "Spread: organ position sigma, mm", 10f,
+                "The game has one skeleton and people do not. Shifts the organ zones " +
+                "sideways per shot, which turns 'hit the heart' from a step at the edge " +
+                "of a box into a gradient.",
+                new AcceptableValueRange<float>(0f, 50f), true);
             FleshRetentionAp = Bind(sBal, "Flesh retention for AP (X 0)", 0.60f,
                 "FALLBACK (only when Physical damage model is off): share of damage/energy " +
                 "a solid (X~0, AP) bullet retains when passing through a body part. " +
@@ -510,6 +613,11 @@ namespace PLATE.Client
                 "(catches name drift after an SPT update — a single log line).", null, true);
             VerboseLog = Bind(sDebug, "Verbose logging", false,
                 "Verbose PLATE logging (including chronic damage ticks).", null, true);
+            AnatomyDebug = Bind(sDebug, "Log hitbox geometry", false,
+                "One line per hit naming the box that was hit, how its width/height/depth " +
+                "axes resolved against the character, and where in it the bullet entered " +
+                "(signed fractions, +width being the target's own right). Turn on to check " +
+                "the organ zones sit where the anatomy says; noisy otherwise.", null, true);
             PerfTrace = Bind(sDebug, "Perf trace", false,
                 "Profile PLATE subsystems: [PLATE-PERF] lines every 5 s.", null, true);
             ConfigVersion = Bind(sDebug, "Config version (internal)", 1,

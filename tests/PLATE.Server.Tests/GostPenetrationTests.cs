@@ -62,70 +62,56 @@ public class GostPenetrationTests
         return data;
     }
 
-    /// <summary>
-    /// The plate the model resolves an item of this material and class to, and the
-    /// physics of what it is made of. Fibre reads out of SoftArmor, which is what a
-    /// vest package is; everything rigid reads out of ArmorByClass.
-    /// </summary>
     private static (BallisticLimit.Barrier Barrier, double ThicknessMm) Plate(
-        string material, int gameClass)
-    {
-        var book = ReferenceBookTests.ShippedBook();
-        var physics = book.ArmorMaterials[material];
+        string material, int gameClass) => ArmorFixture.ByClass(material, gameClass);
 
-        // Fibre is the one material that comes both ways, so the item decides and not
-        // the material: an aramid vest package reads out of SoftArmor and is sold as Бр1
-        // or Бр2, a pressed polyethylene plate reads out of ArmorByClass like any other
-        // plate. Everything rigid reads out of ArmorByClass.
-        var sewn = material == "Aramid";
-        var table = sewn ? book.SoftArmor : book.ArmorByClass;
-        var rung = sewn ? Math.Min(gameClass, 2) : gameClass;
-        var entry = table[$"{material}/{rung}"];
-
-        // only the fibre in a package does any work, and a sewn one is mostly air
-        var density = entry.DensityGCm3 > 0 ? entry.DensityGCm3 : physics.DensityGCm3;
-
-        return (new BallisticLimit.Barrier
-        {
-            Class = physics.Class,
-            ThicknessMm = entry.ThicknessMm,
-            ShearMPa = physics.ShearMPa,
-            CompressiveMPa = physics.CompressiveMPa,
-            FibreTensileMPa = physics.FibreTensileMPa,
-            FailureStrain = physics.FailureStrain,
-            HardnessHv = physics.HardnessHv,
-            DensityGCm3 = density,
-            PackedFraction = physics.DensityGCm3 > 0 ? density / physics.DensityGCm3 : 1,
-        }, entry.ThicknessMm);
-    }
-
-    private static BallisticLimit.Core CoreOf(ArmorStandardTests.Threat t)
-    {
-        return BallisticLimit.Driving(t.MassG, t.DiaMm, t.CoreAreaFrac, t.CoreMassFrac,
-            t.CoreHardnessHv);
-    }
+    private static BallisticLimit.Core CoreOf(ArmorStandardTests.Threat t) =>
+        ArmorFixture.CoreOf(t);
 
     /// <summary>Perpendicular hit, undamaged plate — the conditions the standard tests at.</summary>
     private static double V50(string material, int gameClass, ArmorStandardTests.Threat t)
     {
         var (barrier, _) = Plate(material, gameClass);
-        return BallisticLimit.V50(barrier, CoreOf(t), 1.0, BallisticLimit.Tuning.Default);
+        return ArmorFixture.V50(barrier, t);
     }
 
+    /// <summary>
+    /// Strict, the way a certificate is strict: zero penetrations out of five shots,
+    /// which puts the required V50 about 9% above the test velocity rather than at it
+    /// — a plate whose V50 equals the test velocity fails a real protocol half the
+    /// time on the first shot. See CertificationCriteria for the derivation and for
+    /// which parts of it are our assumptions.
+    ///
+    /// Since the class rungs stopped being thicknesses solved from the class, this
+    /// test stopped being a tautology. For a rung that names a representative product
+    /// it now measures that real plate against the standard — and inherits the
+    /// product's recorded shortfall, because the rung IS the product. Rungs still
+    /// computed as a last resort are solved under this very criterion, so for them
+    /// the test only guards drift; their Source says so.
+    /// </summary>
     [Theory]
     [MemberData(nameof(ClassAndMaterial))]
     public void A_plate_of_the_class_stops_what_the_class_is_certified_against(
         string cls, string material)
     {
         var gameClass = GameClass(cls);
+        var shortfallKey = ArmorFixture.ClassRepresentative(material, gameClass)
+                           ?? $"{material}/{gameClass}";
+        var reaches = ArmorStandardTests.CertShortfalls.TryGetValue(shortfallKey, out var s)
+            ? s.Reaches
+            : 1.0;
+
         foreach (var t in ArmorStandardTests.Gost.Where(t => t.Class == cls))
         {
             var v50 = V50(material, gameClass, t);
             var (_, thickness) = Plate(material, gameClass);
+            var required = CertificationCriteria.RequiredV50("GOST", cls, t.V);
 
-            Assert.True(v50 >= t.V,
+            Assert.True(v50 >= required * reaches,
                 $"{cls} {material} {thickness:N1} mm turns {t.Cartridge} back only up to " +
-                $"{v50:N0} m/s, and the standard fires it at {t.V:N0}");
+                $"{v50:N0} m/s; the standard fires it at {t.V:N0}, zero-of-five " +
+                $"demands {required:N0} and the recorded shortfall allows no less " +
+                $"than {required * reaches:N0}");
         }
     }
 
@@ -170,13 +156,116 @@ public class GostPenetrationTests
             " — so the two classes are not distinguishable");
     }
 
-    private static bool Exists(string material, int gameClass)
+    private static bool Exists(string material, int gameClass) =>
+        ArmorFixture.ClassExists(material, gameClass);
+
+    // --- The plates that actually exist, rather than the ladder's idea of them ---
+
+    public static TheoryData<string> RussianPlates()
+    {
+        var data = new TheoryData<string>();
+        foreach (var c in ArmorStandardTests.Certified.Where(c => c.Standard == "GOST"))
+        {
+            data.Add(c.BookKey);
+        }
+
+        return data;
+    }
+
+    private static ArmorStandardTests.Certificate Cert(string bookKey) =>
+        ArmorStandardTests.Certified.Single(c => c.BookKey == bookKey);
+
+    /// <summary>
+    /// Every Russian plate in the book with a published class, against every cartridge
+    /// GOST fires at that class.
+    ///
+    /// The ladder test above asks whether the model's own idea of a class holds together.
+    /// This one asks the harder question: a real plate of a real thickness, certified by
+    /// the people who made it — does the model let it do what it is sold to do. A class
+    /// rung can always be thickened until it passes; 6 mm of Granit ceramic cannot.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(RussianPlates))]
+    public void A_certified_russian_plate_stops_its_own_class(string bookKey)
+    {
+        var cert = Cert(bookKey);
+        var (barrier, thickness) = ArmorFixture.ByProduct(bookKey);
+        var threats = ArmorFixture.Threats("GOST", cert.Class);
+
+        Assert.NotEmpty(threats);
+        var reaches = ArmorStandardTests.CertShortfalls.TryGetValue(bookKey, out var s)
+            ? s.Reaches
+            : 1.0;
+        foreach (var t in threats)
+        {
+            var v50 = ArmorFixture.V50(barrier, t);
+            var required = CertificationCriteria.RequiredV50("GOST", cert.Class, t.V);
+            Assert.True(v50 >= required * reaches,
+                $"{bookKey} ({cert.Note}) is {thickness:N1} mm of {barrier.Class} and turns " +
+                $"{t.Cartridge} back only up to {v50:N0} m/s, where {cert.Class} is " +
+                $"certified at {t.V:N0}, zero-of-five demands {required:N0} and the " +
+                $"recorded shortfall allows no less than {required * reaches:N0}");
+        }
+    }
+
+    /// <summary>
+    /// And is beaten by the class above it, or its certificate is worth nothing — a plate
+    /// that stops everything is not a Бр4 plate, it is a bug.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(RussianPlates))]
+    public void A_certified_russian_plate_is_beaten_by_the_class_above(string bookKey)
+    {
+        var cert = Cert(bookKey);
+        if (cert.Class == "Бр5")
+        {
+            return; // the top of the ladder the game has a class for
+        }
+
+        var above = Above(cert.Class);
+        var (barrier, thickness) = ArmorFixture.ByProduct(bookKey);
+        var threats = ArmorFixture.Threats("GOST", above);
+
+        var through = threats.Where(t => ArmorFixture.V50(barrier, t) < t.V).ToArray();
+        Assert.True(through.Length > 0,
+            $"{bookKey} is sold as {cert.Class} and stops every cartridge of {above} too — " +
+            string.Join(", ", threats.Select(t =>
+                $"{t.Cartridge} to {ArmorFixture.V50(barrier, t):N0} against {t.V:N0}")) +
+            $" — so {thickness:N1} mm of {barrier.Class} is being read a class too strong");
+    }
+
+    /// <summary>
+    /// The boundary of the certified list, asserted rather than left in a comment.
+    ///
+    /// Every panel named here exists in the book with a real thickness and a real
+    /// material, and is deliberately NOT being fired at, because our references give its
+    /// protection layout or a bare number from the 1995 scale instead of a class in the
+    /// terms this fixture tests in. If one of them ever gains a class, this goes red and
+    /// the panel moves up into Certified where it belongs.
+    /// </summary>
+    [Fact]
+    public void The_panels_we_cannot_class_are_named_and_still_in_the_book()
     {
         var book = ReferenceBookTests.ShippedBook();
-        var sewn = material == "Aramid";
-        var rung = sewn ? Math.Min(gameClass, 2) : gameClass;
-        return (sewn ? book.SoftArmor : book.ArmorByClass).ContainsKey($"{material}/{rung}");
+        var certified = ArmorStandardTests.Certified.Select(c => c.BookKey).ToHashSet();
+
+        foreach (var (key, product, what) in ArmorStandardTests.Unpinned)
+        {
+            Assert.True(book.ArmorPlates.ContainsKey(key),
+                $"{product} is listed as unclassed but is not in the book at all");
+            Assert.DoesNotContain(key, certified);
+            Assert.False(string.IsNullOrWhiteSpace(what));
+        }
     }
+
+    private static string Above(string cls) => cls switch
+    {
+        "Бр1" => "Бр2",
+        "Бр2" => "Бр3",
+        "Бр3" => "Бр4",
+        "Бр4" => "Бр5",
+        _ => throw new ArgumentOutOfRangeException(nameof(cls), cls, "nothing above it"),
+    };
 
     /// <summary>
     /// What is left of the round on the far side. Recht-Ipson, and the energy the plate
@@ -203,16 +292,26 @@ public class GostPenetrationTests
     }
 
     /// <summary>
-    /// Writing down what a bullet is made of must never make it worse at getting through
-    /// a plate than knowing nothing about it. A construction is information; if adding it
-    /// costs the round penetration, the construction is being read wrong.
+    /// Writing down what a bullet is made of must never turn it into something the game
+    /// cannot fire. A construction is information, and the guard against reading it
+    /// wrong is that the described round stays in the same world as the undescribed
+    /// one — not that it always comes out stronger.
     ///
-    /// This is the raid check GOST cannot make. Every cartridge in the standard has a
-    /// full-length core, so reading the driving mass as the surviving mass was invisible
-    /// to all seven of them. An M855, whose "core" is a 0.65 g tip riding on a lead body,
-    /// came out of that reading as a 0.65 g projectile at full 5.7 mm calibre and met a
-    /// titanium plate with a ballistic limit of 2847 m/s. Nothing in the game leaves a
-    /// barrel above 1220, so it was not armour, it was a wall.
+    /// **That second half used to be the test, and a measurement took it away.** It read
+    /// "knowing a construction must never cost a round penetration", which held only
+    /// because the model gave a hardened core the whole bullet's mass to carry. Forrestal
+    /// shot 20 mm of aluminium with complete APM2 bullets and with their stripped cores
+    /// and got the same limit either way, so the jacket does not carry the core through
+    /// a metal plate — and once the model says so, describing a 7N10 as its 1.7 g core
+    /// DOES make it easier to stop than reading it as 3.5 g of full-calibre lead, by
+    /// about a fifth. That is not the construction being read as a handicap; it is the
+    /// undescribed reading over-crediting a bullet with mass its core never delivers.
+    ///
+    /// What survives is the check that caught the real bug: an M855, whose "core" is a
+    /// 0.65 g tip riding on a lead body, once came out as a 0.65 g projectile at full
+    /// calibre and met a titanium plate at a ballistic limit of 2847 m/s. Nothing in the
+    /// game leaves a barrel above 1220, so that plate was not armour, it was a wall. A
+    /// factor of two either way is physics; a factor of three is a category error.
     /// </summary>
     [Theory]
     [InlineData("ArmoredSteel", 5)]
@@ -220,7 +319,8 @@ public class GostPenetrationTests
     [InlineData("Titan", 5)]
     [InlineData("UHMWPE", 5)]
     [InlineData("Combined", 5)]
-    public void Knowing_a_bullets_construction_never_makes_it_weaker(string material, int gameClass)
+    public void Knowing_a_bullets_construction_keeps_it_in_the_same_world(string material,
+        int gameClass)
     {
         var tuning = BallisticLimit.Tuning.Default;
         var (barrier, thickness) = Plate(material, gameClass);
@@ -229,12 +329,9 @@ public class GostPenetrationTests
         {
             var known = BallisticLimit.V50(barrier, CoreOf(t), 1.0, tuning);
             var blind = BallisticLimit.V50(barrier,
-                BallisticLimit.Driving(t.MassG, t.DiaMm, 1, 1, t.CoreHardnessHv), 1.0, tuning);
+                BallisticLimit.Driving(t.MassG, t.DiaMm, 1, 1, t.CoreHardnessHv, tuning), 1.0, tuning);
 
-            Assert.True(known <= blind * 1.02,
-                $"{material} at {thickness:N1} mm stops {t.Cartridge} up to {known:N0} m/s " +
-                $"once its construction is known and only {blind:N0} without it — the " +
-                "construction is being read as a handicap");
+            Assert.InRange(known / blind, 0.5, 2.0);
         }
     }
 

@@ -32,7 +32,7 @@ public class AmmoNormalizer(
         public required TemplateItemProperties P;
         public string Caliber = "";
         public bool IsBuckshot;
-        public double MassG, DiaMm, E0, Area, Sd, Sp, FragChance, X;
+        public double MassG, DiaMm, E0, Area, Sd, Sp, X;
         public double OldDamage, NewDamage;
         public int OldPen, NewPen;
         public double OldPdm, NewPdm;
@@ -91,7 +91,6 @@ public class AmmoNormalizer(
                 P = p,
                 Caliber = p.Caliber,
                 IsBuckshot = p.AmmoType == "buckshot",
-                FragChance = p.FragmentationChance ?? 0,
                 OldDamage = p.Damage ?? 0,
                 OldPen = p.PenetrationPower ?? 0,
                 OldPdm = p.PenetrationDamageMod ?? 0,
@@ -239,10 +238,13 @@ public class AmmoNormalizer(
             }
             else
             {
+                // Two components, deliberately not three: the vanilla
+                // FragmentationChance used to contribute here, and it is gone with
+                // 3.6 — the model now derives fragmentation from construction, so
+                // feeding the game's opinion of it back into X would be circular.
+                // The weights are symmetric, so a cohort-median bullet still reads 0.5.
                 var xRaw = a.WeightSpecificDamage * pctSd
-                           - a.WeightSpecificPenetration * pctSp
-                           + a.WeightFragmentation *
-                           Math.Clamp(r.FragChance / a.FragChanceNormalizer, 0, 1);
+                           - a.WeightSpecificPenetration * pctSp;
                 r.X = Math.Clamp(0.5 + xRaw, 0, 1);
             }
 
@@ -356,8 +358,9 @@ public class AmmoNormalizer(
         }
 
         var w = WoundModel.Compute(r.MassG, r.DiaMm, r.P.InitialSpeed!.Value, r.X,
-            r.FragChance, a);
+            r.CoreMass, a);
         r.Notes.Add($"PC {w.Pc:0.#}+TC {w.Tc:0.#}" +
+                    (w.Frag > 0 ? $", frag {w.Frag:0.00}" : "") +
                     (w.EnergyCapped ? $", cap E0/{a.EnergyCapPerHp:0.#}" : "") +
                     $", channel {w.DepthMm:0} mm");
         return Math.Round(w.Damage);
@@ -463,12 +466,14 @@ public class AmmoNormalizer(
 
         sb.AppendLine(a.WoundChannelModel
             ? $"Total: {recs.Count}. Wound channel model: depth K={a.GelDepthK}·(m/A)·ln(v/{a.GelStopVelocity})·(1−{a.ExpansionDepthFactor}X), " +
-              $"manikin {a.BodyDepthMm} mm, PC: A·(1+{a.ExpansionAreaFactor}X)·Lb/{a.WoundVolumePerHp} mm³/HP; " +
-              $"TC: sigmoid(v; {a.TcVelocityCenter}±{a.TcVelocityWidth})·E·φ·(1+{a.TcFragBonus}·frag)/{a.TcEnergyPerHp} J/HP; " +
+              $"manikin {a.BodyDepthMm} mm, PC: A·(1+{a.ExpansionAreaFactor}X) nose-first for " +
+              $"{a.YawNeckCalibres} calibres, then {a.YawBroadsideFraction}·L·d broadside, " +
+              $"over Lb/{a.WoundVolumePerHp} mm³/HP; " +
+              $"TC: sigmoid(v; {a.TcVelocityCenter}±{a.TcVelocityWidth})·E·φ·(1+{a.TcFragBonus}·frag)/{a.TcEnergyPerHp} J/HP, " +
+              $"frag derived: X·(1−coreMass) when the turn comes faster than {a.FragVelocityThreshold} m/s; " +
               $"budget E0/{a.EnergyCapPerHp}. blend(pen)={a.PenetrationBlend}, PdmMax={a.PdmMax}"
             : $"Total: {recs.Count}. EnergyPerHp={a.EnergyPerHp}, blend(pen)={a.PenetrationBlend}, " +
-              $"PdmMax={a.PdmMax}, X weights: dmg {a.WeightSpecificDamage} / pen {a.WeightSpecificPenetration} / " +
-              $"frag {a.WeightFragmentation}");
+              $"PdmMax={a.PdmMax}, X weights: dmg {a.WeightSpecificDamage} / pen {a.WeightSpecificPenetration}");
         sb.AppendLine();
         sb.AppendLine("**Core** is the frontal area of the hard core as a fraction of the whole " +
                       "bullet, and the mass fraction behind it. `1.00` is a bullet that strikes " +
@@ -516,7 +521,6 @@ public class AmmoNormalizer(
                 X = Math.Round(r.X, 4),
                 E0 = Math.Round(r.E0),
                 Pdm = r.P.PenetrationDamageMod,
-                Frag = Math.Round(r.FragChance, 4),
                 Ca = Math.Round(r.CoreArea, 4),
                 Cm = Math.Round(r.CoreMass, 4),
                 Hv = Math.Round(r.CoreHardnessHv),
@@ -528,12 +532,17 @@ public class AmmoNormalizer(
             a.GelStopVelocity,
             a.ExpansionDepthFactor,
             a.ExpansionAreaFactor,
+            a.YawNeckCalibres,
+            a.YawBroadsideFraction,
+            a.BulletDensityGPerCm3,
+            a.BulletFormFactor,
             a.BodyDepthMm,
             a.WoundVolumePerHp,
             a.TcVelocityCenter,
             a.TcVelocityWidth,
             a.TcEnergyPerHp,
             a.TcFragBonus,
+            a.FragVelocityThreshold,
             a.EnergyCapPerHp,
         };
         data["__armor"] = new
@@ -542,8 +551,6 @@ public class AmmoNormalizer(
             cfg.Armor.ThresholdBand,
             cfg.Armor.AngleMinCos,
             cfg.Armor.ClassULimitJmm2,
-            cfg.Armor.DurabilityFloor,
-            cfg.Armor.DegradeFloor,
             cfg.Armor.ExpansionOnArmor,
             cfg.Armor.Materials,
         };

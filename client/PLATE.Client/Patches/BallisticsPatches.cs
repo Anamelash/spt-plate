@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using EFT;
+using EFT.HealthSystem;
 using EFT.InventoryLogic;
 using HarmonyLib;
 using PLATE.Client.Ballistics;
@@ -30,6 +31,9 @@ namespace PLATE.Client.Patches
                 prefixName: nameof(ArmorMitigationPrefix));
             PatchSafe(harmony, PatchTargets.Bullet_Overpenetrate, nameof(OverpenChildPostfix));
             PatchSafe(harmony, PatchTargets.Bullet_Fragment, nameof(FragmentBudgetPostfix));
+
+            // second half of a lethal organ wound outside the chest and head pools
+            PatchSafe(harmony, PatchTargets.Health_ApplyDamage, nameof(CentralWoundPostfix));
 
             // absolute penetration derived from impact energy density
             PatchSafe(harmony, PatchTargets.Bullet_DegradeOnHit, nameof(AbsolutePenPostfix));
@@ -128,8 +132,10 @@ namespace PLATE.Client.Patches
             try
             {
                 var parts = victim.gameObject.GetComponentsInChildren<BodyPartCollider>();
-                Plugin.Log.LogInfo($"[PLATE] Victim hitboxes ({parts.Length} total), " +
-                                   "local sizes and world AABB:");
+                // to both logs: the organ zones are cut out of these boxes, so a raid
+                // journal that does not say what the boxes were cannot be read afterwards
+                Say($"Victim hitboxes ({parts.Length} total), " +
+                    "local sizes, world AABB and resolved axes:");
                 foreach (var p in parts)
                 {
                     var c = p.Collider;
@@ -150,16 +156,28 @@ namespace PLATE.Client.Patches
                             break;
                     }
 
+                    // how the box reads once its axes are pointed at the character:
+                    // the same list twice over is what makes a wrong axis obvious
+                    var body = victim.gameObject.transform;
+                    var anat = Anatomy.TryDescribe(c, body, out var box)
+                        ? Anatomy.Describe(box) + (Anatomy.IsSpinePlate(box) ? " plate" : "")
+                        : "";
+
                     var world = c != null ? c.bounds.size : Vector3.zero;
-                    Plugin.Log.LogInfo(
-                        $"  {p.BodyPartColliderType,-22} {geom,-40} " +
-                        $"AABB {world.x:0.00}x{world.y:0.00}x{world.z:0.00} m");
+                    Say($"  {p.BodyPartColliderType,-22} {geom,-40} " +
+                        $"AABB {world.x:0.00}x{world.y:0.00}x{world.z:0.00} m  {anat}");
                 }
             }
             catch (Exception ex)
             {
                 Plugin.Log.LogWarning($"[PLATE] Collider dump failed: {ex.Message}");
             }
+        }
+
+        private static void Say(string line)
+        {
+            Plugin.Log.LogInfo("[PLATE] " + line);
+            Overlay.HitFeed.LogEvent(line);
         }
 
         /// <summary>Fragments lighter than this are not projectiles (their energy stays in the body part).</summary>
@@ -272,7 +290,11 @@ namespace PLATE.Client.Patches
             }
 
             var x = EffectiveX(shot); // accounts for armor-induced deformation in this hit
-            var frag = (float)AmmoDataCache.GetFrag(shot.Ammo?.TemplateId);
+
+            // fragmentation is no longer the vanilla FragmentationChance field: the
+            // wound model derives it from what the bullet is made of and how fast it
+            // is where it turns (3.6). All it needs from here is the core share.
+            AmmoDataCache.GetCore(shot.Ammo?.TemplateId, out _, out var coreMassFrac);
 
             // the path through this part bounds everything: the cavity it can cut and
             // the energy it can leave behind. Whether the projectile carries on past it
@@ -281,9 +303,17 @@ namespace PLATE.Client.Patches
             var chordMm = ChordMm(bpc, __instance.HitPoint, __instance.Direction, dia);
             PerfTrace.End("wound.chord", t);
 
-            var d = ClientWoundModel.Compute(mass, dia, v, x, frag, chordMm, wound);
+            // what is not the same twice about this particular shot, drawn once
+            var spread = ShotSpread.For(shot, dia, wound);
+
+            var d = ClientWoundModel.Compute(mass, dia, v, x, coreMassFrac, chordMm, wound,
+                spread.NeckMm, spread.TissueScale);
             var vital = VitalMult(bpc.BodyPartColliderType);
             __instance.Damage = d.DamageHp * vital * DamageScale(bpc.Player as Player);
+
+            // what the projectile actually travelled in here: the chord bounds it, but so
+            // does the channel, and a round that stopped short never reached its turn
+            var alongMm = Mathf.Max(Mathf.Min(chordMm, d.ChannelMm), 1f);
 
             var ammo = AmmoLabel(shot);
             Overlay.HitFeed.PushHit(bpc.Player as Player, d.Contact
@@ -294,7 +324,387 @@ namespace PLATE.Client.Patches
                   $", PC {d.Pc:0.#}+TC {d.Tc:0.#}" +
                   (vital > 1f ? $" x{vital:0.#}" : "") +
                   $" -> {__instance.Damage:0.#}" +
-                  (d.ChannelMm > chordMm ? " (through)" : ""));
+                  (d.ChannelMm > chordMm ? " (through)" : "") +
+                  // where it turned and what it went through: two identical-looking hits
+                  // that differ have to say why they differ
+                  (d.Contact
+                      ? ""
+                      : $" [yaw {(spread.NeckMm < alongMm ? $"{spread.NeckMm:0} mm" : "none")}" +
+                        (d.Frag > 0f ? $", frag {d.Frag:0.00}" : "") +
+                        $", tissue x{spread.TissueScale:0.00}]"));
+
+            // the energy the tissue took, over the length it took it along: what the
+            // radial cavity is driven by
+            var deposited = 0.5f * (mass / 1000f) * v * v * d.DepositFrac;
+            ApplyOrganZones(ref __instance, shot, bpc, d.ChannelMm, deposited / alongMm, v,
+                spread);
+
+            ApplyWoundBleeding(ref __instance, shot, bpc, d, alongMm, wound);
+            LogAnatomy(bpc, __instance.HitPoint);
+        }
+
+        /// <summary>
+        /// Whether this wound bleeds badly, from what the channel crossed rather than
+        /// from what was fired. The ammo template's own bleed chance is overwritten:
+        /// a projectile does not carry a bleeding rate around with it, it cuts whatever
+        /// was in front of it.
+        /// </summary>
+        private static void ApplyWoundBleeding(ref DamageInfoStruct info, EftBulletClass shot,
+            BodyPartCollider bpc, ClientWoundModel.Deposit d, float pathMm,
+            AmmoDataCache.WoundParams wound)
+        {
+            if (!PlateClientConfig.OrganZones.Value || shot.BlockedBy.HasValue || d.Contact)
+            {
+                return; // armour took it, or there is no channel to sweep anything
+            }
+
+            var volume = d.Pc * (float)wound.WoundVolumePerHp;
+            var swept = WoundBleeding.SweptMm2(volume, pathMm);
+            var region = WoundBleeding.Region(bpc.BodyPartColliderType);
+
+            var chance = WoundBleeding.HeavyChance(region, swept, BleedTuning());
+            var before = info.HeavyBleedingDelta;
+            info.HeavyBleedingDelta = chance;
+
+            Overlay.HitFeed.PushHit(bpc.Player as Player,
+                $"  bleed {region}: swept {swept:0} mm², " +
+                $"heavy {before * 100f:0.#}% -> {chance * 100f:0.#}%");
+        }
+
+        private static WoundBleeding.Tuning BleedTuning()
+        {
+            return new WoundBleeding.Tuning
+            {
+                VesselsTorso = PlateClientConfig.BleedVesselsTorso.Value,
+                VesselsJunction = PlateClientConfig.BleedVesselsJunction.Value,
+                VesselsLimb = PlateClientConfig.BleedVesselsLimb.Value,
+                VesselsHead = PlateClientConfig.BleedVesselsHead.Value,
+                MaxChance = PlateClientConfig.BleedHeavyMaxChance.Value,
+            };
+        }
+
+        // --- Organ zones ---
+
+        private static OrganZones.Tuning ZoneTuning(AmmoDataCache.WoundParams wound)
+        {
+            return new OrganZones.Tuning
+            {
+                TissueStrengthMPa = PlateClientConfig.OrganTissueStrengthMPa.Value,
+                KHeart = PlateClientConfig.OrganKHeart.Value,
+                KLiver = PlateClientConfig.OrganKLiver.Value,
+                KSpine = PlateClientConfig.OrganKSpine.Value,
+                ArrestChance = PlateClientConfig.OrganArrestChance.Value,
+                AvulsionChance = PlateClientConfig.OrganAvulsionChance.Value,
+                LiverRadiusMm = PlateClientConfig.OrganLiverRadiusMm.Value,
+
+                // the same boundary the wound model's own TC term uses, from the server:
+                // two velocity sigmoids that disagreed would be two models
+                VelocityCenter = (float)wound.TcVelocityCenter,
+                VelocityWidth = (float)wound.TcVelocityWidth,
+            };
+        }
+
+        /// <summary>
+        /// Runs the channel against the organ zones of the collider it went into. Armour
+        /// that stopped the shot ends it here: behind-armour trauma is a separate
+        /// mechanism and nothing reached an organ.
+        /// </summary>
+        private static void ApplyOrganZones(ref DamageInfoStruct info, EftBulletClass shot,
+            BodyPartCollider bpc, float channelMm, float dEdxJPerMm, float velocity,
+            ShotSpread spread)
+        {
+            if (!PlateClientConfig.OrganZones.Value || shot.BlockedBy.HasValue)
+            {
+                return;
+            }
+
+            var wound = AmmoDataCache.Wound;
+            if (wound == null)
+            {
+                return;
+            }
+
+            var victim = bpc.Player as Player;
+            if (!Anatomy.TryDescribe(bpc.Collider, victim?.gameObject.transform, out var box) ||
+                !Anatomy.TryFrame(box, out var frame))
+            {
+                return; // capsule or sphere — the head, which has its own multipliers
+            }
+
+            var tuning = ZoneTuning(wound);
+            if (!OrganZones.TryHit(bpc.BodyPartColliderType, frame, info.HitPoint,
+                    info.Direction, channelMm, dEdxJPerMm, tuning, out var hit,
+                    spread.ZoneShiftMm))
+            {
+                return; // this collider carries no zone
+            }
+
+            // counted per organ rather than per collider box: RibcageUp is two boxes and
+            // RibcageLow is three, and one bullet through one liver is one liver
+            var zone = (int)hit.Kind;
+            OrganZones.Tally(hit.Kind,
+                touched: spread.FirstTouch(zone),
+                through: hit.Through && spread.FirstThrough(zone),
+                lethal: hit.Lethal && spread.FirstLethal(zone));
+
+            // printed even when nothing fired: without it there is no telling a channel
+            // that missed the heart from a heart that is missing from the code
+            var head = $"  ZONE {hit.Name} ({hit.Where}): PC {hit.PathMm:0}/{hit.NeedMm:0} mm" +
+                       (hit.ToZoneMm > 1f ? $" from {hit.ToZoneMm:0} mm in" : "") +
+                       (hit.Through ? " deep" : "");
+
+            if (hit.Lethal)
+            {
+                Overlay.HitFeed.PushHit(victim, head + " -> LETHAL");
+                FloorDamageToLethal(ref info, bpc, victim, hit);
+                return;
+            }
+
+            Overlay.HitFeed.PushHit(victim, head + (hit.Through ? "" : " -> no") +
+                $", TC r={hit.TcRadiusMm:0} mm at {hit.DistanceMm:0} mm, " +
+                $"overlap {hit.Overlap:0.00}");
+
+            // --- the rolls, and either of them can still end it ---
+
+            var arrest = OrganZones.ArrestChance(hit, velocity, tuning);
+            if (arrest > 0f && Roll(spread, victim, hit.Kind, arrest, "arrest"))
+            {
+                Overlay.HitFeed.PushHit(victim, "    -> LETHAL (traumatic cardiac arrest)");
+                OrganZones.Tally(hit.Kind, false, false, spread.FirstLethal(zone));
+                FloorDamageToLethal(ref info, bpc, victim, hit);
+                return;
+            }
+
+            var avulsion = OrganZones.AvulsionChance(hit, velocity, tuning);
+            if (avulsion > 0f && Roll(spread, victim, hit.Kind, avulsion, "avulsion"))
+            {
+                Overlay.HitFeed.PushHit(victim, "    -> LETHAL (liver avulsed)");
+                OrganZones.Tally(hit.Kind, false, false, spread.FirstLethal(zone));
+                FloorDamageToLethal(ref info, bpc, victim, hit);
+                return;
+            }
+
+            if (hit.Multiplier > 1.001f)
+            {
+                var before = info.Damage;
+                info.Damage = before * hit.Multiplier;
+                OrganZones.TallyMultiplier(hit.Kind);
+                Overlay.HitFeed.PushHit(victim,
+                    $"    x{hit.Multiplier:0.00} ({before:0.#} -> {info.Damage:0.#})");
+            }
+
+            OpenOrganBleed(victim, bpc, hit, spread);
+        }
+
+        /// <summary>
+        /// Internal bleeding from an opened organ or great vessel. A channel through the
+        /// liver opens the full rate — the retrohepatic vena cava runs through the organ,
+        /// which is why these wounds kill and why nothing can be pressed on to stop them.
+        /// The mediastinum is the same argument with the aorta and the vena cava in it,
+        /// and a channel that went all the way through either of those is already dead by
+        /// the time it gets here. The cord has no such vessel of its own.
+        ///
+        /// This is also where the balance the design asks for comes from: the liver stops
+        /// being an instant death and becomes a death in half a minute, which moves it out
+        /// of the 35% killed outright and into the 52% who die over the following minutes.
+        /// </summary>
+        private static void OpenOrganBleed(Player victim, BodyPartCollider bpc,
+            OrganZones.Result hit, ShotSpread spread)
+        {
+            if (!PlateClientConfig.BloodEnabled.Value ||
+                (hit.Kind != OrganZone.Liver && hit.Kind != OrganZone.Heart))
+            {
+                return;
+            }
+
+            var full = PlateClientConfig.OrganBleedMlSec.Value;
+            var rate = full * hit.Involvement;
+
+            // RibcageLow is three collider boxes and the liver behind them is one organ;
+            // RibcageUp is two and the mediastinum behind them is one. Only what this
+            // meeting opens beyond what the shot has already opened, so a graze followed
+            // by a run-through ends at the run-through's rate instead of their sum.
+            var extra = spread.BleedTopUp((int)hit.Kind, rate);
+            if (extra <= 0.5f)
+            {
+                return;
+            }
+
+            Blood.PlateBloodManager.AddInternal(victim, extra,
+                Blood.EInternalBleedSource.Organ, collider: bpc.BodyPartColliderType);
+
+            var toEmpty = PlateClientConfig.BloodMaxMl.Value *
+                          (1f - PlateClientConfig.DeathThreshold.Value);
+            Overlay.HitFeed.PushHit(victim,
+                $"    + internal bleed {extra:0.#} ml/s" +
+                (extra < rate - 0.05f ? $" (up to {rate:0.#} for this organ)" : "") +
+                $" ({toEmpty:0} ml in {toEmpty / rate:0} s)");
+        }
+
+        /// <summary>
+        /// One draw per organ per shot, tested against every meeting with that organ.
+        ///
+        /// A bullet that walks through both RibcageUp boxes is still one bullet, so it
+        /// does not get two rolls. But it must not be judged on the first meeting either:
+        /// clipping the edge of the heart at 1% and then crossing it at 13% has to come
+        /// out at 13. Keeping the number and re-testing it does exactly that —
+        /// P(u &lt; a) then P(u &lt; b) on one u is P(u &lt; max(a, b)).
+        /// </summary>
+        private static bool Roll(ShotSpread spread, Player victim, OrganZone kind,
+            float chance, string what)
+        {
+            var value = spread.RollFor((int)kind, out var fresh);
+            var fired = value < chance;
+
+            // printed whatever happens: a mechanic with a probability in it cannot be
+            // debugged from the times it fired
+            Overlay.HitFeed.PushHit(victim,
+                $"    {what} {chance * 100f:0.0}% rolled {value:0.00}" +
+                (fresh ? "" : " (this shot's draw)") +
+                " -> " + (fired ? "yes" : "no"));
+            OrganZones.TallyRoll(kind, fired);
+            return fired;
+        }
+
+        /// <summary>
+        /// Death is dealt as damage and never as a Kill call. The damage is raised to
+        /// what the body part has left — a floor, not a replacement, so a category
+        /// multiplier cannot save a pierced heart and the ordinary calculation still
+        /// wins wherever it is larger. Everything downstream then works by itself:
+        /// the kill is attributed to the shot, other mods hooking damage still see the
+        /// event, and our own hooks fire without a private path around them.
+        /// </summary>
+        private static void FloorDamageToLethal(ref DamageInfoStruct info, BodyPartCollider bpc,
+            Player victim, OrganZones.Result hit)
+        {
+            var ahc = victim?.ActiveHealthController;
+            if (ahc == null)
+            {
+                Overlay.HitFeed.PushHit(victim, "    no health controller, damage left as is");
+                return;
+            }
+
+            var part = bpc.BodyPartType;
+            var remaining = ahc.GetBodyPartHealth(part).Current;
+            var before = info.Damage;
+
+            if (remaining > before)
+            {
+                info.Damage = remaining;
+                Overlay.HitFeed.PushHit(victim,
+                    $"    damage floored {before:0.#} -> {remaining:0.#} ({part} remaining)");
+            }
+            else
+            {
+                Overlay.HitFeed.PushHit(victim,
+                    $"    damage {before:0.#} already above {part} remaining " +
+                    $"{remaining:0.#}, left as is");
+            }
+
+            if (part == EBodyPart.Head || part == EBodyPart.Chest)
+            {
+                return; // zeroing one of these is death by itself
+            }
+
+            // The stomach pool does not kill — the game dies of Head or Thorax and
+            // nothing else. But every mechanism on the autopsy list is central: a severed
+            // cord or a torn vena cava kills the brain that stops being supplied, not the
+            // abdomen. So the shot reaches the chest as well, as its own damage event,
+            // once the primary one has landed.
+            _central = new CentralWound
+            {
+                Victim = victim,
+                Part = part,
+                Zone = hit.Name,
+                Frame = Time.frameCount,
+            };
+        }
+
+        private struct CentralWound
+        {
+            public Player Victim;
+            public EBodyPart Part;
+            public string Zone;
+            public int Frame;
+        }
+
+        private static CentralWound _central;
+        private static bool _applyingCentral;
+
+        /// <summary>
+        /// The second half of a lethal wound in a body part whose pool does not kill.
+        /// Runs after the primary damage has landed so the order of events reads the way
+        /// it happened. One per shot however many pellets a volley put into the same
+        /// frame, and guarded against re-entering itself.
+        /// </summary>
+        private static void CentralWoundPostfix(ActiveHealthController __instance,
+            EBodyPart bodyPart, DamageInfoStruct damageInfo)
+        {
+            PatchStats.Hit(nameof(CentralWoundPostfix));
+            if (Off || _applyingCentral || _central.Frame != Time.frameCount ||
+                bodyPart != _central.Part ||
+                !ReferenceEquals(__instance?.Player, _central.Victim))
+            {
+                return;
+            }
+
+            var pending = _central;
+            _central = default;
+
+            try
+            {
+                var chest = __instance.GetBodyPartHealth(EBodyPart.Chest).Current;
+                if (chest <= 0f)
+                {
+                    return; // already gone
+                }
+
+                _applyingCentral = true;
+                __instance.ApplyDamage(EBodyPart.Chest, chest, damageInfo);
+                OrganZones.TallyCentral();
+                Overlay.HitFeed.PushHit(pending.Victim,
+                    $"    + central {chest:0.#} to Chest ({pending.Zone} sits in " +
+                    $"{pending.Part}, whose pool does not kill)");
+            }
+            catch (Exception ex)
+            {
+                LogError(nameof(CentralWoundPostfix), ex);
+            }
+            finally
+            {
+                _applyingCentral = false;
+            }
+        }
+
+        /// <summary>
+        /// Where in the hitbox the bullet went in, once the box has been pointed at the
+        /// character. The organ zones are thirds of these boxes, so a width axis resolved
+        /// the wrong way round would move the liver to the left side of the body and
+        /// nothing else would look wrong. Shooting a known side and reading the signs
+        /// back is the check, and it is the only one there is.
+        /// </summary>
+        private static void LogAnatomy(BodyPartCollider bpc, Vector3 hitPoint)
+        {
+            if (!PlateClientConfig.AnatomyDebug.Value)
+            {
+                return;
+            }
+
+            var victim = bpc.Player as Player;
+            if (!Anatomy.TryDescribe(bpc.Collider, victim?.gameObject.transform, out var box))
+            {
+                return; // capsule or sphere — the head, where no zone lives
+            }
+
+            var f = Anatomy.FractionsWorld(box, hitPoint);
+            var third = Anatomy.Third(f.x);
+            Overlay.HitFeed.PushHit(victim,
+                // the body part as well as the collider: which HP pool a collider belongs
+                // to is the whole reason the lethal zones need a second damage event
+                $"BOX {bpc.BodyPartColliderType}/{bpc.BodyPartType} {Anatomy.Describe(box)}" +
+                $": entry w{f.x:+0.00;-0.00} h{f.y:+0.00;-0.00} d{f.z:+0.00;-0.00}" +
+                $", {(third > 0 ? "right" : third < 0 ? "left" : "middle")} third" +
+                (Anatomy.IsSpinePlate(box) ? ", plate" : ""));
         }
 
         /// <summary>
@@ -574,7 +984,11 @@ namespace PLATE.Client.Patches
 
                 var v = shot.Vector3_1.magnitude;
                 var x = EffectiveX(shot);
-                var l = ClientWoundModel.ChannelMm(mass, dia, v, x, p);
+
+                // the same tissue this shot's damage will be computed against: the exit
+                // decision and the wound have to be told the same story about the body
+                var spread = ShotSpread.For(shot, dia, p);
+                var l = ClientWoundModel.ChannelMm(mass, dia, v, x, p, spread.TissueScale);
                 var chord = ChordMm(__instance, hitPoint, shot.Vector3_1, dia);
 
                 // bone: probability per collider (shared with fractures), stashed for BloodPatches
@@ -626,27 +1040,32 @@ namespace PLATE.Client.Patches
         private const int MaxHitMemory = 64;
 
         /// <summary>Local U_limit multiplier from previous hits within the DArea radius.</summary>
-        private static float LocalDegradation(ArmorComponent armor, BodyPartCollider bpc,
-            Vector3 localPos, AmmoDataCache.ArmorMatProfile prof, float floor)
+        /// <summary>
+        /// Recorded previous hits within the material's damage radius of this one.
+        /// The count is the geometry's answer to "how damaged is this spot" — what to
+        /// make of it is ArmorWear's business, per layer.
+        /// </summary>
+        private static int HitsNearby(ArmorComponent armor, BodyPartCollider bpc,
+            Vector3 localPos, AmmoDataCache.ArmorMatProfile prof)
         {
             if (!PlateClientConfig.ArmorLocalDegradation.Value || prof.DAreaMm <= 0 ||
                 !_armorHits.TryGetValue(armor, out var marks))
             {
-                return 1f;
+                return 0;
             }
 
             var r2 = (float)(prof.DAreaMm / 1000.0 * (prof.DAreaMm / 1000.0));
-            var mult = 1f;
+            var n = 0;
             foreach (var m in marks)
             {
                 if (m.Zone == bpc.BodyPartColliderType &&
                     (m.LocalPos - localPos).sqrMagnitude <= r2)
                 {
-                    mult *= (float)prof.DegradeMult;
+                    n++;
                 }
             }
 
-            return Mathf.Max(mult, floor);
+            return n;
         }
 
         private static void RecordArmorHit(ArmorComponent armor, BodyPartCollider bpc,
@@ -787,21 +1206,25 @@ namespace PLATE.Client.Patches
             var hitArea = ArmorExit.ImpactArea(dia, coreArea, x, (float)cfg.ExpansionOnArmor);
             var uHit = eForU / hitArea;
 
-            // threshold: class × material × wear × slanted (oblique) thickness
+            // threshold: class × material × slanted (oblique) thickness; wear joins
+            // below, once this hit knows whether it found a damaged spot
             var prof = cfg.Profile(armor.Template.ArmorMaterial.ToString());
             var duraShare = armor.Repairable.TemplateDurability > 0
                 ? Mathf.Clamp01(armor.Repairable.Durability /
                                 armor.Repairable.TemplateDurability)
                 : 1f;
-            var duraFactor = (float)cfg.DurabilityFloor +
-                             (1f - (float)cfg.DurabilityFloor) * duraShare;
             var dir = shot.Vector3_1.sqrMagnitude > 1e-6f
                 ? shot.Vector3_1.normalized
                 : Vector3.forward;
-            var cos = Mathf.Max(Mathf.Abs(Vector3.Dot(dir, shot.HitNormal.normalized)),
-                (float)cfg.AngleMinCos);
-            var uLimit = (float)(cfg.ClassULimit(armor.ArmorClass) * prof.ULimitMult) *
-                         duraFactor / cos;
+
+            // the raw one is kept for the log. Angle moves a limit harder than any
+            // constant in the model — a 70° read costs a plate three times its
+            // thickness — and reconstructing it afterwards from a v50 is guesswork, so
+            // the hit line says what angle it was decided at and whether the floor,
+            // rather than the geometry, is what set it
+            var rawCos = Mathf.Abs(Vector3.Dot(dir, shot.HitNormal.normalized));
+            var cos = Mathf.Max(rawCos, (float)cfg.AngleMinCos);
+            var uLimit = (float)(cfg.ClassULimit(armor.ArmorClass) * prof.ULimitMult) / cos;
 
             // fibers (UHMWPE/aramid) get pushed apart by sharp-nosed projectiles — lower threshold for X<0.5
             if (prof.SharpVulnMult > 0)
@@ -809,19 +1232,28 @@ namespace PLATE.Client.Patches
                 uLimit *= 1f - (float)prof.SharpVulnMult * Mathf.Clamp01((0.5f - x) * 2f);
             }
 
-            // local degradation — a hit near previous holes (ceramics: a shattered
-            // tile segment); the current hit is recorded below
+            // Wear, probabilistic (3.4). Seen damage — this hit landed within the
+            // damage radius of recorded previous hits — is answered by geometry.
+            // Unseen damage (a worn item entering the raid, memory overflow) is
+            // rolled: the chance of striking a damaged spot IS the missing
+            // durability. The current hit is recorded below.
             var bpc = shot.HittedBallisticCollider as BodyPartCollider;
             var localPos = Vector3.zero;
-            var localMult = 1f;
+            var hitsNearby = 0;
             if (bpc != null)
             {
                 localPos = bpc.ColliderTransformCached != null
                     ? bpc.ColliderTransformCached.InverseTransformPoint(shot.RaycastHit_0.point)
                     : shot.RaycastHit_0.point;
-                localMult = LocalDegradation(armor, bpc, localPos, prof, (float)cfg.DegradeFloor);
-                uLimit *= localMult;
+                hitsNearby = HitsNearby(armor, bpc, localPos, prof);
             }
+
+            // one draw per hit; both layers share it — it is one event, answered per
+            // layer by that layer's own q and k
+            var wearRoll = UnityEngine.Random.value;
+            var wornFace = ArmorWear.WornFraction(hitsNearby, 1f - duraShare,
+                (float)prof.SpotDamageQ, (float)prof.WearExponentK, wearRoll);
+            uLimit *= wornFace;
 
             // --- Ballistic limit, where the item's construction is known ---
             //
@@ -833,7 +1265,7 @@ namespace PLATE.Client.Patches
             // ½m(v² − v_r²) comes to once Recht-Ipson has answered.
             var tuning = BallisticLimit.Tuning.Default;
             var limitCore = BallisticLimit.Driving(mass, dia, coreArea, coreMass,
-                AmmoDataCache.GetCoreHardness(shot.Ammo?.TemplateId));
+                AmmoDataCache.GetCoreHardness(shot.Ammo?.TemplateId), tuning);
 
             // TemplateId, not Template: the latter is an ItemTemplate object whose
             // ToString is a type name, so it matched nothing and every plate in the game
@@ -845,8 +1277,18 @@ namespace PLATE.Client.Patches
             float v50 = 0f;
             if (haveGeometry)
             {
-                // wear and a cracked segment thin the plate rather than lowering a number
-                barrier.ThicknessMm *= duraFactor * localMult;
+                // wear thins the plate rather than lowering a number — per LAYER: the
+                // tile of a ceramic composite is rubble after a hit, the fibre panel
+                // behind it wears like the fibre it is
+                barrier.ThicknessMm *= wornFace;
+                if (barrier.BackingMm > 0)
+                {
+                    var backProf = cfg.Profile(
+                        AmmoDataCache.BackingMaterialOf(armor.Item.TemplateId.ToString()));
+                    barrier.BackingMm *= ArmorWear.WornFraction(hitsNearby, 1f - duraShare,
+                        (float)backProf.SpotDamageQ, (float)backProf.WearExponentK, wearRoll);
+                }
+
                 v50 = (float)BallisticLimit.V50(barrier, limitCore, cos, tuning);
                 ratio = v50 > 0f ? v / v50 : 999f;
             }
@@ -865,7 +1307,10 @@ namespace PLATE.Client.Patches
             {
                 // Recht-Ipson: what is left after the plate, plug and all
                 var plug = (float)BallisticLimit.PlugMassG(barrier, limitCore, cos, tuning);
-                var vr = (float)BallisticLimit.ResidualVelocity(v, v50, limitCore.MassG, plug);
+                // the same mass the limit was computed against — a tile and a fibre pack
+                // meet the whole bullet, a metal plate meets the core
+                var vr = (float)BallisticLimit.ResidualVelocity(v, v50,
+                    (float)BallisticLimit.MassAgainst(barrier, limitCore), plug);
                 eOut = 0.5f * (mass / 1000f) * vr * vr;
                 eCost = Mathf.Max(e - eOut, 0f);
             }
@@ -877,6 +1322,19 @@ namespace PLATE.Client.Patches
                 eCost = (float)prof.ECostMult * uLimit * hitArea;
                 eOut = e - eCost;
             }
+
+            // how the limit was arrived at, for the log: the angle it was read at, and
+            // what the hardness argument between core and plate was worth. Those two
+            // terms multiply, and between them they are most of the spread a raid shows
+            // on one plate against one round
+            var geometry = haveGeometry
+                ? $"{barrier.ThicknessMm:0.0} mm, v {v:0}/{v50:0} m/s, " +
+                  $"{Mathf.Acos(Mathf.Clamp01(rawCos)) * Mathf.Rad2Deg:0}°" +
+                  (rawCos < cos ? " (at the floor)" : "") +
+                  $", H x{BallisticLimit.HardnessFactor(barrier, limitCore, tuning):0.00}"
+                : $"U {uHit:0.#}/{uLimit:0.#} J/mm², " +
+                  $"{Mathf.Acos(Mathf.Clamp01(rawCos)) * Mathf.Rad2Deg:0}°" +
+                  (rawCos < cos ? " (at the floor)" : "");
 
             if (!pierce || eOut < 1f)
             {
@@ -890,16 +1348,20 @@ namespace PLATE.Client.Patches
                 // the victim comes from this shot's own collider rather than _shotCtx:
                 // a stale frame there would put someone else's name on the line
                 Overlay.HitFeed.PushHit(bpc?.Player as Player,
-                    $"armor {armor.Template.ArmorMaterial} cl.{armor.ArmorClass}: " +
-                    (haveGeometry
-                        ? $"{barrier.ThicknessMm:0.0} mm, v {v:0}/{v50:0} m/s"
-                        : $"U {uHit:0.#}/{uLimit:0.#} J/mm²") +
-                    (localMult < 1f ? $" (segment x{localMult:0.00})" : "") + " -> block");
+                    $"armor {armor.Template.ArmorMaterial} cl.{armor.ArmorClass}: " + geometry +
+                    (wornFace < 1f ? $" (wear x{wornFace:0.00}, {hitsNearby} prior)" : "") + " -> block");
                 return false;
             }
 
+            // Only a barrier with a hole in it can strip a jacket off. Where the item's
+            // construction is on file the barrier itself says whether it is a fibre pack;
+            // where it is not, the material does.
+            var stripsJacket = haveGeometry
+                ? barrier.Class != BallisticLimit.Fibrous
+                : !IsSoftPack(armor.Template.ArmorMaterial);
+
             var exit = ArmorExit.Compute(mass, dia, x, eOut, coreArea, coreMass,
-                (float)prof.KFrag, (float)prof.KDef);
+                (float)prof.KFrag, (float)prof.KDef, stripsJacket);
             var mOut = exit.MassG;
             var dOut = exit.DiaMm;
             var vOut = exit.V;
@@ -921,16 +1383,23 @@ namespace PLATE.Client.Patches
             RecordAbsorbedEnergy(armor, eCost + exit.JacketEnergyJ);
 
             Overlay.HitFeed.PushHit(bpc?.Player as Player,
-                $"armor {armor.Template.ArmorMaterial} cl.{armor.ArmorClass}: " +
-                (haveGeometry
-                    ? $"{barrier.ThicknessMm:0.0} mm, v {v:0}/{v50:0} m/s"
-                    : $"U {uHit:0.#}/{uLimit:0.#}") +
-                (localMult < 1f ? $" (segment x{localMult:0.00})" : "") +
+                $"armor {armor.Template.ArmorMaterial} cl.{armor.ArmorClass}: " + geometry +
+                (wornFace < 1f ? $" (wear x{wornFace:0.00}, {hitsNearby} prior)" : "") +
                 $" -> pierce, -{eCost:0} J, v {v:0}->{vOut:0}, X {x:0.00}->{xOut:0.00}" +
                 (mOut < mass * 0.995f
                     ? $", core {mass:0.0}->{mOut:0.0} g / {dia:0.0}->{dOut:0.0} mm"
                     : ""));
             return false; // vanilla does not roll
+        }
+
+        /// <summary>
+        /// A pack of woven fibre rather than a rigid element — no hole, so nothing for a
+        /// jacket to shear against. Used only where the item's construction is not on
+        /// file; where it is, the barrier carries its own class.
+        /// </summary>
+        private static bool IsSoftPack(EArmorMaterial material)
+        {
+            return material == EArmorMaterial.Aramid || material == EArmorMaterial.UHMWPE;
         }
 
         // --- Fragments do not penetrate class 1+ armor (IRL: soft armor is anti-fragment armor) ---
@@ -1298,6 +1767,7 @@ namespace PLATE.Client.Patches
                     var x = EffectiveX(__instance);
                     var halfChord = 0.5f * ChordMm(bpc, __instance.RaycastHit_0.point,
                         __instance.Vector3_1, parentDia);
+                    var spread = ShotSpread.For(__instance, parentDia, wound);
 
                     foreach (var frag in __instance.Fragments)
                     {
@@ -1311,7 +1781,8 @@ namespace PLATE.Client.Patches
                         var vOut = 0f;
                         if (fragMass >= MinFragMassG)
                         {
-                            var li = ClientWoundModel.ChannelMm(fragMass, fragDia, v, x, wound);
+                            var li = ClientWoundModel.ChannelMm(fragMass, fragDia, v, x, wound,
+                                spread.TissueScale);
                             vOut = ExitSpeed(v, li, halfChord, (float)wound.GelStopVelocity);
                         }
 
@@ -1319,6 +1790,9 @@ namespace PLATE.Client.Patches
                             ? frag.Vector3_1.normalized
                             : __instance.Vector3_1.normalized;
                         frag.Vector3_1 = dir * Mathf.Max(vOut, 0.1f);
+
+                        // one body, one shot: the fragments carry the parent's draw on
+                        ShotSpread.Inherit(__instance, frag, halfChord);
                     }
 
                     return;
@@ -1393,7 +1867,9 @@ namespace PLATE.Client.Patches
 
                     var v = __instance.Vector3_1.magnitude;
                     var x = EffectiveX(__instance);
-                    var l = ClientWoundModel.ChannelMm(mass, dia, v, x, wound);
+                    var spread = ShotSpread.For(__instance, dia, wound);
+                    var l = ClientWoundModel.ChannelMm(mass, dia, v, x, wound,
+                        spread.TissueScale);
                     var t = ChordMm(bpc, __instance.RaycastHit_0.point,
                         __instance.Vector3_1, dia);
                     var vOut = ExitSpeed(v, l, t, (float)wound.GelStopVelocity);
@@ -1402,6 +1878,10 @@ namespace PLATE.Client.Patches
                         ? child.Vector3_1.normalized
                         : __instance.Vector3_1.normalized;
                     child.Vector3_1 = dir * Mathf.Max(vOut, 0.1f);
+
+                    // same shot, same body, and a projectile does not un-turn: what it
+                    // has already crossed comes off its neck
+                    ShotSpread.Inherit(__instance, child, t);
 
                     Overlay.HitFeed.PushHit(bpc.Player as Player,
                         $"v_out {vOut:0} m/s after {bpc.BodyPartType}");

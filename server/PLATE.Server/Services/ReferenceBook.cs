@@ -140,6 +140,17 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         /// <summary>Ductile | Brittle | Fibrous — decides which penetration model applies.</summary>
         public string Class { get; set; } = "Ductile";
 
+        /// <summary>
+        /// For a Ductile material: "ShearPlugging" or "HoleExpansion" — which of the
+        /// two ductile laws the alloy obeys. A metallurgical property, decided by the
+        /// alloy's strain-hardening reserve (UTS over yield): exhausted hardening
+        /// localises shear and plugs, reserve flows the material aside. Every armour
+        /// alloy in this book plugs — hence the empty default — and the field exists
+        /// so that a soft, high-hardening metal (structural steel at UTS/yield 1.8)
+        /// added by data is read by the law its metallurgy dictates, not by ours.
+        /// </summary>
+        public string FailureMode { get; set; } = "";
+
         /// <summary>g/cm³.</summary>
         public double DensityGCm3 { get; set; }
 
@@ -202,8 +213,27 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         /// </summary>
         public int Rating { get; set; }
 
+        /// <summary>
+        /// The item is a hard element, whatever slot the game files it under. A class
+        /// ceiling is a statement about a form — loose plies stitched together, prepreg
+        /// pressed into a shell — and a form cannot be rated past what that much of it
+        /// stops. A plate is not one of those forms, so nothing caps its rating: the
+        /// Velocity SLAAP is 18 mm of polyethylene where the thickest shell anyone
+        /// fields is 7.3, a rifle-rated applique that happens to bolt onto a helmet.
+        /// Set this only where the maker's own specification says so, never to lift a
+        /// rating that looks low.
+        /// </summary>
+        public bool Plate { get; set; }
+
         /// <summary>Backing package behind the plate, mm of fibre (0 = none).</summary>
         public double BackingMm { get; set; }
+
+        /// <summary>
+        /// What the backing is made of — a key into ArmorMaterials, fibrous. Empty
+        /// means aramid, the dominant case: Russian packages and helmet liners are
+        /// TSVM/Kevlar fabric. Western composite plates say "UHMWPE" explicitly.
+        /// </summary>
+        public string BackingMaterial { get; set; } = "";
 
         /// <summary>
         /// Density of the hard element, g/cm³, when it is not what the material table
@@ -214,6 +244,17 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         /// 0 = the material table is correct for this one.
         /// </summary>
         public double DensityGCm3 { get; set; }
+
+        /// <summary>
+        /// For ArmorByClass rungs only: the key of the REAL product in ArmorPlates
+        /// whose construction this rung borrows. A class rung used to be a thickness
+        /// solved from the class threshold — a number the model owed to itself. Where
+        /// a certified product of the same material and class exists, the rung is now
+        /// a reference to it: not a solved number, a real plate's construction with a
+        /// real certificate behind it. Empty = the rung carries its own (computed,
+        /// last-resort) figures, and says so in its Source.
+        /// </summary>
+        public string SameAs { get; set; } = "";
 
         public string Source { get; set; } = "";
     }
@@ -244,9 +285,27 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
 
         /// <summary>
         /// Key — "Material/Class". The plate a real one of that rating would be, used for
-        /// the ones the game invented.
+        /// the ones the game invented. Read through ResolveByClass, never directly:
+        /// a rung that names a representative (SameAs) is that product's construction.
         /// </summary>
         public Dictionary<string, ArmorPlateRef> ArmorByClass { get; set; } = new();
+
+        /// <summary>
+        /// The construction a "Material/Class" rung actually stands for: the real
+        /// product it names, or its own last-resort figures when no product of that
+        /// material and class exists to borrow from. Null — no such rung.
+        /// </summary>
+        public ArmorPlateRef ResolveByClass(string key)
+        {
+            if (!ArmorByClass.TryGetValue(key, out var rung))
+            {
+                return null;
+            }
+
+            return rung.SameAs.Length > 0 && ArmorPlates.TryGetValue(rung.SameAs, out var product)
+                ? product
+                : rung;
+        }
 
         /// <summary>
         /// Key — "Material/Class". The package sewn into a carrier: layers of fabric,
@@ -303,7 +362,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
     ///    calibre, not with the fraction of it that survives the plate. The ceramic
     ///    brackets moved with it.
     /// </summary>
-    private const int ShippedVersion = 5;
+    private const int ShippedVersion = 7;
 
     private AmmoReference _cached;
 
@@ -872,28 +931,33 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // constant fits both the rolled-armour V50 ladder and the GOST classes: they
           // sit a factor of 3.8 apart in energy per mm2, and most of that gap is a 40 HRC
           // core meeting a 580 HV plate.
+          // Every Source names where its numbers came from: either a derivation rule
+          // written with a "·" (0.45·UTS and its kin) or a named document — datasheet,
+          // handbook, MIL spec. A strength without a provenance is indistinguishable
+          // from a fitted one, and fitted strengths are what the calibration rule
+          // forbids: the free constants live in the mode constants, never here.
           "ArmorMaterials": {
             "ArmoredSteel": { "Class": "Ductile", "DensityGCm3": 7.85, "YieldMPa": 1250, "ShearMPa": 750,
                               "HardnessHv": 580,
-                              "Source": "armour steel ~500-550 HB. Rolled homogeneous armour is softer - 300 HB, 450 MPa shear, 320 HV - and the V50 ladder in the fixture is RHA, not this" },
+                              "Source": "AR500-grade armour steel per maker datasheets (SSAB 500-class): ~550 HB -> 580 HV, yield 1250 MPa, UTS ~1650; shear 750 = 0.45·UTS, the through-hardened-steel rule. Rolled homogeneous armour is softer - 300 HB, UTS ~1000, shear 450 = 0.45·UTS, 320 HV - and the V50 ladder in the fixture is RHA, not this" },
             "Titan":        { "Class": "Ductile", "DensityGCm3": 4.43, "YieldMPa": 880,  "ShearMPa": 550,
                               "HardnessHv": 350,
-                              "Source": "Ti-6Al-4V, 334 HB, UTS 950 MPa" },
+                              "Source": "Ti-6Al-4V per ASM handbook / MMPDS: yield 880 MPa, UTS 950, ultimate shear 550 as tabulated (=0.58·UTS - titanium shears higher than steel's 0.45 rule), 334 HB -> 350 HV" },
             "Aluminium":    { "Class": "Ductile", "DensityGCm3": 2.70, "YieldMPa": 300,  "ShearMPa": 190,
                               "HardnessHv": 120,
-                              "Source": "5083/7039 armour plate" },
+                              "Source": "5083-H131 armour plate (MIL-DTL-46027): yield ~300 MPa, UTS ~317, shear 190 = 0.6·UTS, the aluminium rule; 120 HV is the 7039 (MIL-DTL-46063) end of the pair" },
             "Ceramic":      { "Class": "Brittle", "DensityGCm3": 3.90, "CompressiveMPa": 2500,
                               "HardnessHv": 1500, "HardMassFraction": 0.65,
-                              "Source": "Al2O3 on a fibre backer; alumina runs 1400-1600 HV, which is why it beats a carbide core" },
+                              "Source": "94-96% alumina per CoorsTek AD-series datasheets: compressive 2000-2600 MPa, 1400-1600 HV; 2500/1500 read mid-band. Al2O3 on a fibre backer; the hardness is why it beats a carbide core" },
             "Combined":     { "Class": "Brittle", "DensityGCm3": 3.20, "CompressiveMPa": 2600,
                               "HardnessHv": 1600, "HardMassFraction": 0.60,
-                              "Source": "ceramic face, composite backing" },
+                              "Source": "ceramic face on composite backing; face read one grade above the Ceramic entry, at 99%-alumina figures (CoorsTek AD-995 class): compressive ~2600 MPa, ~1600 HV" },
             "Glass":        { "Class": "Brittle", "DensityGCm3": 2.50, "CompressiveMPa": 1000,
-                              "HardnessHv": 550, "Source": "laminated ballistic glass" },
+                              "HardnessHv": 550, "Source": "laminated soda-lime float glass: compressive 1000 MPa per Saint-Gobain float-glass data, Vickers ~5.4 GPa -> 550 HV (Ashby, Engineering Materials)" },
             "Aramid":       { "Class": "Fibrous", "DensityGCm3": 1.44, "FibreTensileMPa": 2900, "FailureStrain": 0.034,
-                              "Source": "Kevlar 29 / TSVM-DZh; no hardness - a woven pack has none worth the name" },
+                              "Source": "DuPont Kevlar 29 datasheet: 2920 MPa tensile, 3.6% break elongation; strain read just under single-fibre break because a woven pack fails at the weave. TSVM-DZh is the Russian equivalent. No hardness - a woven pack has none worth the name" },
             "UHMWPE":       { "Class": "Fibrous", "DensityGCm3": 0.97, "FibreTensileMPa": 3400, "FailureStrain": 0.035,
-                              "Source": "Dyneema HB grade" }
+                              "Source": "DSM Dyneema SK-grade fibre datasheet: 3400-3700 MPa tensile, 3-4% break strain; read at the bottom of the band for the pressed HB laminates" }
           },
 
           // ===== Armour construction =====
@@ -1011,26 +1075,31 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "SAPI_Monoclete_PE":        { "Prototype": "Paraclete 10260", "Material": "UHMWPE", "ThicknessMm": 25.4,
                                           "Source": "1 in published, 1.36 kg, 10x12 shooters cut, NIJ III standalone. The game's 1.35 kg is a near-exact match" },
             // NOTE on the ceramic composites below: what these makers publish is the
-            // TOTAL plate thickness, ceramic face plus polyethylene backer together, and
-            // the split between the two is not published for any plate anywhere - that
-            // was hunted specifically, including patent search and sectioned-plate
-            // photographs, and came back empty. So the figure is the whole plate and the
-            // density is the whole plate's average, which keeps rho*t equal to the real
-            // areal density even though it is not the density of the ceramic alone.
-            "SAPI_GAC_4sss2":           { "Prototype": "HighCom Guardian 4sss2", "Material": "Ceramic", "ThicknessMm": 24.6,
-                                          "DensityGCm3": 1.85,
-                                          "Source": "0.97 in published, whole plate. SILICON CARBIDE on a UHMWPE backer - the game tags it plain UHMWPE and omits the ceramic. NIJ IV to the older 0101.04. Mass not published; density is the Level IV band of 4.2-4.7 g/cm2" },
+            // TOTAL plate thickness, ceramic face plus polyethylene backer together —
+            // the split itself is not published for any plate anywhere; that was hunted
+            // specifically, including patent search and sectioned-plate photographs,
+            // and came back empty. But the split is not free to invent either: with the
+            // total thickness, the total areal density and the face material known, the
+            // layer thicknesses are DETERMINED —
+            //     t_face = T · (ρ_avg − ρ_backer) / (ρ_face − ρ_backer)
+            // with the backer at consolidated-UHMWPE density (0.97). Each entry below
+            // carries that derivation in its source line; the derived split preserves
+            // the plate's real areal density exactly, which is the one number the maker
+            // did publish.
+            "SAPI_GAC_4sss2":           { "Prototype": "HighCom Guardian 4sss2", "Material": "Ceramic", "ThicknessMm": 9.7,
+                                          "BackingMm": 14.9, "BackingMaterial": "UHMWPE", "DensityGCm3": 3.21,
+                                          "Source": "0.97 in published TOTAL. SILICON CARBIDE on a UHMWPE backer - the game tags it plain UHMWPE and omits the ceramic. NIJ IV to the older 0101.04. Mass not published; avg density read at the Level IV band 4.55 g/cm2. Split: 24.6·(1.85−0.97)/(3.21−0.97) = 9.7 mm SiC, rest backer; areal density preserved" },
             "SAPI_GAC_3s15m":           { "Prototype": "HighCom Guardian 3s15m", "Material": "UHMWPE", "ThicknessMm": 21,
                                           "Source": "0.83 in published, 100% Dyneema, XTclave-consolidated, NIJ III standalone" },
-            "SAPI_NESCO_4400":          { "Prototype": "HESCO 4400SA-MC", "Material": "Ceramic", "ThicknessMm": 21,
-                                          "DensityGCm3": 2.24,
-                                          "Source": "0.83 in published, whole plate; 3.6 kg over a 9.5x12.5 SAPI cut is 4.70 g/cm2, and the density follows from those two. Ceramic type not published. NIJ IV, but the 4400 is the NON-certified variant - the 4401 is the listed one" },
-            "SAPI_TallCom_Guardian":    { "Prototype": "HighCom Guardian 4sas4", "Material": "Ceramic", "ThicknessMm": 19.05,
-                                          "DensityGCm3": 2.36,
-                                          "Source": "0.75 in published, whole plate. Ceramic type not published; mass not published either - HighCom pulled the page - so the density is the Level IV band" },
-            "SAPI_Cult_Locust":         { "Prototype": "Adept Mantis", "Material": "Titan", "ThicknessMm": 17.8,
-                                          "DensityGCm3": 1.88,
-                                          "Source": "0.7 in published, whole plate, 2.47 kg - forged multi-curve titanium bonded to a polyethylene backer, so the average is far below titanium's own. III+ / Adept 'RF2'. The game's 2.56 kg nearly matches" },
+            "SAPI_NESCO_4400":          { "Prototype": "HESCO 4400SA-MC", "Material": "Ceramic", "ThicknessMm": 9.1,
+                                          "BackingMm": 11.9, "BackingMaterial": "UHMWPE",
+                                          "Source": "0.83 in published TOTAL; 3.6 kg over a 9.5x12.5 SAPI cut is 4.70 g/cm2 average. Ceramic type not published - read as alumina (3.9), the heavy Level IV construction the weight itself argues for. Split: 21·(2.24−0.97)/(3.9−0.97) = 9.1 mm, rest backer; 9.1·3.9 + 11.9·0.97 = 4.70 g/cm2 exactly. NIJ IV, but the 4400 is the NON-certified variant - the 4401 is the listed one" },
+            "SAPI_TallCom_Guardian":    { "Prototype": "HighCom Guardian 4sas4", "Material": "Ceramic", "ThicknessMm": 9.0,
+                                          "BackingMm": 10.1, "BackingMaterial": "UHMWPE",
+                                          "Source": "0.75 in published TOTAL. Ceramic type not published - read as alumina; mass not published either - HighCom pulled the page - so avg density is the Level IV band (2.36 whole-plate). Split: 19.05·(2.36−0.97)/(3.9−0.97) = 9.0 mm, rest backer" },
+            "SAPI_Cult_Locust":         { "Prototype": "Adept Mantis", "Material": "Titan", "ThicknessMm": 4.7,
+                                          "BackingMm": 13.1, "BackingMaterial": "UHMWPE",
+                                          "Source": "0.7 in published TOTAL, 2.47 kg - forged multi-curve titanium bonded to a polyethylene backer. III+ / Adept 'RF2'. The game's 2.56 kg nearly matches. Split: 17.8·(1.88−0.97)/(4.43−0.97) = 4.7 mm of titanium, rest backer; areal density 3.35 g/cm2 preserved" },
             "SAPI_AR500_legacy":        { "Prototype": "AR500 Armor Heritage", "Material": "ArmoredSteel", "ThicknessMm": 6.35,
                                           "Source": "0.34 in total published including the FragLock coat; the steel core is the industry-standard 0.25 in and the rest is non-ballistic. 'Legacy' was never a SKU - the 3.85 kg in game matches the Heritage's 8.5 lb" },
             "SAPI_SPRTN_Omega":         { "Prototype": "Spartan Omega AR500", "Material": "ArmoredSteel", "ThicknessMm": 6.35,
@@ -1135,14 +1204,16 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                   "Source": "identical item in the database, only the prefab differs" },
 
             // a rifle-rated applique, not a shell - and lighter than the figure I first
-            // used, which included the hook-and-loop hardware
+            // used, which included the hook-and-loop hardware. "Plate" is that sentence
+            // made into data: 18 mm against the 7.3 of the thickest shell anyone fields,
+            // so the shell ceiling has nothing to say about the class it is sold at
             "item_equipment_helmet_gentex_slaap_gray":   { "Prototype": "Velocity SLAAP", "Material": "UHMWPE", "ThicknessMm": 18,
-                                  "DensityGCm3": 1.00,
+                                  "DensityGCm3": 1.00, "Plate": true,
                                   "Source": "0.45 kg in large, 0.39 in small. Defeats 7.62x39 mild steel core at 2400 fps. Gentex's sheet has no thickness and no area field at all" },
             "item_equipment_helmet_gentex_slaap_green":  { "Prototype": "Velocity SLAAP", "Material": "UHMWPE", "ThicknessMm": 18,
-                                  "DensityGCm3": 1.00, "Source": "as the gray" },
+                                  "DensityGCm3": 1.00, "Plate": true, "Source": "as the gray" },
             "item_equipment_helmet_gentex_slaap_tan":    { "Prototype": "Velocity SLAAP", "Material": "UHMWPE", "ThicknessMm": 18,
-                                  "DensityGCm3": 1.00, "Source": "as the gray" },
+                                  "DensityGCm3": 1.00, "Plate": true, "Source": "as the gray" },
             "ulach":            { "Prototype": "HighCom Striker ULACH", "Material": "UHMWPE", "ThicknessMm": 5.4,
                                   "DensityGCm3": 1.05,
                                   "Source": "950 g as configured in medium. UHMWPE Spectra by HighCom's own words - the game's aramid is wrong" },
@@ -1276,49 +1347,72 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
 
           // ===== Reference plate per material and class =====
           // Most of the armour in the game is invented for it, so there is no product to
-          // look up. What there is, for every rating, is a real plate that does the same
-          // job — and that is what an invented one is standing in for. Keyed
-          // "Material/Class"; a documented product always wins over this.
-          // A rung here used to be a guess about what a plate of that class looks like.
-          // It is a bracket now. A class is a two-sided promise — it stops the cartridge
-          // it is rated against and the rung below it does not — and with a ballistic
-          // limit those two conditions close on the thickness from both ends. Every entry
-          // sits inside its bracket, and GostPenetrationTests fires the standard's own
-          // cartridges at them one at a time to keep it that way. Where a bracket and a
-          // published product disagreed, the product won and the constants were checked
-          // again: AR500 at 6.35 mm falls inside the Br4 bracket on its own, which is
-          // exactly what a Level III steel plate is certified as.
+          // look up. What an invented plate stands in for is a REAL one of the same
+          // material and class, and wherever this book documents such a product the rung
+          // simply names it ("SameAs"): the thickness is not a number the model solved
+          // out of its own class table, it is a plate somebody built and certified. Read
+          // through ResolveByClass, never directly.
+          //
+          // Rungs with no product to borrow from — nobody sells a Br5 steel monolith or
+          // a Br3 alumina plate — carry their own figures as a LAST RESORT: solved from
+          // the class's own test cartridges under the strict zero-of-five criterion
+          // (CertificationCriteria) at the constants of the coherence recalibration, and
+          // checked for areal density so an absurd answer cannot hide behind arithmetic
+          // (20 mm of steel would weigh what a whole vest does). Each says so.
           "ArmorByClass": {
-            "ArmoredSteel/2": { "Prototype": "steel insert, Br1",      "ThicknessMm": 1.4 },
-            "ArmoredSteel/3": { "Prototype": "steel insert, Br2",      "ThicknessMm": 2.4 },
-            "ArmoredSteel/4": { "Prototype": "thin armour steel, Br3", "ThicknessMm": 3.6 },
-            "ArmoredSteel/5": { "Prototype": "AR500, NIJ III / Br4",   "ThicknessMm": 6.35,
-                                "Source": "0.25 in is the standard Level III steel plate, and it lands inside the Br4 bracket without being moved" },
-            "ArmoredSteel/6": { "Prototype": "armour steel, Br5",      "ThicknessMm": 8.5 },
+            "ArmoredSteel/2": { "Prototype": "steel insert, Br1",      "ThicknessMm": 1.9,
+                                "Source": "computed, last resort: solved from Br1's own 9x18 Pst under zero-of-five (1.82, rounded up); 1.5 g/cm2. Was 1.3 while the hardness clamp stood at 4.5 - both of these rungs are solved AT the clamp, which is why they could never be evidence for it" },
+            "ArmoredSteel/3": { "Prototype": "steel insert, Br2",      "ThicknessMm": 2.5,
+                                "Source": "computed, last resort: solved from Br2's 9x21 P - a lead core, the softest bullet in the standard - under zero-of-five (2.48, rounded up); 2.0 g/cm2. Was 1.7 at the old clamp" },
+            "ArmoredSteel/4": { "SameAs": "kora_kulon",
+                                "Source": "the Kora-Kulon panel: 4.3 mm of steel over a fabric package, certified Br3" },
+            "ArmoredSteel/5": { "SameAs": "korund",
+                                "Source": "the Korund-VM panel: 6.3 mm of 44S, certified Br4. The 0.25-in AR500 Level III plate lands within half a millimetre of it" },
+            "ArmoredSteel/6": { "Prototype": "armour steel, Br5",      "ThicknessMm": 8.8,
+                                "Source": "computed, last resort: no maker sells a Br5 steel monolith. Solved from Br5's 7N13 and B-32 under zero-of-five; 6.9 g/cm2, the weight of the heaviest real steel panels" },
 
-            "Ceramic/4":      { "Prototype": "alumina, Br3",           "ThicknessMm": 3.3 },
-            "Ceramic/5":      { "Prototype": "SAPI, Br4",              "ThicknessMm": 6.0,
-                                "Source": "the real SAPI in this book measures 6.1 and the ESAPI 7.2-7.7, both over their brackets" },
-            "Ceramic/6":      { "Prototype": "ESAPI, boron carbide",   "ThicknessMm": 7.0 },
+            "Ceramic/4":      { "Prototype": "alumina, Br3",           "ThicknessMm": 2.9,
+                                "Source": "computed, last resort: nobody makes a Br3 ceramic plate. Solved from Br3's 9x19 7N21 under zero-of-five; 1.1 g/cm2" },
+            "Ceramic/5":      { "SameAs": "granitBr4",
+                                "Source": "the Granit Br4: 6 mm of alumina on a 12 mm package, certified Br4" },
+            "Ceramic/6":      { "SameAs": "granitBr5",
+                                "Source": "the Granit Br5: 6.8 mm of alumina on a 14 mm package, certified Br5" },
 
-            "Combined/3":     { "Prototype": "ceramic face, Br2",      "ThicknessMm": 2.4 },
-            "Combined/4":     { "Prototype": "ceramic face, Br3",      "ThicknessMm": 3.2 },
-            "Combined/5":     { "Prototype": "ceramic face, Br4",      "ThicknessMm": 5.8 },
-            "Combined/6":     { "Prototype": "ceramic face, Br5",      "ThicknessMm": 6.6 },
+            // no combined-construction product is documented in this book at any class,
+            // so the whole column is computed. Note Br2 over Br3: a 7.93 g lead 9x21
+            // is genuinely harder for a ceramic face than the 5.2 g steel-cored 9x19,
+            // and since the hardness term left the brittle mode (3.2) the model cannot
+            // say otherwise; /4 is set a hair over /3 to keep the rating ladder
+            // monotone rather than pretend the inversion is not there
+            "Combined/3":     { "Prototype": "ceramic face, Br2",      "ThicknessMm": 3.0,
+                                "Source": "computed, last resort; 1.0 g/cm2" },
+            "Combined/4":     { "Prototype": "ceramic face, Br3",      "ThicknessMm": 3.1,
+                                "Source": "computed, last resort; solved 2.9, held at 3.1 for ladder monotonicity - see the column note" },
+            "Combined/5":     { "Prototype": "ceramic face, Br4",      "ThicknessMm": 6.9,
+                                "Source": "computed, last resort; 2.2 g/cm2" },
+            "Combined/6":     { "Prototype": "ceramic face, Br5",      "ThicknessMm": 8.8,
+                                "Source": "computed, last resort; 2.8 g/cm2" },
 
-            "Titan/4":        { "Prototype": "titanium, Br3",          "ThicknessMm": 5.5 },
-            "Titan/5":        { "Prototype": "titanium, Br4",          "ThicknessMm": 9.5 },
-            "Titan/6":        { "Prototype": "titanium, Br5",          "ThicknessMm": 13.0 },
+            "Titan/4":        { "SameAs": "6b3TM",
+                                "Source": "the 6B3TM-01 front: 6.5 mm of VT-23 titanium over a 30-layer package - the game itself rates it class 4; ARMOR-TABLE holds its layout, not a Br class, so this is a construction borrowed, not a certificate claimed" },
+            "Titan/5":        { "Prototype": "titanium, Br4",          "ThicknessMm": 11.2,
+                                "Source": "computed, last resort: the one titanium-faced rifle plate in the book (Adept Mantis) is a thin face on a thick PE backer, not a titanium plate. Solved under zero-of-five; 5.0 g/cm2" },
+            "Titan/6":        { "Prototype": "titanium, Br5",          "ThicknessMm": 14.4,
+                                "Source": "computed, last resort: nobody makes one. Solved under zero-of-five; 6.3 g/cm2" },
 
             // polyethylene stops by encapsulating the round, so it needs far more of
             // itself than a hard face does
-            "UHMWPE/3":       { "Prototype": "UHMWPE monolith, Br2",   "ThicknessMm": 20.0 },
-            "UHMWPE/4":       { "Prototype": "UHMWPE monolith, Br3",   "ThicknessMm": 25.0 },
+            "UHMWPE/3":       { "Prototype": "UHMWPE hard insert, IIIA / Br2", "ThicknessMm": 6.5,
+                                "Source": "read at the real IIIA-class polyethylene inserts, 5.5-6.5 mm. NOT the solve: the model would settle for 3.4 mm here, lighter than a class-2 helmet shell, which no real product is - the fibre mode has no ladder behind it (3.1) and its thin-plate solves are not to be trusted over a real product's thickness. The old 20 mm was a monolith guess with no cartridge behind it" },
+            "UHMWPE/4":       { "SameAs": "granit4_zhukBr3_3class_front",
+                                "Source": "the Zhuk-3 panel: 23 mm of pressed polyethylene, certified Br3" },
             "UHMWPE/5":       { "Prototype": "UHMWPE monolith, NIJ III / Br4", "ThicknessMm": 33.0,
-                                "Source": "standalone Level III polyethylene plate, 1.3 in - the certificate and the Br4 bracket agree" },
-            "UHMWPE/6":       { "Prototype": "UHMWPE monolith, Br5",   "ThicknessMm": 39.0 },
+                                "Source": "standalone Level III polyethylene plate, 1.3 in - a real product's thickness even though no book entry carries it; reads 8% under the strict Br4 bar, recorded in CertShortfalls under this rung's key" },
+            "UHMWPE/6":       { "Prototype": "UHMWPE monolith, Br5",   "ThicknessMm": 42.2,
+                                "Source": "computed, last resort: solved under zero-of-five; 4.1 g/cm2" },
 
-            "Aluminium/4":    { "Prototype": "aluminium armour",      "ThicknessMm": 20.0 }
+            "Aluminium/4":    { "Prototype": "aluminium armour",      "ThicknessMm": 11.3,
+                                "Source": "computed, last resort: solved from Br3's 9x19 7N21 under zero-of-five; 3.1 g/cm2. The old 20 mm was a vehicle-armour figure, a class too strong" }
           },
 
           // ===== Searched, nothing published =====
@@ -1502,7 +1596,14 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // Raise this when a figure above is CORRECTED. Adding entries needs no bump —
           // they merge in on their own — but a correction has to be able to overwrite,
           // and on a bump this file is rewritten with the old one kept as a .bak
-          "Version": 5
+          //
+          // 6: the SLAAP entries gained "Plate", which lifts the shell ceiling off them.
+          //    A new field on an existing entry is a correction — the per-entry merge
+          //    would never reach it, and the applique would be re-rated 5 -> 3
+          // 7: the two computed steel pistol rungs re-solved at the re-derived hardness
+          //    clamp (1.3 -> 1.8 and 1.7 -> 2.4 mm). They are solved AT the clamp, so a
+          //    clamp that moves moves them
+          "Version": 7
         }
         """;
 }

@@ -171,7 +171,13 @@ namespace PLATE.Client.Overlay
             }
 
             LogBuffer.AddRange(PatchStats.Report());
+            LogBuffer.AddRange(Ballistics.OrganZones.Report());
+            LogBuffer.AddRange(Blood.PlateBloodManager.Report());
             FlushLog();
+
+            // the counts are per raid
+            Ballistics.OrganZones.ResetTally();
+            Blood.PlateBloodManager.ResetTally();
         }
 
         // one busy raid is worth ~1 MB; rotating inside a raid splits the evidence and

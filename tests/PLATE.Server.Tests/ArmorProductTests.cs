@@ -104,6 +104,51 @@ public class ArmorProductTests
         Assert.Equal("granit4_5class_front", key);
     }
 
+    /// <summary>
+    /// A class is what a construction earns. The game hands out ratings its materials
+    /// cannot reach — 125 of the aramid packages sewn into vests are stamped class 3,
+    /// which would take around 200 mm of aramid — and the ceiling is what takes them
+    /// back to what the fabric does.
+    /// </summary>
+    [Theory]
+    // the sewn package: fabric stops at 2 whatever the carrier is sold as
+    [InlineData("thorcrv_level3_soft_armor_front", "Aramid", 2)]
+    [InlineData("iotv_gen4_f_level3_soft_armor_front", "Aramid", 2)]
+    [InlineData("defender2_level3_soft_armor_back", "Aramid", 2)]
+    [InlineData("crye_avs_level3_soft_armor_front", "Aramid", 2)]
+    // a pressed shell is one rung better than the fabric it is made of, and no more
+    [InlineData("ratnik_6b47_level3_helmet_armor_top", "Aramid", 3)]
+    [InlineData("item_equipment_facecover_ballistic_mask", "UHMWPE", 3)]
+    // a visor is polycarbonate whatever it is bolted to
+    [InlineData("item_equipment_helmet_vulkan_shield", "Glass", 2)]
+    // metal and ceramic are not capped: a heavier helmet really is a thicker shell
+    [InlineData("kora_kulon_level3_soft_armor_back", "ArmoredSteel", int.MaxValue)]
+    [InlineData("6b5-15_level4_soft_armor_front", "Ceramic", int.MaxValue)]
+    // and neither is a plate: the rifle protection lives there, and a 23 mm pressed
+    // polyethylene Zhuk really is certified Br3
+    [InlineData("item_equipment_plate_granit4_zhukBr3_3class_front", "UHMWPE", int.MaxValue)]
+    [InlineData("item_equipment_plate_granit4_5class_back", "Ceramic", int.MaxValue)]
+    public void A_material_can_only_hold_so_much(string item, string material, int expected)
+    {
+        Assert.Equal(expected, ArmorNormalizer.ClassCeiling(item, material));
+    }
+
+    /// <summary>
+    /// A balaclava is fabric the game rates armour, and one of them ships at class 10.
+    /// Whatever number the game prints, the ceiling is a property of the material.
+    /// </summary>
+    [Theory]
+    [InlineData(10)]
+    [InlineData(6)]
+    [InlineData(3)]
+    public void The_ceiling_does_not_care_what_the_item_claims(int declared)
+    {
+        var ceiling = ArmorNormalizer.ClassCeiling("balaclava", "UHMWPE");
+
+        Assert.Equal(2, ceiling);
+        Assert.True(declared > ceiling);
+    }
+
     /// <summary>And with no entry of its own it still falls back to the product.</summary>
     [Fact]
     public void Without_one_it_falls_back_to_the_product()

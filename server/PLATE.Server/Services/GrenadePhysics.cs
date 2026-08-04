@@ -100,7 +100,8 @@ public class GrenadePhysics(
                 p.BulletDiameterMilimeters = Math.Round(diaMm, 2);
                 // damage — wound channel model (PC+TC), same as for bullets/buckshot;
                 // a fragment lodges in the body and deposits everything
-                var wound = WoundModel.Compute(massG, diaMm, v0, cfg.Grenades.FragmentX, 0, a);
+                // a grenade fragment IS its core: solid steel, nothing to break off
+                var wound = WoundModel.Compute(massG, diaMm, v0, cfg.Grenades.FragmentX, 1, a);
                 p.Damage = Math.Clamp(Math.Round(
                     a.WoundChannelModel ? wound.Damage : e / a.EnergyPerHp),
                     a.MinPelletDamage, a.DamageCap);
