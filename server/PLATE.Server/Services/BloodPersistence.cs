@@ -2,7 +2,7 @@ using System.Text.Json;
 using PLATE.Server.Config;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.Models.Common;
-using SPTarkov.Server.Core.Models.Utils;
+using SPTarkov.Common.Models.Logging;
 using SPTarkov.Server.Core.Servers;
 
 namespace PLATE.Server.Services;

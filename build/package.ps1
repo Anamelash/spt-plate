@@ -8,8 +8,13 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$dotnet   = Join-Path $env:USERPROFILE ".dotnet\dotnet.exe"
-if (-not (Test-Path $dotnet)) { $dotnet = "dotnet" }
+# The server half targets net10, so the SDK has to be able to build it: the user-local
+# install under ~\.dotnet is preferred when new enough, otherwise the system one.
+$dotnet = Join-Path $env:USERPROFILE ".dotnet\dotnet.exe"
+if (-not (Test-Path $dotnet) -or
+    -not (& $dotnet --list-sdks | Where-Object { [int]($_ -split '\.')[0] -ge 10 })) {
+    $dotnet = "dotnet"
+}
 
 # version comes from Directory.Build.props - single source of truth
 [xml]$props = Get-Content "$repoRoot\Directory.Build.props"
@@ -28,7 +33,7 @@ if (-not $SkipBuild) {
 $stage = Join-Path $repoRoot "dist\stage"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 $clientDst = New-Item -ItemType Directory -Force "$stage\BepInEx\plugins\PLATE"
-$serverDst = New-Item -ItemType Directory -Force "$stage\SPT\user\mods\PLATE"
+$serverDst = New-Item -ItemType Directory -Force "$stage\SPT_Runtime\user\mods\PLATE"
 
 Copy-Item "$repoRoot\client\PLATE.Client\bin\$Configuration\PLATE.Client.dll" $clientDst -Force
 Copy-Item "$repoRoot\server\PLATE.Server\bin\$Configuration\PLATE.Server.dll" $serverDst -Force

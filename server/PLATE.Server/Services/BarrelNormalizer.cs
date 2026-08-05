@@ -4,8 +4,8 @@ using PLATE.Server.Config;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
-using SPTarkov.Server.Core.Models.Utils;
-using SPTarkov.Server.Core.Servers;
+using SPTarkov.Common.Models.Logging;
+using SPTarkov.Server.Core.Models.Spt.Tables;
 
 namespace PLATE.Server.Services;
 
@@ -27,7 +27,7 @@ namespace PLATE.Server.Services;
 /// </summary>
 [Injectable]
 public class BarrelNormalizer(
-    DatabaseServer databaseServer,
+    TemplateTable templateTable,
     ReferenceBook referenceBook,
     ISptLogger<BarrelNormalizer> logger)
 {
@@ -50,7 +50,7 @@ public class BarrelNormalizer(
     public void Run(PlateServerConfig cfg, string modPath)
     {
         var b = cfg.BarrelNormalizer;
-        var items = databaseServer.GetTables().Templates?.Items;
+        var items = templateTable.Items;
         if (items == null)
         {
             logger.Error("[PLATE] BarrelNormalizer: item DB unavailable");

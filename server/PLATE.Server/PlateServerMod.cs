@@ -1,21 +1,20 @@
 using System.Reflection;
 using System.Text.Json;
 using PLATE.Server.Config;
+using SPTarkov.Common.Models.Logging;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.DI;
-using SPTarkov.Server.Core.Helpers;
-using SPTarkov.Server.Core.Models.Utils;
-using SPTarkov.Server.Core.Servers;
+using SPTarkov.Server.Core.Helpers.Server;
 
 namespace PLATE.Server;
 
 /// <summary>
-/// PLATE.Server entry point. PostDBModLoader + 9000: we start after content mods
-/// have finished adding items to the DB — the normalizer must see everything.
+/// PLATE.Server entry point. PostLoad is the last stage the server runs and a higher
+/// priority runs later, so PostLoad + 9000 puts us after content mods have finished
+/// adding items to the DB — the normalizer must see everything.
 /// </summary>
-[Injectable(TypePriority = OnLoadOrder.PostDBModLoader + 9000)]
+[Injectable(TypePriority = OnLoadOrder.PostLoad + 9000)]
 public class PlateServerMod(
-    DatabaseServer databaseServer,
     ModHelper modHelper,
     Services.AmmoNormalizer ammoNormalizer,
     Services.BarrelNormalizer barrelNormalizer,
@@ -27,10 +26,10 @@ public class PlateServerMod(
 {
     public const string ConfigFileName = "config.jsonc";
 
-    public Task OnLoad()
+    public async Task OnLoadAsync(CancellationToken cancellationToken)
     {
         var modPath = modHelper.GetAbsolutePathToModFolder(Assembly.GetExecutingAssembly());
-        var config = LoadOrCreateConfig(modPath);
+        var config = await LoadOrCreateConfig(modPath, cancellationToken);
         Routes.PlateConfigHolder.Config = config; // for request handlers (blood-get/set)
 
         if (config.Modules.AmmoNormalizer)
@@ -81,21 +80,19 @@ public class PlateServerMod(
         logger.Success(applied.Count > 0
             ? $"[PLATE] {version} loaded: {string.Join(", ", applied)}"
             : $"[PLATE] {version} loaded: all modules disabled in config.jsonc");
-
-        return Task.CompletedTask;
     }
 
-    private PlateServerConfig LoadOrCreateConfig(string modPath)
+    private async Task<PlateServerConfig> LoadOrCreateConfig(string modPath, CancellationToken ct)
     {
         var path = Path.Combine(modPath, ConfigFileName);
         if (!File.Exists(path))
         {
-            File.WriteAllText(path, DefaultConfigJsonc);
+            await File.WriteAllTextAsync(path, DefaultConfigJsonc, ct);
             logger.Debug($"[PLATE] Config not found, default written to {path}");
         }
         else
         {
-            MigrateConfigText(path);
+            await MigrateConfigText(path, ct);
         }
 
         try
@@ -106,8 +103,15 @@ public class PlateServerMod(
                 AllowTrailingCommas = true,
                 PropertyNameCaseInsensitive = true,
             };
-            return JsonSerializer.Deserialize<PlateServerConfig>(File.ReadAllText(path), options)
+            return JsonSerializer.Deserialize<PlateServerConfig>(
+                       await File.ReadAllTextAsync(path, ct), options)
                    ?? new PlateServerConfig();
+        }
+        // Shutdown is not a broken config: let the cancellation through instead of
+        // reporting it as a parse failure and carrying on with defaults.
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -122,11 +126,11 @@ public class PlateServerMod(
     /// rather than a rewrite: the file is hand-edited jsonc and the comments in it are
     /// the documentation.
     /// </summary>
-    private void MigrateConfigText(string path)
+    private async Task MigrateConfigText(string path, CancellationToken ct)
     {
         try
         {
-            var text = File.ReadAllText(path);
+            var text = await File.ReadAllTextAsync(path, ct);
             var before = text;
 
             // the card's reference shot got a definition: a perpendicular hit into the
@@ -135,9 +139,13 @@ public class PlateServerMod(
 
             if (text != before)
             {
-                File.WriteAllText(path, text);
+                await File.WriteAllTextAsync(path, text, ct);
                 logger.Debug($"[PLATE] {ConfigFileName}: retired defaults updated");
             }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

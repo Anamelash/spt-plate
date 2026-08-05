@@ -3,10 +3,10 @@ using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 using SPTarkov.Server.Core.Models.Spt.Mod;
-using SPTarkov.Server.Core.Models.Utils;
-using SPTarkov.Server.Core.Servers;
+using SPTarkov.Common.Models.Logging;
+using SPTarkov.Server.Core.Models.Spt.Tables;
 using SPTarkov.Server.Core.Services;
-using SPTarkov.Server.Core.Services.Mod;
+using SPTarkov.Server.Core.Services.Modding.Custom;
 
 namespace PLATE.Server.Services;
 
@@ -19,7 +19,9 @@ namespace PLATE.Server.Services;
 [Injectable]
 public class TransfusionItem(
     CustomItemService customItemService,
-    DatabaseServer databaseServer,
+    TemplateTable templateTable,
+    HideoutTable hideoutTable,
+    TradersTable tradersTable,
     ISptLogger<TransfusionItem> logger)
 {
     /// <summary>Stable item tpl (b100d = "blood"). Must not change — the client matches by it.</summary>
@@ -60,8 +62,7 @@ public class TransfusionItem(
 
     public void Apply(PlateServerConfig cfg, string modPath)
     {
-        var tables = databaseServer.GetTables();
-        var items = tables.Templates?.Items;
+        var items = templateTable.Items;
         if (items == null)
         {
             return;
@@ -79,7 +80,7 @@ public class TransfusionItem(
             return;
         }
 
-        var sourceHandbook = tables.Templates?.Handbook?.Items?
+        var sourceHandbook = templateTable.Handbook?.Items?
             .FirstOrDefault(h => h.Id == source.Id);
 
         // model: the built Unity bundle (blood bag model) if deployed next to the
@@ -92,6 +93,8 @@ public class TransfusionItem(
         {
             ItemTplToClone = source.Id,
             NewId = Tpl,
+            // internal template _name (not the displayed one — that comes from the locales below)
+            NewItemName = "blood_transfusion_kit",
             ParentId = source.Parent, // Drink — the ration's native class, its drinking animation
             HandbookParentId = sourceHandbook?.ParentId.ToString(),
             HandbookPriceRoubles = cfg.Blood.TransfusionPriceRub,
@@ -196,8 +199,8 @@ public class TransfusionItem(
             return;
         }
 
-        AddTherapistAssort(tables, cfg);
-        AddMedstationCraft(tables);
+        AddTherapistAssort(cfg);
+        AddMedstationCraft();
 
         Summary = $"transfusion item ({(hasCustomModel ? "custom model" : "vanilla model")})";
         logger.Debug($"[PLATE] Transfusion item registered ({cfg.Blood.TransfusionUses} uses, " +
@@ -206,9 +209,9 @@ public class TransfusionItem(
     }
 
     /// <summary>Medstation recipe: 1 saline + 1 bloodset -> 1 blood bag (60 s).</summary>
-    private void AddMedstationCraft(SPTarkov.Server.Core.Models.Spt.Server.DatabaseTables tables)
+    private void AddMedstationCraft()
     {
-        var recipes = tables.Hideout?.Production?.Recipes;
+        var recipes = hideoutTable.Production?.Recipes;
         if (recipes == null)
         {
             logger.Warning("[PLATE] TransfusionItem: hideout recipes unavailable, craft skipped");
@@ -263,11 +266,9 @@ public class TransfusionItem(
         logger.Debug("[PLATE] Medstation craft added: saline + bloodset -> blood bag (60s)");
     }
 
-    private void AddTherapistAssort(
-        SPTarkov.Server.Core.Models.Spt.Server.DatabaseTables tables, PlateServerConfig cfg)
+    private void AddTherapistAssort(PlateServerConfig cfg)
     {
-        if (tables.Traders == null ||
-            !tables.Traders.TryGetValue(new MongoId(TherapistId), out var therapist) ||
+        if (!tradersTable.TryGetValue(new MongoId(TherapistId), out var therapist) ||
             therapist.Assort == null)
         {
             logger.Warning("[PLATE] TransfusionItem: Therapist assort unavailable, item not sold");

@@ -1,6 +1,6 @@
 # P.L.A.T.E. — Penetration, Lethality, Armor & Trauma Engine
 
-A physics-driven overhaul of terminal ballistics, armor and trauma for SPT 4.0
+A physics-driven overhaul of terminal ballistics, armor and trauma for SPT 4.1
 (EFT 0.16.9.40087):
 
 - **Penetration** — armor as a physical barrier: specific-energy thresholds
@@ -35,7 +35,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the list of changes vs vanilla.
 
 | Component | Version |
 |---|---|
-| SPT | 4.0.13+ |
+| SPT | 4.1.1 |
 | EFT client | 0.16.9.40087 |
 
 Both parts are required: the client plugin and the server mod work as a pair.
@@ -43,7 +43,7 @@ Both parts are required: the client plugin and the server mod work as a pair.
 ## Installation
 
 - `PLATE.Client.dll` → `<SPT>\BepInEx\plugins\PLATE\`
-- `PLATE.Server.dll` (+ `bundles/`) → `<SPT>\SPT\user\mods\PLATE\`
+- `PLATE.Server.dll` (+ `bundles/`) → `<SPT>\SPT_Runtime\user\mods\PLATE\`
 
 Server config (`config.jsonc`) and the ammo reference book
 (`ammo-reference.jsonc`) are generated next to the server dll on first start.
@@ -52,8 +52,8 @@ hidden there can be edited in `BepInEx\config\com.anamelash.plate.cfg`.
 
 ## Building from source
 
-Requires .NET SDK 9. Set your game path in `Directory.Build.props`
-(`SptGameDir`), then:
+Requires .NET SDK 10 — the server half targets net10, the framework SPT 4.1 is built
+against. Set your game path in `Directory.Build.props` (`SptGameDir`), then:
 
 ```bash
 pwsh -File build/deploy.ps1

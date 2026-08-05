@@ -337,6 +337,20 @@ broken — results in combination with PLATE. Mods that overhaul the same system
 
 ## Release history
 
+### 1.0.0
+
+- **SPT 4.1.1 only.** Both halves were rebuilt against 4.1 and neither will load on
+  4.0: the server compares the `SPTarkov.Server.Core` version a mod was built against
+  with its own and refuses a mismatch, and the client references game types that 4.0
+  did not have under those names. Stay on 0.10.0 if you are staying on SPT 4.0.
+  The server half now targets net10, so building from source needs the .NET 10 SDK.
+- **Nothing about the physics changed.** No formula, constant or calibration anchor
+  moved in this release — the same wound channel, the same ballistic limit, the same
+  blood model, addressed through 4.1's names and APIs. If a number in a raid looks
+  different from 0.10.0, that is a bug in the port, not a rebalance.
+- Installation path moved with the server: the server half now goes to
+  `<SPT>\SPT_Runtime\user\mods\PLATE\` instead of `<SPT>\SPT\user\mods\PLATE\`.
+
 ### 0.10.0
 
 - **The body now has an inside.** The hitboxes the game already ships are read as

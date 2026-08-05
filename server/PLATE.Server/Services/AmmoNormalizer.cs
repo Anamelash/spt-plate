@@ -4,8 +4,8 @@ using PLATE.Server.Config;
 using PLATE.Server.Routes;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
-using SPTarkov.Server.Core.Models.Utils;
-using SPTarkov.Server.Core.Servers;
+using SPTarkov.Common.Models.Logging;
+using SPTarkov.Server.Core.Models.Spt.Tables;
 
 namespace PLATE.Server.Services;
 
@@ -19,7 +19,7 @@ namespace PLATE.Server.Services;
 /// </summary>
 [Injectable]
 public class AmmoNormalizer(
-    DatabaseServer databaseServer,
+    TemplateTable templateTable,
     ReferenceBook referenceBook,
     ISptLogger<AmmoNormalizer> logger)
 {
@@ -58,7 +58,7 @@ public class AmmoNormalizer(
     public void Run(PlateServerConfig cfg, string modPath)
     {
         var a = cfg.AmmoNormalizer;
-        var items = databaseServer.GetTables().Templates?.Items;
+        var items = templateTable.Items;
         if (items == null)
         {
             logger.Error("[PLATE] AmmoNormalizer: item DB unavailable");

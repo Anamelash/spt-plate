@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using EFT.Ballistics;
 using HarmonyLib;
 using PLATE.Client;
 using Xunit;
@@ -135,7 +136,7 @@ namespace PLATE.Tests
         /// <summary>
         /// Whether a wound bleeds is decided by writing the chance onto the hit, which
         /// only works while the hit is what carries it. If the field moves off
-        /// DamageInfoStruct, the write compiles nowhere else and every wound quietly
+        /// DamageInfo, the write compiles nowhere else and every wound quietly
         /// falls back to the cartridge's own number — the same silent-no-op shape as the
         /// template-id bug above, and just as invisible in a raid.
         /// </summary>
@@ -144,7 +145,7 @@ namespace PLATE.Tests
         {
             if (Skip) return;
 
-            var field = typeof(DamageInfoStruct).GetField("HeavyBleedingDelta");
+            var field = typeof(DamageInfo).GetField("HeavyBleedingDelta");
 
             Assert.NotNull(field);
             Assert.Equal(typeof(float), field.FieldType);

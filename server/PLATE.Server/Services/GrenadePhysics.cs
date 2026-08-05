@@ -1,8 +1,8 @@
 using PLATE.Server.Config;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.Models.Common;
-using SPTarkov.Server.Core.Models.Utils;
-using SPTarkov.Server.Core.Servers;
+using SPTarkov.Common.Models.Logging;
+using SPTarkov.Server.Core.Models.Spt.Tables;
 using SPTarkov.Server.Core.Utils;
 
 namespace PLATE.Server.Services;
@@ -19,7 +19,8 @@ namespace PLATE.Server.Services;
 /// </summary>
 [Injectable]
 public class GrenadePhysics(
-    DatabaseServer databaseServer,
+    TemplateTable templateTable,
+    LocaleTable localeTable,
     ReferenceBook referenceBook,
     JsonUtil jsonUtil,
     ISptLogger<GrenadePhysics> logger)
@@ -32,8 +33,7 @@ public class GrenadePhysics(
 
     public void Apply(PlateServerConfig cfg, string modPath)
     {
-        var tables = databaseServer.GetTables();
-        var items = tables.Templates?.Items;
+        var items = templateTable.Items;
         if (items == null)
         {
             return;
@@ -117,7 +117,7 @@ public class GrenadePhysics(
                 p.HeavyBleedingDelta = cfg.Grenades.FragHeavyDelta;
 
                 items[clone.Id] = clone;
-                AddLocales(tables, cloneId, gr.Prototype);
+                AddLocales(cloneId, gr.Prototype);
             }
 
             grenade.Properties.FragmentType = cloneId;
@@ -202,10 +202,9 @@ public class GrenadePhysics(
         };
 
     /// <summary>Locale entries for the shrapnel clone (kill feed/hit log).</summary>
-    private static void AddLocales(
-        SPTarkov.Server.Core.Models.Spt.Server.DatabaseTables tables, string tpl, string prototype)
+    private void AddLocales(string tpl, string prototype)
     {
-        var locales = tables.Locales?.Global;
+        var locales = localeTable.Global;
         if (locales == null)
         {
             return;

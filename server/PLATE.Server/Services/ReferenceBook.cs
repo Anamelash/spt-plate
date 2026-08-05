@@ -1,6 +1,6 @@
 using System.Text.Json;
 using SPTarkov.DI.Annotations;
-using SPTarkov.Server.Core.Models.Utils;
+using SPTarkov.Common.Models.Logging;
 
 namespace PLATE.Server.Services;
 

@@ -21,8 +21,13 @@ if ($GameDir) {
 }
 if (-not (Test-Path $gameDir)) { throw "Game directory not found: $gameDir" }
 
-$dotnet   = Join-Path $env:USERPROFILE ".dotnet\dotnet.exe"
-if (-not (Test-Path $dotnet)) { $dotnet = "dotnet" }  # fallback to the system one
+# The server half targets net10, so the SDK has to be able to build it: the user-local
+# install under ~\.dotnet is preferred when new enough, otherwise the system one.
+$dotnet = Join-Path $env:USERPROFILE ".dotnet\dotnet.exe"
+if (-not (Test-Path $dotnet) -or
+    -not (& $dotnet --list-sdks | Where-Object { [int]($_ -split '\.')[0] -ge 10 })) {
+    $dotnet = "dotnet"
+}
 
 # Warn if the game or the server is running (hot-swapping the dll will not work)
 foreach ($proc in "EscapeFromTarkov", "SPT.Server") {
@@ -43,7 +48,7 @@ if (-not $SkipBuild) {
 
 # --- Server -> user/mods/PLATE ---
 $serverOut = "$repoRoot\server\PLATE.Server\bin\$Configuration\PLATE.Server.dll"
-$serverDst = "$gameDir\SPT\user\mods\PLATE"
+$serverDst = "$gameDir\SPT_Runtime\user\mods\PLATE"
 New-Item -ItemType Directory -Force $serverDst | Out-Null
 Copy-Item $serverOut $serverDst -Force
 Write-Host "Server -> $serverDst\PLATE.Server.dll" -ForegroundColor Green

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>PLATE.Server</RootNamespace>
     <AssemblyName>PLATE.Server</AssemblyName>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -12,10 +12,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Versions are pinned to the installed server (SPTarkov.Server.Core.dll 4.0.13) -->
-    <PackageReference Include="SPTarkov.Common" Version="4.0.13" />
-    <PackageReference Include="SPTarkov.DI" Version="4.0.13" />
-    <PackageReference Include="SPTarkov.Server.Core" Version="4.0.13" />
+    <!-- Versions are pinned to the installed server (SPTarkov.Server.Core.dll 4.1.1).
+         The server compares the Core version a mod was built against with its own and
+         refuses to load a mismatch, so this is a hard pin, not a floor. -->
+    <PackageReference Include="SPTarkov.Common" Version="4.1.1" />
+    <PackageReference Include="SPTarkov.DI" Version="4.1.1" />
+    <PackageReference Include="SPTarkov.Server.Core" Version="4.1.1" />
   </ItemGroup>
 
 </Project>

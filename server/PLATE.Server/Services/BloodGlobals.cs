@@ -1,7 +1,7 @@
 using PLATE.Server.Config;
 using SPTarkov.DI.Annotations;
-using SPTarkov.Server.Core.Models.Utils;
-using SPTarkov.Server.Core.Servers;
+using SPTarkov.Common.Models.Logging;
+using SPTarkov.Server.Core.Models.Spt.Tables;
 
 namespace PLATE.Server.Services;
 
@@ -12,14 +12,14 @@ namespace PLATE.Server.Services;
 /// 2. Fresh Wound lasts until the end of the raid (vanilla: 480 sec).
 /// </summary>
 [Injectable]
-public class BloodGlobals(DatabaseServer databaseServer, ISptLogger<BloodGlobals> logger)
+public class BloodGlobals(GlobalTable globalTable, ISptLogger<BloodGlobals> logger)
 {
     /// <summary>One-line result for the startup summary; null if the module did not run.</summary>
     public string? Summary { get; private set; }
 
     public void Apply(PlateServerConfig cfg)
     {
-        var effects = databaseServer.GetTables().Globals?.Configuration?.Health?.Effects;
+        var effects = globalTable.Configuration?.Health?.Effects;
         if (effects == null)
         {
             logger.Error("[PLATE] BloodGlobals: globals Health.Effects unavailable");
