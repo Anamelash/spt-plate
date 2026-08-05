@@ -98,6 +98,7 @@ namespace PLATE.Client
         public static ConfigEntry<float> StomachDestroyedBleed;
         // "Leg/Arm destroyed bleed" retired: a destroyed limb now opens a heavy external
         // bleed, whose rate comes from BleedHeavyLeg/BleedHeavyArm (or the femoral branch)
+        public static ConfigEntry<bool> LimbHitsCanKill;
         public static ConfigEntry<bool> CrippleEnabled;
         public static ConfigEntry<float> CrippleStaminaCoeff;
         public static ConfigEntry<float> CrippleSpeedLimit;
@@ -144,11 +145,19 @@ namespace PLATE.Client
         public static ConfigEntry<bool> OverlayLogHits;
         public static ConfigEntry<float> OverlayMaxFloatDistance;
 
-        // --- Survivability overrides (deliberately not physical) ---
+        // --- Player survivability (section 7) ---
+        // The overrides that depart from the model on purpose; the ": Player" halves of
+        // the per-side groups are declared with their siblings above but bound here.
         public static ConfigEntry<bool> PreventPlayerDeath;
-        public static ConfigEntry<bool> LimbHitsCanKill;
         public static ConfigEntry<float> PlayerBleedChance;
         public static ConfigEntry<bool> PlayerOrganCrits;
+
+        // Retired keys, kept bound so the v4 migration can read what the player had under
+        // the section these four used to live in. See MigrateDefaults.
+        public static ConfigEntry<bool> LegacyDeathForPlayer;
+        public static ConfigEntry<bool> LegacyInternalBleedPlayer;
+        public static ConfigEntry<float> LegacyBleedRatePlayer;
+        public static ConfigEntry<bool> LegacyFractureCollapsePlayer;
 
         // --- Debug ---
         public static ConfigEntry<bool> TrackSelfHits;
@@ -159,7 +168,12 @@ namespace PLATE.Client
         public static ConfigEntry<int> ConfigVersion;
 
         /// <summary>Bump on every change to an existing setting's default.</summary>
-        private const int CurrentConfigVersion = 3;
+        private const int CurrentConfigVersion = 4;
+
+        /// <summary>Shown on a key that only exists to be read once by a migration.</summary>
+        private const string RetiredNote =
+            "Moved to \"7. Player Survivability\". Read once on update to carry your " +
+            "value across; editing it now does nothing.";
 
         // --- Armor material profiles ---
         public class MaterialProfile
@@ -202,7 +216,7 @@ namespace PLATE.Client
             const string sMat = "4. Armor materials";
             const string sOverlay = "5. Hit overlay (debug)";
             const string sDebug = "6. Debug";
-            const string sSurv = "7. Survivability (overrides the model)";
+            const string sSurv = "7. Player Survivability";
 
             // ===== 1. Modules =====
             BallisticsEnabled = Bind(sMod, "Ballistics", true,
@@ -429,9 +443,9 @@ namespace PLATE.Client
                 new AcceptableValueRange<float>(1f, 10f), true);
 
             // ===== 3. Blood & trauma (regular — gameplay tuning) =====
-            DeathForPlayer = Bind(sBlood, "Death from bleeding: Player", true,
-                "Death from blood loss for YOU. When off: blood pressure drops to 0% and " +
-                "hangs at the threshold with all the debuffs, but death never occurs.");
+            // The ": Player" halves of the groups below live in section 7 instead: what
+            // keeps YOU alive is worth having in one place, even at the cost of a group
+            // being read across two sections.
             DeathForPmc = Bind(sBlood, "Death from bleeding: PMC", true,
                 "Death from blood loss for PMC bots (USEC/BEAR).");
             DeathForScav = Bind(sBlood, "Death from bleeding: Scav", true,
@@ -441,36 +455,28 @@ namespace PLATE.Client
                 "A surgical kit (CMS, Surv12) also closes the bleedings on the limb it " +
                 "repairs. Vanilla leaves them running, which under PLATE keeps draining " +
                 "blood out of a limb that was just operated on.");
-            InternalBleedPlayer = Bind(sBlood, "Internal bleeding: Player", true,
-                "Internal bleeding for YOU: from a destroyed abdomen, from behind-armor " +
-                "trauma to the torso or head, and from blast barotrauma. All three bleed " +
-                "into a cavity, so there is no wound icon and no field medicine closes " +
-                "them — dressings, tourniquets, hemostatics and surgery all fall short. " +
-                "A destroyed limb is NOT one of these: it bleeds externally and is " +
-                "treatable. Turn off if you would rather every bleed be treatable.");
             InternalBleedPmc = Bind(sBlood, "Internal bleeding: PMC", true,
                 "Same for PMC bots (USEC/BEAR).");
             InternalBleedScav = Bind(sBlood, "Internal bleeding: Scav", true,
                 "Same for all Savage-side NPCs.");
-            BleedRatePlayer = Bind(sBlood, "Bleed rate: Player", 1.0f,
-                "Multiplier for how fast blood leaves YOUR body — every bleed, external " +
-                "and internal, plus the cardiac output cap, so 2.0 really is twice as fast. " +
-                "0 = you never lose blood, bleedings become cosmetic. Applies immediately, " +
-                "including to bleedings already running.",
-                new AcceptableValueRange<float>(0f, 10f));
             BleedRatePmc = Bind(sBlood, "Bleed rate: PMC", 1.0f,
                 "Same for PMC bots (USEC/BEAR).",
                 new AcceptableValueRange<float>(0f, 10f));
             BleedRateScav = Bind(sBlood, "Bleed rate: Scav", 1.0f,
                 "Same for all Savage-side NPCs.",
                 new AcceptableValueRange<float>(0f, 10f));
-            FractureCollapsePlayer = Bind(sBlood, "Fracture collapse: Player", true,
-                "Leg fracture without a splint: collapse to prone when trying to walk, " +
-                "and a jump ban (also with a destroyed stomach/leg). A splint lifts the restrictions.");
             FractureCollapsePmc = Bind(sBlood, "Fracture collapse: PMC", true,
                 "Same for PMC bots (USEC/BEAR).");
             FractureCollapseScav = Bind(sBlood, "Fracture collapse: Scav", true,
                 "Same for all Savage-side NPCs.");
+            // not a player switch — it changes how a destroyed limb behaves for everyone,
+            // which is why it sits with the rest of the trauma rules rather than in 7
+            LimbHitsCanKill = Bind(sBlood, "Limb hits can kill", true,
+                "Vanilla behaviour, and it applies to everyone — you and bots alike. " +
+                "Destroying an arm or a leg spills the excess damage over the surviving " +
+                "parts, which is how shot-off legs kill. Turn off and arms and legs stop " +
+                "being a route to death: they still take damage, black out, bleed and " +
+                "cripple, but nothing carries over from them into the torso or the head.");
             CrippleEnabled = Bind(sBlood, "Cripple on destroyed part", true,
                 "A destroyed body part = sprint ban, Endurance/Strength bonus rollback " +
                 "and a speed limit — until surgery.");
@@ -630,25 +636,39 @@ namespace PLATE.Client
             ConfigVersion = Bind(sDebug, "Config version (internal)", 1,
                 "Internal default-migration field — do not edit by hand.", null, true);
 
-            // ===== 7. Survivability =====
-            // Everything here overrides the physical model on purpose. The defaults leave
-            // the model alone; every other value is the player choosing to be harder to
-            // kill than the physics says, which is a legitimate thing to want and is kept
-            // in its own section so it is never mistaken for part of the model.
+            // ===== 7. Player Survivability =====
+            // Everything that decides how long YOU last, in one place: the overrides that
+            // deliberately depart from the physical model, and the ": Player" halves of the
+            // per-side groups that used to sit with their PMC and Scav siblings in section
+            // 3. The defaults change nothing — the model as calibrated.
             PreventPlayerDeath = Bind(sSurv, "Prevent death", false,
                 "Hits can no longer kill YOU: head and thorax never black out, each keeps " +
                 "at least 1 HP, and damage that would spill into them from a destroyed " +
                 "limb is trimmed to the same floor. Everything else stays — parts still " +
                 "take damage, limbs still black out, bleedings and fractures still happen. " +
-                "Death from blood loss is NOT covered by this: it has its own switch " +
-                "(\"Death from bleeding: Player\" in section 3), so turn that off too to " +
-                "be fully unkillable.");
-            LimbHitsCanKill = Bind(sSurv, "Limb hits can kill", true,
-                "Vanilla behaviour, and it applies to everyone — you and bots alike. " +
-                "Destroying an arm or a leg spills the excess damage over the surviving " +
-                "parts, which is how shot-off legs kill. Turn off and arms and legs stop " +
-                "being a route to death: they still take damage, black out, bleed and " +
-                "cripple, but nothing carries over from them into the torso or the head.");
+                "Death from blood loss is NOT covered by this: that is \"Death from " +
+                "bleeding: Player\" below, so turn that off too to be fully unkillable.");
+            DeathForPlayer = Bind(sSurv, "Death from bleeding: Player", true,
+                "Death from blood loss for YOU. When off: blood pressure drops to 0% and " +
+                "hangs at the threshold with all the debuffs, but death never occurs. " +
+                "The PMC and Scav halves of this group are in section 3.");
+            InternalBleedPlayer = Bind(sSurv, "Internal bleeding: Player", true,
+                "Internal bleeding for YOU: from a destroyed abdomen, from behind-armor " +
+                "trauma to the torso or head, and from blast barotrauma. All three bleed " +
+                "into a cavity, so there is no wound icon and no field medicine closes " +
+                "them — dressings, tourniquets, hemostatics and surgery all fall short. " +
+                "A destroyed limb is NOT one of these: it bleeds externally and is " +
+                "treatable. Turn off if you would rather every bleed be treatable.");
+            BleedRatePlayer = Bind(sSurv, "Bleed rate: Player", 1.0f,
+                "Multiplier for how fast blood leaves YOUR body — every bleed, external " +
+                "and internal, plus the cardiac output cap, so 2.0 really is twice as fast. " +
+                "0 = you never lose blood, bleedings become cosmetic. Applies immediately, " +
+                "including to bleedings already running.",
+                new AcceptableValueRange<float>(0f, 10f));
+            FractureCollapsePlayer = Bind(sSurv, "Fracture collapse: Player", true,
+                "Leg fracture without a splint: collapse to prone when trying to walk, " +
+                "and a jump ban (also with a destroyed stomach/leg). A splint lifts the " +
+                "restrictions.");
             PlayerBleedChance = Bind(sSurv, "Bleeding chance on hits to you", 1f,
                 "Multiplier on the chance that a hit ON YOU starts a bleeding — heavy, " +
                 "guaranteed light, and the internal ones from opened organs, destroyed " +
@@ -656,6 +676,20 @@ namespace PLATE.Client
                 "from being shot. Does not touch bleedings already running, bots, or the " +
                 "blood you have already lost.",
                 new AcceptableValueRange<float>(0f, 1f));
+            // The four above moved here out of "3. Blood & trauma" in v4. BepInEx keys are
+            // (section, key) pairs, so to the cfg file that is a delete plus an add and a
+            // tuned value would silently revert to the default. Binding the old pair reads
+            // it back; the v4 migration copies it over. Same trick as the retired
+            // "Damage scale". The keys have to stay verbatim — reading them is the point.
+            LegacyDeathForPlayer = Bind(sBlood, "Death from bleeding: Player", true,
+                RetiredNote, null, true);
+            LegacyInternalBleedPlayer = Bind(sBlood, "Internal bleeding: Player", true,
+                RetiredNote, null, true);
+            LegacyBleedRatePlayer = Bind(sBlood, "Bleed rate: Player", 1.0f,
+                RetiredNote, new AcceptableValueRange<float>(0f, 10f), true);
+            LegacyFractureCollapsePlayer = Bind(sBlood, "Fracture collapse: Player", true,
+                RetiredNote, null, true);
+
             PlayerOrganCrits = Bind(sSurv, "Critical organ hits on you", true,
                 "On (the model as designed): a channel through YOUR heart, liver or spinal " +
                 "cord is lethal or nearly so, and brain, jaw and neck carry their vital " +
@@ -762,6 +796,17 @@ namespace PLATE.Client
                 Migrate(DamageScalePlayer, 1f, legacy);
                 Migrate(DamageScalePmc, 1f, legacy);
                 Migrate(DamageScaleScav, 1f, legacy);
+            }
+
+            // v4: the four ": Player" knobs moved from "3. Blood & trauma" into
+            // "7. Player Survivability". Moving a key between sections loses its saved
+            // value, so what the player had under the old section is carried across.
+            if (ConfigVersion.Value < 4)
+            {
+                Migrate(DeathForPlayer, true, LegacyDeathForPlayer.Value);
+                Migrate(InternalBleedPlayer, true, LegacyInternalBleedPlayer.Value);
+                Migrate(BleedRatePlayer, 1f, LegacyBleedRatePlayer.Value);
+                Migrate(FractureCollapsePlayer, true, LegacyFractureCollapsePlayer.Value);
             }
 
             ConfigVersion.Value = CurrentConfigVersion;

@@ -350,20 +350,26 @@ broken — results in combination with PLATE. Mods that overhaul the same system
   different from 0.10.0, that is a bug in the port, not a rebalance.
 - Installation path moved with the server: the server half now goes to
   `<SPT>\SPT_Runtime\user\mods\PLATE\` instead of `<SPT>\SPT\user\mods\PLATE\`.
-- **Survivability overrides (new section 7 in F12).** Four switches that deliberately
+- **New F12 section, "7. Player Survivability".** Everything that decides how long
+  you last, in one place. Three of the switches below are new and deliberately
   override the model for players who want to survive a raid the physics would have
-  ended. None of them is on by default, and at their defaults nothing in the sections
-  above behaves differently:
+  ended; the fourth applies to bots too and lives with the rest of the trauma rules
+  in section 3. None is on by default, and at their defaults nothing behaves
+  differently from before. Four knobs that already existed moved into the new section
+  from "3. Blood & trauma" — *Death from bleeding: Player*, *Internal bleeding:
+  Player*, *Bleed rate: Player* and *Fracture collapse: Player*; their PMC and Scav
+  halves stayed behind. If you had tuned any of them, your value is carried across on
+  first launch, not reset.
   - *Prevent death* (off) — hits can no longer kill you: your head and thorax never
     black out and each keeps at least 1 HP, including damage spilling into them from
     a destroyed limb. Parts still take damage, limbs still black out, bleedings and
     fractures still happen. Death from blood loss is not covered — that has its own
     switch, "Death from bleeding: Player", so turn both off to be fully unkillable.
-  - *Limb hits can kill* (on, and this one applies to bots too) — vanilla spills the
-    excess damage from a destroyed arm or leg over the surviving parts, which is how
-    shot-off legs kill. Turn it off and limbs stop being a route to death for anyone:
-    they still take damage, black out, bleed and cripple, but nothing carries over
-    into the torso or head.
+  - *Limb hits can kill* (on, in section 3 — it applies to bots too) — vanilla spills
+    the excess damage from a destroyed arm or leg over the surviving parts, which is
+    how shot-off legs kill. Turn it off and limbs stop being a route to death for
+    anyone: they still take damage, black out, bleed and cripple, but nothing carries
+    over into the torso or head.
   - *Bleeding chance on hits to you* (1.0) — scales the chance a hit on you starts a
     bleeding, heavy, light and internal alike. At 0 you never bleed from being shot.
     Bots are unaffected.

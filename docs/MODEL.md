@@ -1004,12 +1004,13 @@ third, separate knob.
 ## What is deliberately not modelled
 
 - **The survivability overrides are not part of the model at all.** Four switches
-  in config section 7 let a player be harder to kill than the physics says: a floor
-  of 1 HP under their own head and thorax, arms and legs removed as a route to
-  death for everyone, a multiplier on the chance a hit on them starts a bleeding,
-  and their own critical organ and vital-zone damage turned off. Nothing here is
-  derived from anything, and none of it is on by default — the defaults leave every
-  formula below untouched. They exist because wanting to survive a raid is a
+  let a player be harder to kill than the physics says: a floor of 1 HP under their
+  own head and thorax, a multiplier on the chance a hit on them starts a bleeding,
+  and their own critical organ and vital-zone damage turned off (config section 7,
+  "Player Survivability"), plus arms and legs removed as a route to death for
+  everyone (section 3, since it changes bots too). Nothing here is derived from
+  anything, and none of it is on by default — the defaults leave every formula
+  below untouched. They exist because wanting to survive a raid is a
   legitimate thing to want, and the honest way to give it is a labelled switch
   rather than wound constants quietly tuned until the numbers feel kind. Everything
   else in this document describes what happens with all four at their defaults.

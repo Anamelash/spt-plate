@@ -30,6 +30,12 @@ namespace PLATE.Tests
         /// <summary>
         /// Anything split per side must be split all the way: half a group means one
         /// faction silently keeps the default while the other two are tunable.
+        ///
+        /// The sibling is looked up by key across the whole file rather than within the
+        /// section, because four of these groups are deliberately read across two: the
+        /// ": Player" half sits in "7. Player Survivability" so that everything deciding
+        /// how long you last is in one place, and PMC and Scav stay in "3. Blood &amp;
+        /// trauma". What must not happen is a side going missing altogether.
         /// </summary>
         [Fact]
         public void Per_category_knobs_come_in_complete_sets()
@@ -48,15 +54,53 @@ namespace PLATE.Tests
                 var stem = player.Key.Substring(0, player.Key.Length - PlayerSuffix.Length);
                 foreach (var side in new[] { ": PMC", ": Scav" })
                 {
-                    if (!keys.Any(k => k.Section == player.Section && k.Key == stem + side))
+                    if (!keys.Any(k => k.Key == stem + side))
                     {
-                        missing.Add(player.Section + "/" + stem + side);
+                        missing.Add(stem + side);
                     }
                 }
             }
 
             Assert.True(missing.Count == 0, "incomplete per-category groups: " +
                                             string.Join(", ", missing));
+        }
+
+        /// <summary>
+        /// The four ": Player" knobs that moved out of "3. Blood &amp; trauma" in v4 are
+        /// bound where the reorganisation put them, and the retired keys they moved from
+        /// are still bound in the old section — that read is the only thing standing
+        /// between an upgrading player and a silently reset tuning.
+        /// </summary>
+        [Fact]
+        public void Moved_player_knobs_can_still_read_their_old_home()
+        {
+            if (Skip) return;
+
+            foreach (var entry in new ConfigEntryBase[]
+            {
+                PlateClientConfig.DeathForPlayer,
+                PlateClientConfig.InternalBleedPlayer,
+                PlateClientConfig.BleedRatePlayer,
+                PlateClientConfig.FractureCollapsePlayer,
+            })
+            {
+                Assert.StartsWith("7.", entry.Definition.Section);
+            }
+
+            foreach (var legacy in new ConfigEntryBase[]
+            {
+                PlateClientConfig.LegacyDeathForPlayer,
+                PlateClientConfig.LegacyInternalBleedPlayer,
+                PlateClientConfig.LegacyBleedRatePlayer,
+                PlateClientConfig.LegacyFractureCollapsePlayer,
+            })
+            {
+                Assert.Equal("3. Blood & trauma", legacy.Definition.Section);
+            }
+
+            // it changes how a destroyed limb behaves for bots too, so it is not a
+            // player-survivability switch and must not drift back into section 7
+            Assert.StartsWith("3.", PlateClientConfig.LimbHitsCanKill.Definition.Section);
         }
 
         /// <summary>
@@ -151,7 +195,6 @@ namespace PLATE.Tests
             foreach (var entry in new ConfigEntryBase[]
             {
                 PlateClientConfig.PreventPlayerDeath,
-                PlateClientConfig.LimbHitsCanKill,
                 PlateClientConfig.PlayerBleedChance,
                 PlateClientConfig.PlayerOrganCrits,
             })
