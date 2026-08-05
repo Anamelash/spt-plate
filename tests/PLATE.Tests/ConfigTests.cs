@@ -116,6 +116,56 @@ namespace PLATE.Tests
         }
 
         /// <summary>
+        /// The journal's settings line is what a bug report is read against, so it must
+        /// list settings and nothing else. A retired key holds whatever the player had
+        /// before the move — precisely when the migration matters — and it shares its
+        /// name with the live key it fed, so printing it put the same name in the line
+        /// twice with no way to tell which was which.
+        /// </summary>
+        [Fact]
+        public void Retired_keys_stay_out_of_the_settings_line()
+        {
+            if (Skip) return;
+
+            var legacy = PlateClientConfig.LegacyBleedRatePlayer;
+            var live = PlateClientConfig.BleedRatePlayer;
+            var savedLegacy = legacy.Value;
+            var savedLive = live.Value;
+
+            try
+            {
+                // both off their defaults, and both called "Bleed rate: Player"
+                legacy.Value = 0.25f;
+                live.Value = 0.5f;
+
+                var line = PlateClientConfig.ChangedSettings();
+
+                // built from the values rather than written out: the line is formatted in
+                // the current culture, and the test host's is not necessarily invariant
+                Assert.Equal(1, CountOccurrences(line, "Bleed rate: Player="));
+                Assert.Contains($"Bleed rate: Player={live.Value}", line);
+                Assert.DoesNotContain($"Bleed rate: Player={legacy.Value}", line);
+            }
+            finally
+            {
+                legacy.Value = savedLegacy;
+                live.Value = savedLive;
+            }
+        }
+
+        private static int CountOccurrences(string haystack, string needle)
+        {
+            var n = 0;
+            for (var i = haystack.IndexOf(needle, StringComparison.Ordinal); i >= 0;
+                 i = haystack.IndexOf(needle, i + needle.Length, StringComparison.Ordinal))
+            {
+                n++;
+            }
+
+            return n;
+        }
+
+        /// <summary>
         /// Bleeding may be switched off entirely for a side; damage may not — a zero
         /// damage scale is not a tuning option, it is an invulnerable faction.
         /// </summary>

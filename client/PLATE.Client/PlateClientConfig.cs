@@ -190,6 +190,28 @@ namespace PLATE.Client
         private static ConfigFile _cfg;
         private static int _order = 5000;
 
+        /// <summary>
+        /// Keys that exist only so a migration can read what the player had before a
+        /// setting moved or was replaced. They are not settings — nothing reads them at
+        /// runtime and editing them does nothing — so they stay out of the journal's
+        /// settings line, where they would otherwise show up as a second, contradicting
+        /// value for a key that also exists under its new section.
+        /// </summary>
+        private static readonly HashSet<ConfigDefinition> Retired =
+            new HashSet<ConfigDefinition>();
+
+        /// <summary>
+        /// Binds a key that only a migration reads. Registering happens here rather than
+        /// at the call sites so a retired key cannot be added without being excluded.
+        /// </summary>
+        private static ConfigEntry<T> BindRetired<T>(string section, string key, T def,
+            AcceptableValueBase range = null, string desc = null)
+        {
+            var entry = Bind(section, key, def, desc ?? RetiredNote, range, true);
+            Retired.Add(entry.Definition);
+            return entry;
+        }
+
         private static ConfigEntry<T> Bind<T>(string section, string key, T def, string desc,
             AcceptableValueBase range = null, bool advanced = false)
         {
@@ -251,10 +273,10 @@ namespace PLATE.Client
             // the single "Damage scale" knob was split per category; its saved value is
             // carried into the three by the v3 migration so an existing tuning is not
             // reset (the key has to stay verbatim — reading the old one is the point)
-            LegacyDamageScale = Bind(sBal, "Damage scale", 1.0f,
-                "Superseded by the per-category damage scales below. Read once on update " +
-                "to seed them; editing it now does nothing.",
-                new AcceptableValueRange<float>(0.1f, 10f), true);
+            LegacyDamageScale = BindRetired(sBal, "Damage scale", 1.0f,
+                new AcceptableValueRange<float>(0.1f, 10f),
+                "Superseded by the per-category damage scales. Read once on update " +
+                "to seed them; editing it now does nothing.");
             // "Damage scale: Player" is bound in section 7 with the rest of what keeps
             // you alive; the retired pair it moved from is bound further down so the v5
             // migration can read it
@@ -686,16 +708,13 @@ namespace PLATE.Client
             // tuned value would silently revert to the default. Binding the old pair reads
             // it back; the v4 migration copies it over. Same trick as the retired
             // "Damage scale". The keys have to stay verbatim — reading them is the point.
-            LegacyDeathForPlayer = Bind(sBlood, "Death from bleeding: Player", true,
-                RetiredNote, null, true);
-            LegacyInternalBleedPlayer = Bind(sBlood, "Internal bleeding: Player", true,
-                RetiredNote, null, true);
-            LegacyBleedRatePlayer = Bind(sBlood, "Bleed rate: Player", 1.0f,
-                RetiredNote, new AcceptableValueRange<float>(0f, 10f), true);
-            LegacyFractureCollapsePlayer = Bind(sBlood, "Fracture collapse: Player", true,
-                RetiredNote, null, true);
-            LegacyDamageScalePlayer = Bind(sBal, "Damage scale: Player", 1.0f,
-                RetiredNote, new AcceptableValueRange<float>(0.1f, 10f), true);
+            LegacyDeathForPlayer = BindRetired(sBlood, "Death from bleeding: Player", true);
+            LegacyInternalBleedPlayer = BindRetired(sBlood, "Internal bleeding: Player", true);
+            LegacyBleedRatePlayer = BindRetired(sBlood, "Bleed rate: Player", 1.0f,
+                new AcceptableValueRange<float>(0f, 10f));
+            LegacyFractureCollapsePlayer = BindRetired(sBlood, "Fracture collapse: Player", true);
+            LegacyDamageScalePlayer = BindRetired(sBal, "Damage scale: Player", 1.0f,
+                new AcceptableValueRange<float>(0.1f, 10f));
 
             PlayerOrganCrits = Bind(sSurv, "Critical organ hits on you", true,
                 "On (the model as designed): a channel through YOUR heart, liver or spinal " +
@@ -763,6 +782,11 @@ namespace PLATE.Client
             var changed = new List<string>();
             foreach (var key in _cfg.Keys)
             {
+                if (Retired.Contains(key))
+                {
+                    continue; // migration material, not a setting — see Retired
+                }
+
                 var entry = _cfg[key];
                 if (entry != null && !Equals(entry.BoxedValue, entry.DefaultValue))
                 {
