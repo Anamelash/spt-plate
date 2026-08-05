@@ -173,6 +173,38 @@ namespace PLATE.Tests
         }
 
         /// <summary>
+        /// Two hooks on one method are ordinary — the survivability prefix and the organ
+        /// model's postfix both sit on ApplyDamage — and each has to keep its own row and
+        /// its own counter. Registering by target first folded the second into the first,
+        /// leaving Hit(label) with nothing to find: the hook reported "never ran" while
+        /// running on every hit, which is the exact lie this telemetry exists to prevent.
+        /// </summary>
+        [Fact]
+        public void Two_hooks_on_one_method_count_separately()
+        {
+            if (Skip) return;
+
+            var harmony = new Harmony("plate.tests.two-hooks");
+            var target = AccessTools.Method(typeof(PatchIntegrityTests), nameof(Dummy));
+
+            PatchStats.Track(harmony, target, "shared-first");
+            PatchStats.Track(harmony, target, "shared-second");
+
+            PatchStats.Hit("shared-first");
+            PatchStats.Hit("shared-second");
+            PatchStats.Hit("shared-second");
+
+            var report = string.Join(Environment.NewLine, PatchStats.Report());
+
+            Assert.Contains("shared-first", report);
+            Assert.Contains("shared-second", report);
+            Assert.Contains("shared-first", report.Split('\n')
+                .First(l => l.Contains("shared-first") && l.Contains("fired 1")));
+            Assert.Contains("shared-second", report.Split('\n')
+                .First(l => l.Contains("shared-second") && l.Contains("fired 2")));
+        }
+
+        /// <summary>
         /// Applying the real patch set must not throw and must not report failures.
         /// This is the test that would have gone red for 0.9.0 before release.
         /// </summary>
@@ -185,14 +217,17 @@ namespace PLATE.Tests
 
             // MonoMod cannot detour ActiveHealthController.ApplyDamage outside the Unity
             // runtime — its prepare step reaches for BCL members net471's mscorlib does
-            // not have. It is the target that cannot be detoured here, not the patch:
-            // whichever of our hooks reaches it first takes the error, and the rest
-            // attach to the already-patched method and report success. So the assertion
-            // is on the count and the membership rather than on a particular name, which
-            // would only be encoding the order Apply() happens to run in.
+            // not have. It is the target that cannot be detoured here, not the patch, so
+            // every hook aimed at it fails, all three of them.
             //
-            // Verified working in game: the client log has never carried a patch failure
-            // for any of them, and the features they drive demonstrably run.
+            // This used to assert a count of one, on the reasoning that the first hook
+            // took the error and the rest attached to an already-patched method. That
+            // reasoning was reading a telemetry bug: PatchStats keyed rows by target
+            // before label, so the second and third hooks folded into the first one's row
+            // and only one label was ever reported. They were all failing the whole time.
+            //
+            // In game all three attach: the raid journal's hook report carries no failures
+            // and the features they drive demonstrably run.
             var onApplyDamage = new HashSet<string>
             {
                 "GuaranteedBleedPostfix",
@@ -202,9 +237,10 @@ namespace PLATE.Tests
 
             var actual = new HashSet<string>(PatchStats.FailedLabels());
 
-            Assert.True(actual.Count == 1 && actual.IsSubsetOf(onApplyDamage),
+            Assert.True(actual.SetEquals(onApplyDamage),
                 "patch application changed. Failures outside ApplyDamage: " +
                 string.Join(", ", actual.Except(onApplyDamage)) +
+                "; expected but absent: " + string.Join(", ", onApplyDamage.Except(actual)) +
                 "; total failures: " + actual.Count + " (" + string.Join(", ", actual) + ")" +
                 Environment.NewLine +
                 string.Join(Environment.NewLine, PatchStats.Report()));

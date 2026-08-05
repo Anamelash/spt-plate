@@ -58,6 +58,7 @@ namespace PLATE.Client.Patches
 
         private static void ApplyDamagePrefix(EBodyPart bodyPart, out EBodyPart? __state)
         {
+            PatchStats.Hit(nameof(ApplyDamagePrefix));
             __state = _spillFrom;
             _spillFrom = !PlateClientConfig.LimbHitsCanKill.Value && IsLimb(bodyPart)
                 ? bodyPart
@@ -76,6 +77,7 @@ namespace PLATE.Client.Patches
         private static bool ChangeHealthPrefix(ActiveHealthController __instance,
             EBodyPart bodyPart, ref float value, DamageInfo damageInfo)
         {
+            PatchStats.Hit(nameof(ChangeHealthPrefix));
             try
             {
                 // A limb is being damaged with the spill switched off, and this change is

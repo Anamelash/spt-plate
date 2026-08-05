@@ -16,8 +16,10 @@ namespace PLATE.Client
     /// counter the first two are indistinguishable in a bug report, which is exactly
     /// how a dead transfusion item shipped in 0.9.0.
     ///
-    /// Counting is generic: one shared postfix takes Harmony's __originalMethod, so
-    /// every patched target is covered without hand-instrumenting each patch body.
+    /// Counting is NOT automatic: every patch body calls Hit itself (see Hit for why the
+    /// generic counting postfix was removed in 0.9.2). A hook that forgets the call
+    /// reports "never ran" however busy it is, which is the one lie this type must not
+    /// tell — check the call is there before believing a zero.
     /// </summary>
     internal static class PatchStats
     {
@@ -47,28 +49,28 @@ namespace PLATE.Client
         /// <summary>Patches that could not be attached.</summary>
         public static int Failures { get; private set; }
 
+        /// <summary>
+        /// One row per label, and the label is what identifies a hook — not the method it
+        /// sits on. Looking the target up first used to short-circuit this, so a second
+        /// hook on an already-tracked method silently folded into the first one's row:
+        /// no counter of its own, and Hit(label) finding nothing to increment reported it
+        /// as never having run. Two patches on one method is ordinary (the survivability
+        /// prefix and the organ model's postfix both live on ApplyDamage), so the label
+        /// leads and the method follows.
+        /// </summary>
         private static Entry GetOrAdd(MethodBase target, string label)
         {
-            if (target != null && ByMethod.TryGetValue(target, out var byMethod))
-            {
-                return byMethod;
-            }
-
             var name = target == null
                 ? "(unresolved)"
                 : $"{Short(target.DeclaringType)}.{target.Name}";
 
-            // one row per label: a patch registered against several targets (the same
-            // postfix on RestoreBodyPart and FullRestoreBodyPart, say) shares a counter,
-            // so showing it twice with the count on one row reads as a dead hook
+            // a label registered against several targets (the same postfix on
+            // RestoreBodyPart and FullRestoreBodyPart, say) shares a counter, so showing
+            // it twice with the count on one row reads as a dead hook
             if (ByLabel.TryGetValue(label, out var byLabel))
             {
                 byLabel.Target += ", " + name;
-                if (target != null)
-                {
-                    ByMethod[target] = byLabel;
-                }
-
+                Claim(target, byLabel);
                 return byLabel;
             }
 
@@ -76,12 +78,23 @@ namespace PLATE.Client
 
             Ordered.Add(entry);
             ByLabel[label] = entry;
-            if (target != null)
+            Claim(target, entry);
+
+            return entry;
+        }
+
+        /// <summary>
+        /// ByMethod is what Hit(MethodBase) resolves through, and a method can only point
+        /// at one row. First label registered against a target keeps it: that is the hook
+        /// spread over several overloads, which is the case the by-method lookup exists
+        /// for. A later hook on the same method counts through its own label instead.
+        /// </summary>
+        private static void Claim(MethodBase target, Entry entry)
+        {
+            if (target != null && !ByMethod.ContainsKey(target))
             {
                 ByMethod[target] = entry;
             }
-
-            return entry;
         }
 
         private static string Short(Type t)
