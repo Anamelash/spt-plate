@@ -8,7 +8,7 @@ public record PlateModMetadata : IModMetadata
 {
     public string ModGuid { get; init; } = "com.anamelash.plate";
     public string Name { get; init; } = "P.L.A.T.E.";
-    public string Author { get; init; } = "crow";
+    public string Author { get; init; } = "anamelash";
     public List<string>? Contributors { get; init; }
     public SemanticVersioning.Version Version { get; init; } = new("1.0.0");
     public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.0");
