@@ -176,6 +176,15 @@ namespace PLATE.Client
 
         /// <summary>Final body-part damage (the guaranteed-LightBleeding and overlay hook).</summary>
         public static MethodBase Health_ApplyDamage => Method(ActiveHealthController, "ApplyDamage");
+
+        /// <summary>
+        /// Every HP change of a body part goes through here, and inside ApplyDamage it is
+        /// called twice for two different things: once for the part that was hit, and once
+        /// per surviving part when a destroyed part spills its excess damage over the rest.
+        /// That makes it the one place the survivability overrides can hold a floor under
+        /// a part or drop the spill (see SurvivabilityPatches).
+        /// </summary>
+        public static MethodBase Health_ChangeHealth => Method(ActiveHealthController, "ChangeHealth");
         /// <summary>Bleeding tick (redirects HP damage into blood drain).</summary>
         public static MethodBase Bleeding_RegularUpdate => Method(BleedingBase, "RegularUpdate");
         public static MethodBase Health_DoBleed => AccessTools.Method(ActiveHealthController, "DoBleed", new[] { typeof(bool), FindType("EBodyPart") });
@@ -224,6 +233,7 @@ namespace PLATE.Client
             { nameof(HealthParametersPanel), () => HealthParametersPanel },
             { nameof(HealthPanel_Show), () => HealthPanel_Show },
             { nameof(Health_ApplyDamage), () => Health_ApplyDamage },
+            { nameof(Health_ChangeHealth), () => Health_ChangeHealth },
             { nameof(Bleeding_RegularUpdate), () => Bleeding_RegularUpdate },
             { nameof(Health_DoBleed), () => Health_DoBleed },
             { nameof(Health_Kill), () => Health_Kill },

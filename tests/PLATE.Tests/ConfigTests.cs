@@ -128,6 +128,53 @@ namespace PLATE.Tests
             Assert.Equal(2f, PlateBloodManager.CategoryValue(null, 1f, 2f, 3f));
         }
 
+        /// <summary>
+        /// The survivability overrides exist to be switched on by someone who wants them.
+        /// Out of the box they must change nothing at all: a default that drifted here
+        /// would quietly rewrite every raid for everyone who never opened section 7, and
+        /// it would look like the wound model had changed rather than a switch.
+        /// </summary>
+        [Fact]
+        public void Survivability_overrides_are_off_by_default()
+        {
+            if (Skip) return;
+
+            Assert.False(PlateClientConfig.PreventPlayerDeath.Value);
+            Assert.True(PlateClientConfig.LimbHitsCanKill.Value);
+            Assert.Equal(1f, PlateClientConfig.PlayerBleedChance.Value);
+            Assert.True(PlateClientConfig.PlayerOrganCrits.Value);
+
+            // a bleeding chance above 1 would invent bleedings the model never found,
+            // which is the one thing this knob is not for
+            AssertRange(PlateClientConfig.PlayerBleedChance, 0f, 1f);
+
+            foreach (var entry in new ConfigEntryBase[]
+            {
+                PlateClientConfig.PreventPlayerDeath,
+                PlateClientConfig.LimbHitsCanKill,
+                PlateClientConfig.PlayerBleedChance,
+                PlateClientConfig.PlayerOrganCrits,
+            })
+            {
+                Assert.StartsWith("7.", entry.Definition.Section);
+            }
+        }
+
+        /// <summary>
+        /// Every override is about the local player, so anyone the mod cannot identify as
+        /// you has to come out of the gates untouched — a null target reaching these from
+        /// a grenade or a fragment must not silently become invulnerable.
+        /// </summary>
+        [Fact]
+        public void Overrides_leave_everyone_who_is_not_you_alone()
+        {
+            if (Skip) return;
+
+            Assert.True(PlateBloodManager.OrganCritsAllowed(null));
+            Assert.Equal(1f, PlateBloodManager.BleedChanceFactor(null));
+            Assert.True(PlateBloodManager.BleedRollPasses(null));
+        }
+
         private static void AssertRange(ConfigEntry<float> entry, float min, float max)
         {
             var range = entry.Description.AcceptableValues as AcceptableValueRange<float>;

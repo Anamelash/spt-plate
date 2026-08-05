@@ -202,6 +202,14 @@ namespace PLATE.Client.Blood
                 return;
             }
 
+            // section 7: the player turned the bleeding chance down, and the internal ones
+            // count. Rolled here rather than at the call sites so every source — organ,
+            // destroyed part, blast — goes through the same gate.
+            if (!BleedRollPasses(player))
+            {
+                return;
+            }
+
             var bleed = new InternalBleed
             {
                 Source = source,
@@ -276,6 +284,49 @@ namespace PLATE.Client.Blood
             return CategoryOn(p, PlateClientConfig.DeathForPlayer.Value,
                 PlateClientConfig.DeathForPmc.Value, PlateClientConfig.DeathForScav.Value);
         }
+
+        /// <summary>
+        /// Survivability override (config section 7): whether critical organ and vital-zone
+        /// damage applies to this target. Only the local player can have it switched off —
+        /// it is a choice about your own survivability, not a change to the model.
+        /// </summary>
+        public static bool OrganCritsAllowed(Player p)
+        {
+            return p == null || !p.IsYourPlayer || PlateClientConfig.PlayerOrganCrits.Value;
+        }
+
+        /// <summary>
+        /// Survivability override (config section 7): the chance multiplier for a bleeding
+        /// started by a hit on the local player. 1 for everyone else.
+        /// </summary>
+        public static float BleedChanceFactor(Player p)
+        {
+            return p != null && p.IsYourPlayer
+                ? Mathf.Clamp01(PlateClientConfig.PlayerBleedChance.Value)
+                : 1f;
+        }
+
+        /// <summary>
+        /// The same factor as a single yes/no, for the bleedings the model applies outright
+        /// rather than as a chance: the guaranteed light bleeding and the internal ones.
+        /// Rolled per event, so a factor of 0.3 means three in ten of them survive.
+        /// </summary>
+        public static bool BleedRollPasses(Player p)
+        {
+            var factor = BleedChanceFactor(p);
+            if (factor >= 1f)
+            {
+                return true;
+            }
+
+            // System.Random, not UnityEngine.Random: the latter is a native call that does
+            // not exist outside the game, and a draw built on it could never be tested.
+            // Same reasoning as ShotSpread.NewRng.
+            return factor > 0f && BleedRng.NextDouble() < factor;
+        }
+
+        private static readonly System.Random BleedRng =
+            new System.Random(System.Environment.TickCount);
 
         /// <summary>Per-category toggle: you / PMC bots / the whole Savage side.</summary>
         public static bool CategoryOn(Player p, bool player, bool pmc, bool scav)

@@ -144,6 +144,12 @@ namespace PLATE.Client
         public static ConfigEntry<bool> OverlayLogHits;
         public static ConfigEntry<float> OverlayMaxFloatDistance;
 
+        // --- Survivability overrides (deliberately not physical) ---
+        public static ConfigEntry<bool> PreventPlayerDeath;
+        public static ConfigEntry<bool> LimbHitsCanKill;
+        public static ConfigEntry<float> PlayerBleedChance;
+        public static ConfigEntry<bool> PlayerOrganCrits;
+
         // --- Debug ---
         public static ConfigEntry<bool> TrackSelfHits;
         public static ConfigEntry<bool> SelfTestOnLoad;
@@ -196,6 +202,7 @@ namespace PLATE.Client
             const string sMat = "4. Armor materials";
             const string sOverlay = "5. Hit overlay (debug)";
             const string sDebug = "6. Debug";
+            const string sSurv = "7. Survivability (overrides the model)";
 
             // ===== 1. Modules =====
             BallisticsEnabled = Bind(sMod, "Ballistics", true,
@@ -622,6 +629,39 @@ namespace PLATE.Client
                 "Profile PLATE subsystems: [PLATE-PERF] lines every 5 s.", null, true);
             ConfigVersion = Bind(sDebug, "Config version (internal)", 1,
                 "Internal default-migration field — do not edit by hand.", null, true);
+
+            // ===== 7. Survivability =====
+            // Everything here overrides the physical model on purpose. The defaults leave
+            // the model alone; every other value is the player choosing to be harder to
+            // kill than the physics says, which is a legitimate thing to want and is kept
+            // in its own section so it is never mistaken for part of the model.
+            PreventPlayerDeath = Bind(sSurv, "Prevent death", false,
+                "Hits can no longer kill YOU: head and thorax never black out, each keeps " +
+                "at least 1 HP, and damage that would spill into them from a destroyed " +
+                "limb is trimmed to the same floor. Everything else stays — parts still " +
+                "take damage, limbs still black out, bleedings and fractures still happen. " +
+                "Death from blood loss is NOT covered by this: it has its own switch " +
+                "(\"Death from bleeding: Player\" in section 3), so turn that off too to " +
+                "be fully unkillable.");
+            LimbHitsCanKill = Bind(sSurv, "Limb hits can kill", true,
+                "Vanilla behaviour, and it applies to everyone — you and bots alike. " +
+                "Destroying an arm or a leg spills the excess damage over the surviving " +
+                "parts, which is how shot-off legs kill. Turn off and arms and legs stop " +
+                "being a route to death: they still take damage, black out, bleed and " +
+                "cripple, but nothing carries over from them into the torso or the head.");
+            PlayerBleedChance = Bind(sSurv, "Bleeding chance on hits to you", 1f,
+                "Multiplier on the chance that a hit ON YOU starts a bleeding — heavy, " +
+                "guaranteed light, and the internal ones from opened organs, destroyed " +
+                "parts and blast alike. 1 = the model's own chance, 0 = you never bleed " +
+                "from being shot. Does not touch bleedings already running, bots, or the " +
+                "blood you have already lost.",
+                new AcceptableValueRange<float>(0f, 1f));
+            PlayerOrganCrits = Bind(sSurv, "Critical organ hits on you", true,
+                "On (the model as designed): a channel through YOUR heart, liver or spinal " +
+                "cord is lethal or nearly so, and brain, jaw and neck carry their vital " +
+                "multipliers. Off: those hits deposit ordinary flesh damage and nothing " +
+                "else — no lethality, no multiplier. Organs still bleed when opened; that " +
+                "is the bleeding chance above, not this.");
 
             MigrateDefaults();
         }

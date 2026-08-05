@@ -328,6 +328,13 @@ namespace PLATE.Client.Patches
                     return;
                 }
 
+                // section 7: the guaranteed light bleeding is not a chance in the model,
+                // so the player's factor is rolled against it here
+                if (!PlateBloodManager.BleedRollPasses(player))
+                {
+                    return;
+                }
+
                 state.LastGuaranteedBleedAt[bodyPart] = Time.time;
                 __instance.DoBleed(false, bodyPart);
             }

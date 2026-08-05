@@ -309,7 +309,7 @@ namespace PLATE.Client.Patches
 
             var d = ClientWoundModel.Compute(mass, dia, v, x, coreMassFrac, chordMm, wound,
                 spread.NeckMm, spread.TissueScale);
-            var vital = VitalMult(bpc.BodyPartColliderType);
+            var vital = VitalMult(bpc.BodyPartColliderType, bpc.Player as Player);
             __instance.Damage = d.DamageHp * vital * DamageScale(bpc.Player as Player);
 
             // what the projectile actually travelled in here: the chord bounds it, but so
@@ -363,13 +363,22 @@ namespace PLATE.Client.Patches
             var swept = WoundBleeding.SweptMm2(volume, pathMm);
             var region = WoundBleeding.Region(bpc.BodyPartColliderType);
 
+            var victim = bpc.Player as Player;
             var chance = WoundBleeding.HeavyChance(region, swept, BleedTuning());
+
+            // section 7: the chance the model worked out, scaled by what the player asked
+            // for on themselves. It is already a probability, so this is a plain multiply
+            // and vanilla still rolls it.
+            var factor = Blood.PlateBloodManager.BleedChanceFactor(victim);
+            chance *= factor;
+
             var before = info.HeavyBleedingDelta;
             info.HeavyBleedingDelta = chance;
 
-            Overlay.HitFeed.PushHit(bpc.Player as Player,
+            Overlay.HitFeed.PushHit(victim,
                 $"  bleed {region}: swept {swept:0} mm², " +
-                $"heavy {before * 100f:0.#}% -> {chance * 100f:0.#}%");
+                $"heavy {before * 100f:0.#}% -> {chance * 100f:0.#}%" +
+                (factor < 1f ? $" (x{factor:0.00} yours)" : ""));
         }
 
         private static WoundBleeding.Tuning BleedTuning()
@@ -453,6 +462,16 @@ namespace PLATE.Client.Patches
             var head = $"  ZONE {hit.Name} ({hit.Where}): PC {hit.PathMm:0}/{hit.NeedMm:0} mm" +
                        (hit.ToZoneMm > 1f ? $" from {hit.ToZoneMm:0} mm in" : "") +
                        (hit.Through ? " deep" : "");
+
+            // section 7: this target's organs deposit ordinary flesh damage and nothing
+            // more. The zone was still resolved and is still reported, and an opened
+            // organ still bleeds — that is the bleeding chance, not this switch.
+            if (!OrganCritsAllowed(victim))
+            {
+                Overlay.HitFeed.PushHit(victim, head + " -> crits off for this target");
+                OpenOrganBleed(victim, bpc, hit, spread);
+                return;
+            }
 
             if (hit.Lethal)
             {
@@ -738,6 +757,12 @@ namespace PLATE.Client.Patches
                 PlateClientConfig.DamageScaleScav.Value);
         }
 
+        /// <summary>Survivability override (section 7) — see PlateBloodManager.</summary>
+        private static bool OrganCritsAllowed(Player victim)
+        {
+            return Blood.PlateBloodManager.OrganCritsAllowed(victim);
+        }
+
         // --- Absolute penetration from impact energy density ---
 
         /// <summary>
@@ -895,8 +920,14 @@ namespace PLATE.Client.Patches
         /// (15 ml = death), the neck carries major vessels, the jaw is severe but not
         /// brain-level.
         /// </summary>
-        private static float VitalMult(EBodyPartColliderType collider)
+        private static float VitalMult(EBodyPartColliderType collider, Player victim)
         {
+            // section 7: the player asked for their own head and neck to be ordinary meat
+            if (!OrganCritsAllowed(victim))
+            {
+                return 1f;
+            }
+
             switch (collider)
             {
                 case EBodyPartColliderType.Eyes:

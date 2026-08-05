@@ -72,6 +72,12 @@ namespace PLATE.Client
                     "in F12 or disable BloodGlobals in the server config.jsonc.");
             }
 
+            // Survivability overrides (section 7). Applied whatever the modules are set
+            // to — they override the game as much as they override PLATE — and always,
+            // rather than only when something is off-default, so that flipping a switch
+            // in F12 takes effect the way every other setting in the mod does.
+            SurvivabilityPatches.Apply(HarmonyInstance);
+
             // Hit overlay
             if (PlateClientConfig.OverlayEnabled.Value)
             {

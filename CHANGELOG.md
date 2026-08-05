@@ -350,6 +350,26 @@ broken — results in combination with PLATE. Mods that overhaul the same system
   different from 0.10.0, that is a bug in the port, not a rebalance.
 - Installation path moved with the server: the server half now goes to
   `<SPT>\SPT_Runtime\user\mods\PLATE\` instead of `<SPT>\SPT\user\mods\PLATE\`.
+- **Survivability overrides (new section 7 in F12).** Four switches that deliberately
+  override the model for players who want to survive a raid the physics would have
+  ended. None of them is on by default, and at their defaults nothing in the sections
+  above behaves differently:
+  - *Prevent death* (off) — hits can no longer kill you: your head and thorax never
+    black out and each keeps at least 1 HP, including damage spilling into them from
+    a destroyed limb. Parts still take damage, limbs still black out, bleedings and
+    fractures still happen. Death from blood loss is not covered — that has its own
+    switch, "Death from bleeding: Player", so turn both off to be fully unkillable.
+  - *Limb hits can kill* (on, and this one applies to bots too) — vanilla spills the
+    excess damage from a destroyed arm or leg over the surviving parts, which is how
+    shot-off legs kill. Turn it off and limbs stop being a route to death for anyone:
+    they still take damage, black out, bleed and cripple, but nothing carries over
+    into the torso or head.
+  - *Bleeding chance on hits to you* (1.0) — scales the chance a hit on you starts a
+    bleeding, heavy, light and internal alike. At 0 you never bleed from being shot.
+    Bots are unaffected.
+  - *Critical organ hits on you* (on) — off, hits to your heart, liver, spinal cord,
+    brain, jaw and neck deposit ordinary flesh damage with no lethality and no vital
+    multiplier. An opened organ still bleeds; that is the chance above, not this.
 
 ### 0.10.0
 
