@@ -158,6 +158,7 @@ namespace PLATE.Client
         public static ConfigEntry<bool> LegacyInternalBleedPlayer;
         public static ConfigEntry<float> LegacyBleedRatePlayer;
         public static ConfigEntry<bool> LegacyFractureCollapsePlayer;
+        public static ConfigEntry<float> LegacyDamageScalePlayer;
 
         // --- Debug ---
         public static ConfigEntry<bool> TrackSelfHits;
@@ -168,7 +169,7 @@ namespace PLATE.Client
         public static ConfigEntry<int> ConfigVersion;
 
         /// <summary>Bump on every change to an existing setting's default.</summary>
-        private const int CurrentConfigVersion = 4;
+        private const int CurrentConfigVersion = 5;
 
         /// <summary>Shown on a key that only exists to be read once by a migration.</summary>
         private const string RetiredNote =
@@ -254,10 +255,9 @@ namespace PLATE.Client
                 "Superseded by the per-category damage scales below. Read once on update " +
                 "to seed them; editing it now does nothing.",
                 new AcceptableValueRange<float>(0.1f, 10f), true);
-            DamageScalePlayer = Bind(sBal, "Damage scale: Player", 1.0f,
-                "Multiplier for flesh damage YOU take, computed by the physical model. " +
-                "1.0 = realism as calibrated; below — bullet-sponge mode, above — for maniacs.",
-                new AcceptableValueRange<float>(0.1f, 10f));
+            // "Damage scale: Player" is bound in section 7 with the rest of what keeps
+            // you alive; the retired pair it moved from is bound further down so the v5
+            // migration can read it
             DamageScalePmc = Bind(sBal, "Damage scale: PMC", 1.0f,
                 "Same for PMC bots (USEC/BEAR).",
                 new AcceptableValueRange<float>(0.1f, 10f));
@@ -648,6 +648,11 @@ namespace PLATE.Client
                 "take damage, limbs still black out, bleedings and fractures still happen. " +
                 "Death from blood loss is NOT covered by this: that is \"Death from " +
                 "bleeding: Player\" below, so turn that off too to be fully unkillable.");
+            DamageScalePlayer = Bind(sSurv, "Damage scale: Player", 1.0f,
+                "Multiplier for flesh damage YOU take, computed by the physical model. " +
+                "1.0 = realism as calibrated; below — bullet-sponge mode, above — for " +
+                "maniacs. The PMC and Scav halves of this group are in section 2.",
+                new AcceptableValueRange<float>(0.1f, 10f));
             DeathForPlayer = Bind(sSurv, "Death from bleeding: Player", true,
                 "Death from blood loss for YOU. When off: blood pressure drops to 0% and " +
                 "hangs at the threshold with all the debuffs, but death never occurs. " +
@@ -689,6 +694,8 @@ namespace PLATE.Client
                 RetiredNote, new AcceptableValueRange<float>(0f, 10f), true);
             LegacyFractureCollapsePlayer = Bind(sBlood, "Fracture collapse: Player", true,
                 RetiredNote, null, true);
+            LegacyDamageScalePlayer = Bind(sBal, "Damage scale: Player", 1.0f,
+                RetiredNote, new AcceptableValueRange<float>(0.1f, 10f), true);
 
             PlayerOrganCrits = Bind(sSurv, "Critical organ hits on you", true,
                 "On (the model as designed): a channel through YOUR heart, liver or spinal " +
@@ -807,6 +814,18 @@ namespace PLATE.Client
                 Migrate(InternalBleedPlayer, true, LegacyInternalBleedPlayer.Value);
                 Migrate(BleedRatePlayer, 1f, LegacyBleedRatePlayer.Value);
                 Migrate(FractureCollapsePlayer, true, LegacyFractureCollapsePlayer.Value);
+            }
+
+            // v5: "Damage scale: Player" followed them out of "2. Ballistics". Its own
+            // block rather than folded into v4 — a cfg that already reached 4 would skip
+            // the move and quietly reset the knob.
+            //
+            // Runs after v3, which seeds this same entry from the retired single "Damage
+            // scale". No conflict: Migrate only writes over a value still sitting on the
+            // old default, so whichever of the two had something to say keeps it.
+            if (ConfigVersion.Value < 5)
+            {
+                Migrate(DamageScalePlayer, 1f, LegacyDamageScalePlayer.Value);
             }
 
             ConfigVersion.Value = CurrentConfigVersion;

@@ -66,10 +66,12 @@ namespace PLATE.Tests
         }
 
         /// <summary>
-        /// The four ": Player" knobs that moved out of "3. Blood &amp; trauma" in v4 are
-        /// bound where the reorganisation put them, and the retired keys they moved from
-        /// are still bound in the old section — that read is the only thing standing
-        /// between an upgrading player and a silently reset tuning.
+        /// The ": Player" knobs that moved into section 7 are bound where the
+        /// reorganisation put them, and each retired key they moved from is still bound
+        /// in the section it came from — that read is the only thing standing between an
+        /// upgrading player and a silently reset tuning. The old section is pinned per
+        /// key: four came from "3. Blood &amp; trauma" (v4) and the damage scale from
+        /// "2. Ballistics" (v5).
         /// </summary>
         [Fact]
         public void Moved_player_knobs_can_still_read_their_old_home()
@@ -82,20 +84,30 @@ namespace PLATE.Tests
                 PlateClientConfig.InternalBleedPlayer,
                 PlateClientConfig.BleedRatePlayer,
                 PlateClientConfig.FractureCollapsePlayer,
+                PlateClientConfig.DamageScalePlayer,
             })
             {
                 Assert.StartsWith("7.", entry.Definition.Section);
             }
 
-            foreach (var legacy in new ConfigEntryBase[]
+            var cameFrom = new (ConfigEntryBase Legacy, string Section, string Key)[]
             {
-                PlateClientConfig.LegacyDeathForPlayer,
-                PlateClientConfig.LegacyInternalBleedPlayer,
-                PlateClientConfig.LegacyBleedRatePlayer,
-                PlateClientConfig.LegacyFractureCollapsePlayer,
-            })
+                (PlateClientConfig.LegacyDeathForPlayer, "3. Blood & trauma",
+                    "Death from bleeding: Player"),
+                (PlateClientConfig.LegacyInternalBleedPlayer, "3. Blood & trauma",
+                    "Internal bleeding: Player"),
+                (PlateClientConfig.LegacyBleedRatePlayer, "3. Blood & trauma",
+                    "Bleed rate: Player"),
+                (PlateClientConfig.LegacyFractureCollapsePlayer, "3. Blood & trauma",
+                    "Fracture collapse: Player"),
+                (PlateClientConfig.LegacyDamageScalePlayer, "2. Ballistics",
+                    "Damage scale: Player"),
+            };
+
+            foreach (var (legacy, section, key) in cameFrom)
             {
-                Assert.Equal("3. Blood & trauma", legacy.Definition.Section);
+                Assert.Equal(section, legacy.Definition.Section);
+                Assert.Equal(key, legacy.Definition.Key);
             }
 
             // it changes how a destroyed limb behaves for bots too, so it is not a

@@ -355,11 +355,11 @@ broken — results in combination with PLATE. Mods that overhaul the same system
   override the model for players who want to survive a raid the physics would have
   ended; the fourth applies to bots too and lives with the rest of the trauma rules
   in section 3. None is on by default, and at their defaults nothing behaves
-  differently from before. Four knobs that already existed moved into the new section
-  from "3. Blood & trauma" — *Death from bleeding: Player*, *Internal bleeding:
-  Player*, *Bleed rate: Player* and *Fracture collapse: Player*; their PMC and Scav
-  halves stayed behind. If you had tuned any of them, your value is carried across on
-  first launch, not reset.
+  differently from before. Five knobs that already existed moved into the new section:
+  *Death from bleeding: Player*, *Internal bleeding: Player*, *Bleed rate: Player* and
+  *Fracture collapse: Player* from "3. Blood & trauma", and *Damage scale: Player*
+  from "2. Ballistics". Their PMC and Scav halves stayed behind. If you had tuned any
+  of them, your value is carried across on first launch, not reset.
   - *Prevent death* (off) — hits can no longer kill you: your head and thorax never
     black out and each keeps at least 1 HP, including damage spilling into them from
     a destroyed limb. Parts still take damage, limbs still black out, bleedings and
