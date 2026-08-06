@@ -10,7 +10,7 @@ public record PlateModMetadata : IModMetadata
     public string Name { get; init; } = "P.L.A.T.E.";
     public string Author { get; init; } = "anamelash";
     public List<string>? Contributors { get; init; }
-    public SemanticVersioning.Version Version { get; init; } = new("1.0.0");
+    public SemanticVersioning.Version Version { get; init; } = new("1.1.0");
     public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.0");
     // No prepatcher: PLATE extends no Core enum, everything it changes it changes at
     // runtime through the database and Harmony.

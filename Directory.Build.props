@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <PlateVersion>1.0.0</PlateVersion>
+    <PlateVersion>1.1.0</PlateVersion>
     <Version>$(PlateVersion)</Version>
     <LangVersion>latest</LangVersion>
     <Deterministic>true</Deterministic>

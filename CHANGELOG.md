@@ -316,6 +316,23 @@ which is what makes a tourniquet applied late still worth applying.
 
 ## Quality of life
 
+- **Blood volume is readable on screen.** Vanilla has no indication of blood loss
+  at all, because vanilla has no blood: the panel is a drop, the volume, and the
+  ATLS tier you are currently in, with the loss rate underneath it while
+  something is actually draining. It is built out of the game's own interface
+  font and sits where you put it. You choose whether the volume reads in
+  millilitres or as a percentage, and what the zero of the scale means — the
+  whole body, where a full 5000 ml is full and death arrives around 2500, or
+  only the blood that can actually be lost, where zero *is* the death point and
+  a healthy body reads 2500 ml or 100%. The first is the more honest number, the
+  second the more honest gauge of how much trouble you are in.
+  - The panel can also count down the seconds to the next hypovolemia tier and
+    to bleeding out. That one is **off by default**, on purpose: it is an
+    affordance no person has. Blood loss is not a quantity a casualty perceives,
+    and a clinician grades shock from pulse, blood pressure and mental state
+    rather than predicting a clock — badly, at that. Showing a volume at all is
+    the ordinary licence of a status indicator; a countdown is a prediction the
+    character could not make, so the mod does not hand it out unasked.
 - F12 menu holds the gameplay-level settings, including a **damage scale** and a
   **bleed rate** multiplier (from bullet-sponge to instant-kill for the curious),
   set separately for you, PMC bots and Savage-side NPCs — so "I want a fair fight
@@ -336,6 +353,44 @@ broken — results in combination with PLATE. Mods that overhaul the same system
 (Fika) is untested.
 
 ## Release history
+
+### 1.1.0
+
+- **Nothing about the physics changed.** No formula, constant or calibration anchor
+  moved in this release. It is the blood readout and the settings around it.
+- **The blood indicator is a panel instead of a text label.** Up to 1.0.0 the volume
+  was a line of text pinned to the bottom-left corner — `BP 100%` — in a font that
+  was not the game's, at a size that did not follow your resolution, ignoring
+  anything you might have wanted to do about where it sat. It is now a proper
+  interface element: a drop, the volume, the ATLS tier, and the loss rate on a
+  second line while blood is actually leaving. It uses the game's own font and
+  scales with the screen, so the same position lands in the same place at any
+  resolution.
+- **New F12 section, "8. HUD".** *Show HUD* moved here from "3. Blood & trauma",
+  where it was called *Blood HUD*; if you had switched it off, it stays off. New
+  next to it:
+  - *Horizontal offset* / *Vertical offset* / *Scale* — where the panel sits and how
+    big it is, applied live while you drag them.
+  - *Units* — millilitres (`4500/5000 ml`) or percent (`90%`).
+  - *Range* — what zero means. *FullVolume* counts the whole body, so the reading
+    never approaches zero because death arrives around half of it. *UsableVolume*
+    counts only the blood that can be lost: zero is the death point and a healthy
+    body reads `2500 ml` or `100%`.
+  - *Blood loss rate* (on) — the second line, in ml/s.
+  - *Time estimate* (**off**) — seconds remaining to the next tier, or to bleeding
+    out at tier 3. Deliberately not on by default; the reasoning is under
+    [Quality of life](#quality-of-life) and in the description in F12. If you had it
+    on from the day it appeared, it switches off on first launch — it never shipped
+    in a release before this one.
+  - In the config file next to the mod, for people who want them: the hue and
+    saturation of the drop, the canvas sorting order, the gap between the lines, how
+    often the second line refreshes, and a font override.
+- **The panel now arrives with the vanilla HUD**, not several seconds earlier on the
+  deploy screen while you are still waiting for your character.
+- **GamePanelHUD can be installed alongside.** The two share no patches and no
+  objects, and the default positions do not overlap — PLATE's panel sits to the left
+  of where GamePanelHUD puts its health panel. If you move them onto each other,
+  move them apart again with the offsets above.
 
 ### 1.0.0
 
