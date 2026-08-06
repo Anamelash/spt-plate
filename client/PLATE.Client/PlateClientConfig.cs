@@ -756,8 +756,7 @@ namespace PLATE.Client
             HudOffsetX = Bind(sHud, "Horizontal offset", 24f,
                 "Distance from the left edge of the screen, in 1920x1080 units — the panel " +
                 "is scaled to the screen, so the same offset lands in the same place at " +
-                "any resolution. GamePanelHUD's own health panel sits at 250 by default, " +
-                "so the two do not overlap unless moved together.",
+                "any resolution.",
                 new AcceptableValueRange<float>(0f, 1920f));
             HudOffsetY = Bind(sHud, "Vertical offset", 64f,
                 "Distance from the bottom edge of the screen, in 1920x1080 units.",
@@ -793,9 +792,8 @@ namespace PLATE.Client
                 "Saturation of the re-coloured drop. 0 leaves it white whatever the hue.",
                 new AcceptableValueRange<float>(0f, 1f), true);
             HudSortingOrder = Bind(sHud, "Canvas sorting order", 1,
-                "1 puts the panel above the world and below the menus, which is where " +
-                "GamePanelHUD puts its own; raise it only if another mod's HUD covers " +
-                "this one.",
+                "1 puts the panel above the world and below the menus. Raise it only if " +
+                "another mod's HUD covers this one.",
                 new AcceptableValueRange<int>(0, 100), true);
             HudLineGap = Bind(sHud, "Line gap", 6f,
                 "Vertical gap between the readout and the time estimate under it.",

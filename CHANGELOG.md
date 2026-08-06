@@ -387,10 +387,6 @@ broken — results in combination with PLATE. Mods that overhaul the same system
     often the second line refreshes, and a font override.
 - **The panel now arrives with the vanilla HUD**, not several seconds earlier on the
   deploy screen while you are still waiting for your character.
-- **GamePanelHUD can be installed alongside.** The two share no patches and no
-  objects, and the default positions do not overlap — PLATE's panel sits to the left
-  of where GamePanelHUD puts its health panel. If you move them onto each other,
-  move them apart again with the offsets above.
 
 ### 1.0.0
 
