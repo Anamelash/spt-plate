@@ -81,6 +81,15 @@ namespace PLATE.Client.Blood
         /// </summary>
         public readonly float[] PendingExternalMl = new float[4];
         public float LastExternalDrainAt; // to pause passive regeneration
+
+        /// <summary>
+        /// Blood actually leaving the body, ml/s, smoothed. The open bleeds' rates do not
+        /// answer this on their own: they are throttled by hypotension and capped by
+        /// cardiac output, and external bleeding arrives in per-frame bursts. What the
+        /// HUD needs is what came out, so that is what is measured.
+        /// </summary>
+        public float DrainMlSec;
+
         public int Tier;                  // 0..3
         public float NextEffectRefresh;
         public float NextCrippleCheck;
@@ -156,6 +165,34 @@ namespace PLATE.Client.Blood
             var death = PlateClientConfig.DeathThreshold.Value;
             var frac = Mathf.Clamp01(s.Cur / s.Max);
             return Mathf.Clamp01((frac - death) / (1f - death)) * 100f;
+        }
+
+        /// <summary>
+        /// The next threshold below the current tier, as a fraction of maximum volume,
+        /// with the tag the HUD prints for it. Below tier 3 there is nothing left but the
+        /// death point, so that is what the countdown runs to.
+        /// </summary>
+        public static void NextThreshold(int tier, out float fraction, out string label)
+        {
+            switch (tier)
+            {
+                case 0:
+                    fraction = PlateClientConfig.ThresholdTier1.Value;
+                    label = "T1";
+                    return;
+                case 1:
+                    fraction = PlateClientConfig.ThresholdTier2.Value;
+                    label = "T2";
+                    return;
+                case 2:
+                    fraction = PlateClientConfig.ThresholdTier3.Value;
+                    label = "T3";
+                    return;
+                default:
+                    fraction = PlateClientConfig.DeathThreshold.Value;
+                    label = "OUT";
+                    return;
+            }
         }
 
         /// <summary>
@@ -571,6 +608,13 @@ namespace PLATE.Client.Blood
             // What actually came out, charged back to where it came from. Under the cap
             // every source is throttled equally, so the shares are the shares of the rate.
             AttributeDrain(s, applied, drain, mult);
+
+            // The same number as a rate, low-passed for the HUD: external bleeding lands
+            // in bursts, and an unsmoothed reading flickers between zero and a spike.
+            var tau = PlateClientConfig.HudRateSmoothing.Value;
+            var instant = dt > 1e-6f ? applied / dt : 0f;
+            var alpha = tau > 1e-3f ? 1f - Mathf.Exp(-dt / tau) : 1f;
+            s.DrainMlSec += (instant - s.DrainMlSec) * alpha;
 
             // passive regeneration: only after 5+ s with no external drain and no internal bleeding
             if (internalMlSec <= 0f && Time.time - s.LastExternalDrainAt > 5f && s.Cur < s.Max)

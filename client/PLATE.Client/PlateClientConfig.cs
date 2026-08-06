@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using BepInEx.Configuration;
 using EFT.InventoryLogic;
+using PLATE.Client.Blood;
 using UnityEngine;
 
 namespace PLATE.Client
@@ -128,7 +129,6 @@ namespace PLATE.Client
         public static ConfigEntry<float> BleedRatePmc;
         public static ConfigEntry<float> BleedRateScav;
         public static ConfigEntry<float> PassiveRegenMlMin;
-        public static ConfigEntry<bool> BloodHudVisible;
         public static ConfigEntry<bool> HeartbeatAtTier2;
         public static ConfigEntry<bool> FatigueAtTier2;
         public static ConfigEntry<bool> Tier3MovementBan;
@@ -160,6 +160,26 @@ namespace PLATE.Client
         public static ConfigEntry<bool> LegacyFractureCollapsePlayer;
         public static ConfigEntry<float> LegacyDamageScalePlayer;
 
+        // --- HUD (section 8) ---
+        public static ConfigEntry<bool> HudVisible;
+        public static ConfigEntry<float> HudOffsetX;
+        public static ConfigEntry<float> HudOffsetY;
+        public static ConfigEntry<float> HudScale;
+        public static ConfigEntry<bool> HudRateArrow;
+        public static ConfigEntry<bool> HudEta;
+        public static ConfigEntry<float> HudIconHue;
+        public static ConfigEntry<float> HudIconSaturation;
+        public static ConfigEntry<int> HudSortingOrder;
+        public static ConfigEntry<float> HudLineGap;
+        public static ConfigEntry<float> HudRateSmoothing;
+        public static ConfigEntry<string> HudFontName;
+        public static ConfigEntry<BloodUnits> HudUnits;
+        public static ConfigEntry<BloodRange> HudRange;
+        public static ConfigEntry<float> HudEtaRefresh;
+
+        // Retired with the section-8 move; read once by the v6 migration.
+        public static ConfigEntry<bool> LegacyBloodHudVisible;
+
         // --- Debug ---
         public static ConfigEntry<bool> TrackSelfHits;
         public static ConfigEntry<bool> SelfTestOnLoad;
@@ -168,8 +188,15 @@ namespace PLATE.Client
         public static ConfigEntry<bool> PerfTrace;
         public static ConfigEntry<int> ConfigVersion;
 
+        /// <summary>
+        /// The bound file. Live views subscribe to its SettingChanged so an F12 edit
+        /// lands the moment it is made, instead of every view polling every setting on
+        /// every frame to notice.
+        /// </summary>
+        public static ConfigFile Source => _cfg;
+
         /// <summary>Bump on every change to an existing setting's default.</summary>
-        private const int CurrentConfigVersion = 5;
+        private const int CurrentConfigVersion = 6;
 
         /// <summary>Shown on a key that only exists to be read once by a migration.</summary>
         private const string RetiredNote =
@@ -240,6 +267,7 @@ namespace PLATE.Client
             const string sOverlay = "5. Hit overlay (debug)";
             const string sDebug = "6. Debug";
             const string sSurv = "7. Player Survivability";
+            const string sHud = "8. HUD";
 
             // ===== 1. Modules =====
             BallisticsEnabled = Bind(sMod, "Ballistics", true,
@@ -510,8 +538,6 @@ namespace PLATE.Client
             Tier3MovementBan = Bind(sBlood, "Tier 3 sprint/jump ban", true,
                 "Hypovolemic shock: at tier 3 (ATLS class IV) sprinting and jumping are " +
                 "impossible until blood volume recovers above the threshold.");
-            BloodHudVisible = Bind(sBlood, "Blood HUD", true,
-                "BP (blood pressure) indicator at the bottom left of the screen.");
             BlastBarotrauma = Bind(sBlood, "Blast barotrauma", true,
                 "A close grenade blast gives a chance of internal bleeding from barotrauma " +
                 "(lungs/GI tract). Probability grows with blast wave damage.");
@@ -723,6 +749,73 @@ namespace PLATE.Client
                 "else — no lethality, no multiplier. Organs still bleed when opened; that " +
                 "is the bleeding chance above, not this.");
 
+            // ===== 8. HUD =====
+            HudVisible = Bind(sHud, "Show HUD", true,
+                "Blood readout on the screen: a copy of the vanilla Health-tab parameter " +
+                "row, showing current/maximum ml and the ATLS hypovolemia tier.");
+            HudOffsetX = Bind(sHud, "Horizontal offset", 24f,
+                "Distance from the left edge of the screen, in 1920x1080 units — the panel " +
+                "is scaled to the screen, so the same offset lands in the same place at " +
+                "any resolution. GamePanelHUD's own health panel sits at 250 by default, " +
+                "so the two do not overlap unless moved together.",
+                new AcceptableValueRange<float>(0f, 1920f));
+            HudOffsetY = Bind(sHud, "Vertical offset", 64f,
+                "Distance from the bottom edge of the screen, in 1920x1080 units.",
+                new AcceptableValueRange<float>(0f, 1080f));
+            HudScale = Bind(sHud, "Scale", 1f,
+                "Panel size multiplier.", new AcceptableValueRange<float>(0.4f, 3f));
+            HudUnits = Bind(sHud, "Units", BloodUnits.Milliliters,
+                "How the volume is written: absolute millilitres, or a percentage of the " +
+                "range set below.");
+            HudRange = Bind(sHud, "Range", BloodRange.FullVolume,
+                "What zero on the readout means. FullVolume: the whole body, so 5000 ml " +
+                "is full and death arrives around 2500 — the reading never goes near " +
+                "zero. UsableVolume: only the blood that can actually be lost, so zero " +
+                "IS the death point and full reads 2500 ml (or 100%). The second is the " +
+                "more honest gauge of how much trouble you are in; the first is the more " +
+                "honest number.");
+            HudRateArrow = Bind(sHud, "Blood loss rate", true,
+                "Second line: how fast blood is being lost, in ml/s.");
+            HudEta = Bind(sHud, "Time estimate", true,
+                "Second line: time left at the current rate until the next hypovolemia " +
+                "tier, or until bleeding out at tier 3.");
+
+            // --- 8. HUD (advanced — presentation constants) ---
+            HudIconHue = Bind(sHud, "Icon hue", 0f,
+                "Hue the donated hydration drop is re-coloured to, 0..1 around the colour " +
+                "wheel. 0 = red (blood), 0.58 = the vanilla blue.",
+                new AcceptableValueRange<float>(0f, 1f), true);
+            HudIconSaturation = Bind(sHud, "Icon saturation", 0.8f,
+                "Saturation of the re-coloured drop. 0 leaves it white whatever the hue.",
+                new AcceptableValueRange<float>(0f, 1f), true);
+            HudSortingOrder = Bind(sHud, "Canvas sorting order", 1,
+                "1 puts the panel above the world and below the menus, which is where " +
+                "GamePanelHUD puts its own; raise it only if another mod's HUD covers " +
+                "this one.",
+                new AcceptableValueRange<int>(0, 100), true);
+            HudLineGap = Bind(sHud, "Line gap", 6f,
+                "Vertical gap between the readout and the time estimate under it.",
+                new AcceptableValueRange<float>(0f, 40f), true);
+            HudFontName = Bind(sHud, "Font", "",
+                "Empty = the game's own interface font, found by counting which face most " +
+                "of the UI's text is set in. Set a name fragment to force a specific font " +
+                "asset instead; the names loaded are listed in LogOutput.log at raid start " +
+                "as 'HUD fonts in use'.", null, true);
+            HudEtaRefresh = Bind(sHud, "Second line refresh, s", 1f,
+                "How often the rate and the countdown are re-read. They are computed from " +
+                "a bleed rate that moves every frame, so refreshing every frame prints a " +
+                "number that jitters up and down and is harder to read than a slightly " +
+                "stale one. 0 = every frame.",
+                new AcceptableValueRange<float>(0f, 5f), true);
+            HudRateSmoothing = Bind(sHud, "Rate smoothing, s", 0.5f,
+                "Time constant for smoothing the displayed loss rate. Bleeding is applied " +
+                "in per-frame bursts, so the raw rate is unreadable; 0 shows it raw.",
+                new AcceptableValueRange<float>(0f, 5f), true);
+
+            // "Blood HUD" was section 3's until v6. Same (section, key) problem as the
+            // ": Player" moves above — bind the old pair so the migration can read it.
+            LegacyBloodHudVisible = BindRetired(sBlood, "Blood HUD", true);
+
             MigrateDefaults();
         }
 
@@ -850,6 +943,16 @@ namespace PLATE.Client
             if (ConfigVersion.Value < 5)
             {
                 Migrate(DamageScalePlayer, 1f, LegacyDamageScalePlayer.Value);
+            }
+
+            // v6: the on-screen readout grew from one label into a panel with a position,
+            // so its settings became section "8. HUD". Only the visibility toggle existed
+            // before the move and can carry a player's choice across; the rest are new.
+            // Its own block for the same reason v5 was: a cfg already at 5 would skip a
+            // move folded into an earlier one.
+            if (ConfigVersion.Value < 6)
+            {
+                Migrate(HudVisible, true, LegacyBloodHudVisible.Value);
             }
 
             ConfigVersion.Value = CurrentConfigVersion;

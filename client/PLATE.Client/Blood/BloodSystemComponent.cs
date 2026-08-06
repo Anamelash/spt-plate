@@ -13,7 +13,7 @@ namespace PLATE.Client.Blood
         private bool _synced;
         private string _mainId;
         private float _nextScan;
-        private GUIStyle _hudStyle;
+        private readonly BloodHudView _hud = new BloodHudView();
 
         private void Update()
         {
@@ -38,6 +38,8 @@ namespace PLATE.Client.Blood
                     _synced = false;
                     _mainId = null;
                     PlateBloodManager.Clear();
+                    _hud.Destroy();
+                    _controlLogged = false;
                 }
 
                 return;
@@ -75,61 +77,54 @@ namespace PLATE.Client.Blood
             var t = PerfTrace.Begin();
             PlateBloodManager.TickAll(Time.deltaTime);
             PerfTrace.End("blood.tickall", t);
+
+            var th = PerfTrace.Begin();
+            _hud.Build();
+            _hud.Tick(InControl() ? PlateBloodManager.Get(_mainId) : null);
+            PerfTrace.End("blood.hud", th);
+
             PerfTrace.Report(Time.time);
         }
 
-        private void OnGUI()
+        private bool _controlLogged;
+
+        /// <summary>
+        /// Whether the player actually has their character, rather than watching the
+        /// deploy screen with the world already built around them. The blood state
+        /// exists from the moment the world does, which is several seconds too early to
+        /// put a panel on screen.
+        ///
+        /// The raid timer is what says so. Neither of the two obvious candidates does:
+        /// on the deploy screen the game already reports InRaid=True and Status=Running,
+        /// while GameTimer.StartDateTime is still unset — it is only stamped when the
+        /// raid actually starts, which is the same moment the vanilla HUD fades in.
+        ///
+        /// An absent session object is treated as "in control": the panel not showing at
+        /// all is a worse failure than showing a few seconds early, and this is a display
+        /// gate rather than anything the model depends on.
+        /// </summary>
+        private bool InControl()
         {
-            if (!_inRaid || !PlateClientConfig.BloodEnabled.Value ||
-                !PlateClientConfig.BloodHudVisible.Value)
+            var game = Singleton<AbstractGame>.Instance;
+            if (game == null)
             {
-                return;
+                return true;
             }
 
-            var tg = PerfTrace.Begin();
-            try
+            var timer = game.GameTimer;
+            if (!game.InRaid || timer == null || !timer.StartDateTime.HasValue)
             {
-                DrawHud();
-            }
-            finally
-            {
-                PerfTrace.End("blood.hud", tg);
-            }
-        }
-
-        private void DrawHud()
-        {
-
-            var gw = Singleton<GameWorld>.Instance;
-            var me = gw?.MainPlayer;
-            if (me == null)
-            {
-                return;
+                return false;
             }
 
-            var s = PlateBloodManager.Get(me.ProfileId);
-            var frac = s != null ? s.Cur / s.Max : 1f;
-            var bp = s != null ? PlateBloodManager.PressurePct(s) : 100f;
-
-            _hudStyle ??= new GUIStyle(GUI.skin.label)
+            if (!_controlLogged)
             {
-                fontSize = 13,
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleLeft,
-            };
+                _controlLogged = true;
+                Plugin.Log.LogInfo($"[PLATE] HUD shown: InRaid={game.InRaid}, " +
+                                   $"status={game.Status}, timer={timer.StartDateTime}");
+            }
 
-            var color = frac > 0.85f ? new Color(0.85f, 0.9f, 0.85f)
-                : frac > 0.7f ? new Color(1f, 0.85f, 0.5f)
-                : frac > 0.6f ? new Color(1f, 0.55f, 0.3f)
-                : new Color(1f, 0.25f, 0.25f);
-
-            var text = $"BP {bp:0}%";
-            var rect = new Rect(12f, Screen.height - 96f, 260f, 20f);
-            GUI.color = new Color(0f, 0f, 0f, 0.8f);
-            GUI.Label(new Rect(rect.x + 1, rect.y + 1, rect.width, rect.height), text, _hudStyle);
-            GUI.color = color;
-            GUI.Label(rect, text, _hudStyle);
-            GUI.color = Color.white;
+            return true;
         }
     }
 }
