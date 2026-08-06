@@ -196,7 +196,7 @@ namespace PLATE.Client
         public static ConfigFile Source => _cfg;
 
         /// <summary>Bump on every change to an existing setting's default.</summary>
-        private const int CurrentConfigVersion = 6;
+        private const int CurrentConfigVersion = 7;
 
         /// <summary>Shown on a key that only exists to be read once by a migration.</summary>
         private const string RetiredNote =
@@ -776,9 +776,13 @@ namespace PLATE.Client
                 "honest number.");
             HudRateArrow = Bind(sHud, "Blood loss rate", true,
                 "Second line: how fast blood is being lost, in ml/s.");
-            HudEta = Bind(sHud, "Time estimate", true,
+            HudEta = Bind(sHud, "Time estimate", false,
                 "Second line: time left at the current rate until the next hypovolemia " +
-                "tier, or until bleeding out at tier 3.");
+                "tier, or until bleeding out at tier 3. Off by default because nobody " +
+                "can do this for themselves — a casualty cannot measure their own blood " +
+                "loss, and even a clinician grades shock from pulse and mental state " +
+                "rather than predicting a clock. It is a game affordance, not something " +
+                "the model claims a person would know.");
 
             // --- 8. HUD (advanced — presentation constants) ---
             HudIconHue = Bind(sHud, "Icon hue", 0f,
@@ -953,6 +957,16 @@ namespace PLATE.Client
             if (ConfigVersion.Value < 6)
             {
                 Migrate(HudVisible, true, LegacyBloodHudVisible.Value);
+            }
+
+            // v7: the HUD's time estimate is off by default. It is an affordance no
+            // person has — a casualty cannot measure their own blood loss — so it stops
+            // being something the mod hands out without being asked. Its own block, for
+            // the same reason as v5: a config already at 6 would skip an addition folded
+            // into an earlier one.
+            if (ConfigVersion.Value < 7)
+            {
+                Migrate(HudEta, true, false);
             }
 
             ConfigVersion.Value = CurrentConfigVersion;
