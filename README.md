@@ -1,5 +1,15 @@
 # P.L.A.T.E. — Penetration, Lethality, Armor & Trauma Engine
 
+> **Note on the Forge**
+>
+> I was banned from the Forge website and its Discord community after
+> submitting a good-faith complaint about targeted harassment and the public
+> reposting of my responses. The moderators' handling of the situation was
+> unacceptable.
+>
+> This will not end the project. I will continue to maintain and develop it
+> here: releases and issues live in this repository.
+
 A physics-driven overhaul of terminal ballistics, armor and trauma for SPT 4.1
 (EFT 0.16.9.40087):
 
