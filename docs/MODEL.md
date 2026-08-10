@@ -401,9 +401,57 @@ thin-plate flow — and one constant cannot carry both regimes. That is the mild
 shape test's remaining red, deeper than any wearable plate, closable by a
 confinement term with data behind it.
 
-The hardness ratio is the term that separates a mild steel core from a hardened
-one out of the same cartridge case: a core softer than the plate upsets on the
-face and stops being a punch.
+Measured against the two ladders, model over published:
+
+| `T/d` | 0.62 | 0.79 | 1.05 | 1.31 | 1.57 | 1.84 | 2.10 | 2.62 | 3.28 |
+|---|---|---|---|---|---|---|---|---|---|
+| plug (RHA) | | 0.98 | 0.98 | 1.01 | 1.01 | 1.01 | 1.01 | | |
+| flow (mild) | 1.07 | 1.09 | | 1.07 | 1.05 | | 1.02 | **0.89** | **0.86** |
+
+Two things follow, and the second bounds the first. The flow law drifts steadily
+from +9% to −14% and breaks between 2.10 and 2.62, which is the confinement
+above. But the plug law holds to 3.8% across its whole ladder — so a plate that
+plugs is not affected by any of this, and no wearable steel or titanium plate is
+in the flow regime at all. The open shape problem is real and it is not what
+decides whether armour in this game stops a bullet.
+
+**The hardness term is a decision before it is a curve: what happened to the
+core.** One clamped power of the plate-over-core hardness ratio used to do every
+job at once, and three vest passports refuted it with a sign pattern no ratio
+curve can produce. The same titanium vest (6B3TM) was under-credited against the
+mild PS core — its passport holds that round, and the model needed a factor above
+1 at a ratio below 1, which a power of the ratio cannot say — and over-credited
+against lead, whose SVD round the same passport sends through the chest. The 6B23
+was under-credited against tungsten carbide: a factor of 0.41 demanded at a ratio
+where the RHA ladder pins 0.32, so the term cannot even be monotone in the ratio.
+Three fates, each with its own physics:
+
+- **Rigid** — a quenched core (above `DeformCoreMaxHv`, ≈45 HRC) or any core the
+  plate cannot stress to its yield. The contest is whether the plate's shear band
+  or the core gives way first: `clamp((HV_p/HV_c)^1.96, 0.30, 2.08)`, exponent,
+  floor, ceiling and the RHA-ladder derivation unchanged.
+- **Deformed** — a softer core dies on the face when the contact stress reaches
+  its own strength: Taylor's rigidity criterion in two-material form,
+  `½ρ_plate·v² + q·Y_plate ≥ Y_core`, with `Y = 3.27·HV` (Tabor's constraint
+  factor, pinned by 44S's published pair: 613 HV against 2000–2100 MPa yield) and
+  `q = DeformPlateSupport` the plate's supported share. Velocity is in the
+  criterion and the corpus shows it belongs there: the same construction-steel
+  family is rigid at 335 m/s out of a PM and dead at 720 out of an AKM. A dead
+  core loads the plate as spread mass over more than its own calibre:
+  `clamp((HV_p/HV_c)^0.33, 1.05, 2.08)` — never below `DeformFloor`, growing
+  shallowly, capped by the same ceiling the AR500 certificate pins.
+- **Shattered** — a brittle core (above `BrittleCoreMinHv`; carbides and
+  ceramics, no steel) cracks on a face hard enough, `HV_p/HV_c ≥ ShatterRatio`,
+  and rubble is spread mass exactly as a mushroomed slug is: the dead-core factor
+  covers both deaths. The 6B23 certificate is the anchor — 613 HV of 44S turning
+  back the 7N24's 1300 HV VK-8 — and titanium at a ratio of 0.27 stays under it,
+  which keeps the 7N24 the titanium-killer nothing in the corpus contradicts.
+
+What the rework bought, on the evidence that demanded it: all three vest-passport
+gates hold (the 6B23 stops the 7N24 it is certified against with no recorded
+shortfall left; the 6B3TM holds the mild PS and is pierced by the SVD, both per
+its passport), and nothing else in the corpus moved — the RHA ladder, the pistol
+rungs, the AR500 anchor and every certified product read exactly as before.
 
 **The fibre mode, and the two datasets that disagree about it.** Fibre used to be
 the one failure mode with no published ladder at all — its constant came off two
@@ -759,7 +807,44 @@ now; a proper ICP state with its own timeline and blackout is a TODO.
 
 Any penetrating wound above a damage threshold bleeds, bypassing the vanilla
 probability roll — a hole in you is a hole blood comes out of. Fractures come from
-actual bone hits with energy behind them rather than from a damage-number lottery.
+actual bone hits with energy behind them rather than from a damage-number lottery:
+
+```
+P(fracture) = clamp01( P(bone | limb segment) · ramp · multipliers )
+ramp        = clamp01((E − E_min)/(E_full − E_min))
+```
+
+The bone term is per segment, because a femur and a tibia are not equally exposed,
+and it is the same roll that decides whether the bullet stopped in the limb — a
+round arrested by a femur and a broken femur are one event, not two dice. That
+sharing is why the term is not free to be tuned for fractures alone: halve it and
+limbs overpenetrate more often by exactly the same factor. It is one number
+answering one physical question, and both consequences follow from it.
+
+It is also the least anchored quantity in this section. It stands on the cross
+section a long bone takes up in a limb rather than on any published series, and it
+spent the mod's whole history unexercised — the fracture roll never reached it, so
+nothing it produced was ever seen. The figures shipped today are half what they
+were when they were first written down, on the evidence of the first raids in which
+they did anything at all. What would replace the estimate: a gelatin or cadaveric
+series reporting bone involvement per limb segment.
+
+The outer clamp is not decoration. The ramp saturates at a few hundred joules, so
+above that every multiplier on top of it — the one for a wrecked limb, the ones per
+side — is pushing against a probability that is already 1. Rifle energies therefore
+break the bone they find whatever those are set to, and the multipliers only bite in
+the ramp's own range, which in practice means handgun and fragment hits. Where they
+should bite is a question about `E_full`, not about them.
+
+**A blacked-out limb is wrecked, not absent.** It has stopped doing its job; it has
+not left the body, and nobody carries it to the surgeon separately. So it goes on
+bleeding, and it goes on breaking — with a *higher* chance than a sound one, since
+the bone in it has already been struck and the tissue that was bracing it is gone.
+The game takes the other reading and refuses to fracture such a limb at all, so
+this is a deliberate departure: the multiplier is a config parameter, and the
+effect is added through the same call the game uses, only without that one guard.
+A limb still above zero goes through the game's own path unchanged, so the
+departure is confined to the case the game would have refused.
 
 Whether it bleeds *badly* is decided by what the channel crossed, not by what was
 fired. A round does not carry a bleeding rate around with it: it cuts whatever was
@@ -848,6 +933,13 @@ fraction only when the core is hard enough to keep its shape against a plate. Th
 line runs between the M855 and the M855A1: same case, same 62 grains, same calibre,
 but 40 HRC of steel tip upsets on the face of the panel and 58 HRC does not.
 
+The book can also override the **mass**, which it otherwise takes from the card.
+That exists for one shape of cartridge: a sabot round leaves the barrel as its
+penetrator alone, so a card listing the whole projectile at the velocity only the
+penetrator reaches describes something that never arrives — and it shows up as an
+energy the case cannot deliver. The mass that belongs there follows from the two
+figures that do hold: the calibre's own service energy and the stated velocity.
+
 For cartridges the book does not name — modded ammunition, mostly — `X` is inferred
 as a percentile blend within the caliber cohort (specific damage positive, specific
 penetration negative; the vanilla fragmentation chance used to be a third component
@@ -916,13 +1008,11 @@ against the shipped values):
    titanium's own ladder point are then checks, not inputs.
 2. `HoleGrowthK` from the mild-steel ladder — which identified it only as a
    bound; see "The ballistic limit" for what that ladder's shape actually says.
-3. The hardness exponent from what separates hard plate from mild against the
-   same core — and, new with the measured core, its two **bounds** from the only
-   evidence that speaks to them. Every ladder in the fixture is an AP core, so the
-   ladders say nothing about a lead bullet against a hard plate (the ceiling,
-   **2.08**) or a hardened core against a soft plate (the floor, 0.30, anchored on
-   a 7N21 against aluminium and bounded above by the RHA ladder's own factor, past
-   which a softer plate would out-earn a harder one).
+3. The hardness term, in two halves along the core's fate (see "The ballistic
+   limit"). The **rigid** half keeps its whole derivation: the exponent from what
+   separates hard plate from mild against the same core, the floor (0.30,
+   anchored on a 7N21 against aluminium and bounded above by the RHA ladder's own
+   factor, past which a softer plate would out-earn a harder one), the ceiling.
 
    The ceiling was 4.5 and its anchor was **circular**: the two steel pistol rungs
    it stood on are *computed*, solved from their own class's cartridge at this very
@@ -936,11 +1026,61 @@ against the shipped values):
    `FibrousK` sits on its own. At 4.5 the same plate read 47% over its certificate,
    and 6.5 mm of titanium stopped a .50 BMG. The two computed pistol rungs were
    re-solved at the new clamp: 1.3 → 1.9 mm and 1.7 → 2.5 mm.
+
+   The **dead-core** half is new, and every one of its constants is a window the
+   corpus pins from two sides, with the value sitting inside and CalibrationTests
+   probing both walls:
+
+   - `DeformCoreMaxHv` **480**, window (390, 570): the pre-1989 PS core deforms
+     on titanium (6B3TM passport) and the 570 HV M2 AP is rigid through the
+     whole RHA ladder, top rows included — which is also what keeps the ladder
+     deriving one constant, since a mid-ladder branch flip would tear the
+     per-row solutions apart.
+   - `DeformPlateSupport` **0.14**, window [0.096, 0.199): below it titanium's
+     stagnation pressure alone is 109 MPa short of crushing the PS core at
+     720 m/s; at the top the 9x18's 250 HV core would die on a Бр1 panel at
+     335 m/s and the Бр1/Бр2 rungs stop being distinguishable.
+   - `DeformSpreadExponent` **0.33**, window [0.323, 0.405]: the smallest value
+     at which M80 still drives the AR500 certificate up to the ceiling it pins,
+     bounded above where the 6B3TM would start stopping the SVD its passport
+     sends through. Sits just over its own floor, as the ceiling sits on the
+     AR500's.
+   - `DeformFloor` **1.05**: a core that dies on the face loads the plate over
+     more than its calibre, never less — 1.0 is the physical floor, and the
+     6B3TM passport demands 1.035; it sits just above.
+   - `BrittleCoreMinHv` **1000**: a material bound, not a fit — hardened tool
+     steels end near 800 HV and the space above belongs to carbides and
+     ceramics, which fail by fracture.
+   - `ShatterRatio` **0.47**: a hair inside the one documented shatter, the 6B23
+     certificate's 613/1300. One-sided — it says this ratio suffices and nothing
+     about softer plates.
+
+   What would close the windows properly is the experiment that varies core
+   hardness against one plate: Anderson, Hohler, Walker & Stilp, "The influence
+   of projectile hardness on ballistic performance", *Int. J. Impact Eng.* 22(6)
+   1999 — 17 penetrator materials, one target, V50 each. No accessible copy
+   exists; its published conclusion (effectiveness rises monotonically with
+   hardness over 200–750 HV) is consistent with a threshold in the window but
+   does not place it.
 4. `BrittleK` from the bare-tile DOP point read one-sided ("the limit is at or
    above the velocity fired"), with the ceramic certificates pinning where in
-   the tile's band the constant sits. Since the backing became its own layer,
-   the tile and the certificates agree — the 2.5× they used to disagree by was
-   the backing's work hiding inside the constant.
+   the tile's band the constant sits — **0.98**, the smallest value at which
+   every certified ceramic product without a recorded shortfall holds its class
+   at the criterion the tests enforce (zero-of-five), the Бр4 Granit against
+   the 7N10 binding. Since the backing became its own layer, the tile and the
+   certificates agree — the 2.5× they used to disagree by was the backing's
+   work hiding inside the constant.
+
+   Two rules the value's history taught. The requirement is read at the
+   *enforced* criterion, not the bare test velocity: the old 1.04 was derived
+   at bare velocity, agreed with enforcement by coincidence, and outlived its
+   own justification the day the backing data improved. And only products
+   without recorded shortfalls may demand anything — a recorded miss is a
+   documented gap (the erosion term, 3.2), and letting it bid would push the
+   constant up to hide the very physics its entry documents. Re-deriving also
+   re-measured every ceramic allowance: the backing fixes had left up to 13%
+   of hidden head-room inside them, room a regression could have crossed
+   unseen.
 5. `FibrousK` on the certificates it has to satisfy, read as a floor rather than
    a fit — 28.8, with the sewn Бр2 package binding. It is no longer the mode with
    no ladder: ten para-aramid points now sit under it and derive 23.1, and the
@@ -1006,9 +1146,10 @@ third, separate knob.
 - **The survivability overrides are not part of the model at all.** Four switches
   let a player be harder to kill than the physics says: a floor of 1 HP under their
   own head and thorax, a multiplier on the chance a hit on them starts a bleeding,
-  and their own critical organ and vital-zone damage turned off (config section 7,
-  "Player Survivability"), plus arms and legs removed as a route to death for
-  everyone (section 3, since it changes bots too). Nothing here is derived from
+  a multiplier on the chance a bullet breaks one of their bones, and their own
+  critical organ and vital-zone damage turned off (config section 7, "Player
+  Survivability"), plus arms and legs removed as a route to death for everyone
+  (section 3, since it changes bots too). Nothing here is derived from
   anything, and none of it is on by default — the defaults leave every formula
   below untouched. They exist because wanting to survive a raid is a
   legitimate thing to want, and the honest way to give it is a labelled switch
@@ -1044,6 +1185,31 @@ third, separate knob.
   distinguish. It is removed rather than kept decorative. What would bring it
   back: one ceramic tile shot against cores of two hardnesses (a lead-cored ball
   and an AP of the same calibre), giving the two points the exponent needs.
+- **The shatter gap.** A brittle core's fracture is a shock phenomenon and real
+  carbide cores survive slow impacts that would shatter them at speed — so a
+  correctly modelled 7N24 would have a band of velocities where it pierces a
+  plate that stops it when it arrives faster. The shatter decision here is
+  velocity-blind on purpose: below the rigid-branch limit both readings block,
+  so the gap cannot show inside the game's velocity range, and a threshold
+  velocity would be a number with no measurement behind it. What would close
+  it: a V50 series for a WC-cored round against one hard steel plate, fired
+  from below the shatter threshold to above it.
+- **The dead-core factor's shape.** Above the deform threshold the factor grows
+  as one shallow power of the hardness ratio with one floor, because four
+  passport statements are all the corpus says about it — enough to pin a window,
+  not a form. The experiment that would draw the curve exists and is unread:
+  Anderson, Hohler, Walker & Stilp 1999, seventeen penetrator hardnesses against
+  one target.
+- **A cartridge with no prototype.** The 7.62x39 MAI AP is not in the Russian
+  ammunition literature, on the forums, or in the patent record: it appears to be the
+  game's own invention, so the usual anchor — measure the real thing — does not
+  exist. What it is modelled on instead is the game's own description of its
+  construction, a sabot carrying a tungsten carbide penetrator, which fixes the
+  hardness against material this book already carries and the mass against the
+  calibre's energy. Its **core geometry stays inferred** from where its penetration
+  sits above its energy density, because nothing anywhere states the penetrator's
+  diameter, and a number invented for it would decide how it fights every plate in
+  the game. What would close it: a published section drawing.
 - **Sewn versus consolidated backing.** The fibre panel behind a plate's face is
   modelled at laminate packing; a stitched package behind a Russian plate is
   looser than that. The book's backing thicknesses were derived from areal

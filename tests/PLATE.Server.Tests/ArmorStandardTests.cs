@@ -80,8 +80,10 @@ public class ArmorStandardTests
             "has to be read as solid - only its hardness is known"),
         new("GOST", "Бр4", 5, "5.45x39 PP 7N10", 3.5, 5.62, 895, 0.15, 0.532, 0.478, 697,
             "hardened steel core 1.72-1.80 g, 4.1 mm, 60 HRC"),
-        new("GOST", "Бр4", 5, "7.62x39 PS 57-N-231", 7.9, 7.92, 720, 0.25, 1.0, 0.468, 390,
-            "the standard calls this core heat-treated; at 35-45 HRC it still upsets on a plate"),
+        new("GOST", "Бр4", 5, "7.62x39 PS 57-N-231", 7.9, 7.92, 720, 0.25, 0.50, 0.468, 697,
+            "65G core, heat-treated since 1989 under an unchanged index - and the 6B23 " +
+            "certificate names the heat-hardened AKM core by that index, so this is what " +
+            "Бр4 is actually shot with"),
         new("GOST", "Бр5", 6, "7.62x54R PP 7N13", 9.4, 7.92, 830, 0.10, 0.673, 0.463, 650,
             "U12A core 70 gr, 6.5 mm, 55-60 HRC"),
         new("GOST", "Бр5", 6, "7.62x54R B-32 7-BZ-3", 10.4, 7.92, 810, 0.10, 0.60, 0.60, 700,
@@ -187,60 +189,69 @@ public class ArmorStandardTests
         // rungs joined it, and the pattern in who joined is the finding — see the
         // ceramic and titanium notes below.
 
-        // The steel trio: the RHA-anchored DuctileK and the book's 44S figures put
-        // 6.3 mm of Korund panel exactly AT its Бр4 test velocity (898 of 895), and
-        // the strict margin is simply not there. Either zero-of-five over-reads what
-        // ГОСТ demanded of this panel, or 750 MPa shear undersells 44S — the panel is
-        // 500+ HB steel and its maker passed certification with it. Unresolved; the
-        // resolution is a published 44S strength, not a bigger constant.
-        ["korund"] = (0.913, "6.3 mm of 44S reads at its test velocity, not 9% over"),
-        ["korund_vm"] = (0.913, "the same panel under the other item name"),
-        ["korund_back_6b23_2"] = (0.913, "the same 44S arithmetic in the 6B23 back"),
+        // The steel trio is GONE, and it went the way this note said it would: "the
+        // resolution is a published 44S strength, not a bigger constant". It was 750 MPa
+        // shear underselling 44S — the figure belonged to AR500, the one steel the game's
+        // material enum could name, and every steel plate in the game inherited it. 44S is
+        // NII Stali's ultra-high-strength grade at 2250-2350 UTS and 2000-2100 yield, so
+        // its shear is 1035, and the panel now clears zero-of-five on its own with no
+        // allowance at all. The constant was never the problem.
         ["ArmoredSteel/6"] = (0.898,
             "the Бр5 steel rung against the B-32, 10% under; the same 44S arithmetic " +
             "one class up, where the hardest core in the standard arrives"),
 
         // The ceramic line sits under the strict bar with BrittleK at the BOTTOM of
-        // the tile's band on purpose (the smallest constant the certificates allow).
-        // The binding round is the B-32 — armour-piercing incendiary with a 60 HRC
-        // core — and that is no accident: since the hardness term left the brittle
-        // mode (3.2), the model cannot let a ceramic treat a hardened core
-        // differently, and the granits pay for it exactly where the hardest core in
-        // the standard arrives. The measurement that closes 3.2 would close most of
-        // this gap; what remains is most plausibly the sewn package behind the
-        // tiles, modelled at laminate packing (see "deliberately not modelled").
-        ["granitBr4"] = (0.992, "7N10 binds, just under the bar"),
-        ["granitBr5"] = (0.924, "B-32 binds at 7.4% under zero-of-five"),
-        ["granit4_5class_front"] = (0.924, "the same plate"),
-        ["granit4_5class_back"] = (0.924, "the same plate on the back"),
-        ["granit4rs"] = (0.913, "the lightest execution of the line, B-32 8.5% under"),
+        // the tile's band on purpose (the smallest constant the enforced certificates
+        // allow, the Бр4 Granit binding). The binding round is the B-32 —
+        // armour-piercing incendiary with a 60 HRC core — and that is no accident:
+        // since the hardness term left the brittle mode (3.2), the model cannot let a
+        // ceramic treat a hardened core differently, and the granits pay for it
+        // exactly where the hardest core in the standard arrives. The measurement
+        // that closes 3.2 would close most of this gap.
+        //
+        // Twice these entries have gone stale in the loose direction and been
+        // re-measured. First the backing: the book never said what the backing was
+        // MADE of, so every ceramic plate defaulted to aramid when the line is
+        // alumina on UHMWPE, and every backing was built at packed = 1 — fixing both
+        // made the assemblies stronger and left up to 13% of hidden head-room inside
+        // these allowances, room a real regression could have crossed unseen. Then
+        // BrittleK itself was re-derived (1.04 → 0.98) under the criterion these
+        // very tests enforce. Every value below is the measurement at the shipped
+        // constants minus the 0.002 float-noise hair, nothing more.
+        ["granitBr5"] = (0.938, "B-32 binds at 6% under zero-of-five"),
+        ["granit4_5class_front"] = (0.938, "the same plate"),
+        ["granit4_5class_back"] = (0.938, "the same plate on the back"),
+        ["granit4rs"] = (0.924, "the lightest execution of the line, B-32 7.3% under"),
         ["UHMWPE/5"] = (0.943,
             "a real 1.3-in Level III standalone PE plate wearing the Бр4 rung; the " +
             "5.45 binds, and fibre is the mode where the ladder and the products " +
             "disagree (3.1)"),
-        ["Combined/5"] = (0.777,
-            "the boron-carbide Бр4 rung, and the clearest statement of 3.2 in the " +
-            "table: what binds it is the 7.62x39 PS, a MILD steel core, because a " +
-            "brittle barrier is not allowed to notice how hard a core is. With the " +
-            "projectile read as its measured core the AP rounds it is anchored on got " +
-            "lighter and the soft-cored ones did not, so the rung pays for the missing " +
-            "erosion term in full"),
-        ["Combined/6"] = (0.859, "the same rung one class up, B-32 binding"),
-        ["Ceramic/6"] = (0.942, "the Бр5 alumina rung, which is the Granit's own reading"),
+        ["Combined/5"] = (0.932,
+            "the boron-carbide Бр4 rung, bound by the 7.62x39 PS because a brittle " +
+            "barrier is not allowed to notice how hard a core is (3.2). It read " +
+            "0.777 once, and most of that was never 3.2: the unnamed backing " +
+            "material and the laminate-packed screen were carrying the difference, " +
+            "and the erosion term's true cost is the 7% that remains"),
+        ["Combined/6"] = (0.964, "the same rung one class up, B-32 binding"),
+        ["Ceramic/6"] = (0.938, "the Бр5 alumina rung, which is the Granit's own reading"),
 
         // Titanium: the hardness exponent is derived from a rolled-armour ladder at
         // 320 HV and a 580 HV AR500 plate, and titanium sits at 350 — near the ladder,
         // far from the certificate, and with no ladder of its own beyond a single
         // point. What binds both rungs is a hardened core, which is exactly where an
         // exponent fitted at the two ends of the steel range has the least to say.
-        ["Titan/5"] = (0.911, "the Бр4 titanium rung against the 7N10, 9% under"),
+        ["Titan/5"] = (0.913,
+            "the Бр4 titanium rung, 9% under - bound by the 7.62x39 PS since its core " +
+            "was corrected to the hardened one, where it used to be bound by the 7N10"),
         ["Titan/6"] = (0.828, "the Бр5 rung against the B-32, 17% under"),
 
         // Western
-        ["SAPI_Cult_Locust"] = (0.849,
+        ["SAPI_Cult_Locust"] = (0.896,
             "titanium face over a PE backer, split derived from densities; its own " +
             "maker certifies III+/'RF2', read here at the six-shot protocol, and it " +
-            "carries the titanium gap above as well"),
+            "carries the titanium gap above as well. It read 0.849 while the M855's " +
+            "410 HV tip was read as a rigid punch; the core-fate rework has it die " +
+            "on the face, which is the physics its own certificate was owed"),
         ["SAPI_GAC_3s15m"] = (0.921,
             "fibre, where the ladder and the products disagree (3.1) — the constant " +
             "behind this plate is the model's weakest and it shows here first"),
@@ -724,17 +735,106 @@ public class ArmorStandardTests
     }
 
     /// <summary>
+    /// The 6B23's own certificate, cartridge by cartridge — the densest anchor in the
+    /// corpus, because it is one plate of known thickness and known alloy against six
+    /// named rounds. Everywhere else a certificate gives a class and the class gives one
+    /// or two cartridges; here the maker lists the schedule.
+    ///
+    /// Velocities are muzzle, where the certificate names a range of 10 to 50 m. That is
+    /// deliberate and it is the safe direction: a round arrives at 50 m slower than it
+    /// leaves, so a plate that holds at muzzle holds at the certified range with room to
+    /// spare. Reading it the other way would need a drag law per cartridge, which is one
+    /// more model between the evidence and the test.
+    /// </summary>
+    public static readonly Threat[] Vest6B23 =
+    [
+        new("6B23", "cert", 0, "57-N-231 PS", 7.9, 7.92, 720, 0.25, 0.50, 0.468, 697,
+            "the heat-hardened AKM core, at 10 m"),
+        new("6B23", "cert", 0, "7N22 BP", 3.65, 5.62, 890, 0.08, 0.507, 0.477, 765,
+            "U12A tool steel core, at 25 m"),
+        new("6B23", "cert", 0, "M193", 3.75, 5.7, 957, 0.30, 1.0, 1.0, 60,
+            "no hard element, at 25 m"),
+        new("6B23", "cert", 0, "M855", 4.0, 5.7, 922, 0.25, 1.0, 0.162, 410,
+            "steel tip over lead, at 25 m"),
+        new("6B23", "cert", 0, "7N24 BS", 3.67, 5.62, 830, 0.05, 0.507, 0.512, 1300,
+            "VK-8 tungsten carbide, at 50 m"),
+        new("6B23", "cert", 0, "57-N-323S LPS", 9.6, 7.92, 865, 0.25, 1.0, 1.0, 60,
+            "mild steel core, at 50 m"),
+    ];
+
+    /// <summary>
+    /// A vest as it is actually certified: the hard element AND the fabric screen it sits
+    /// in, against a cartridge its maker names. Two-sided where the maker is two-sided —
+    /// a passport that says "the SVD goes through the chest" is worth more than one that
+    /// only lists what is stopped, because a model can pass every positive gate by being
+    /// uniformly too strong.
+    ///
+    /// ScreenMm is the fabric behind the plate; where the game already models it as its
+    /// own item the plate entry carries none, so the assembly has to be stated here.
+    /// </summary>
+    public readonly record struct VestGate(
+        string Vest, string PlateKey, double ScreenMm, Threat Round, bool MustHold, string Source);
+
+    public static readonly VestGate[] VestGates =
+    [
+        // 6B23: 44S panel inside a 30-layer TSVM-2 screen. Six rounds, all "holds".
+        .. Vest6B23.Select(r => new VestGate("6B23", "korund_back_6b23_2", 7.6, r, true,
+            $"maker's schedule: {r.Source}")),
+
+        // 6B3TM: thirteen 6.5 mm VT-23 tiles over 30 layers of TSVM-DZh. Its passport is
+        // explicit about which era of core it was rated against — "стальными
+        // нетермоупрочненными сердечниками" — which is the pre-1989 mild PS, not the one
+        // the same index carries today.
+        new("6B3TM", "6b3TM", 7.6,
+            new Threat("6B3TM", "cert", 0, "57-N-231 PS mild", 7.9, 7.92, 720, 0.25, 1.0, 0.468, 390,
+                "non-heat-treated core, at 10 m"),
+            true, "круговая противопульная защита от пуль ПС 7,62x39 с дистанции 10 м"),
+
+        // The other half of the same passport, and the rarer kind of statement: the SVD
+        // goes through the chest section. A model that stops this is wrong in the
+        // direction no positive gate can catch.
+        new("6B3TM", "6b3TM", 7.6,
+            new Threat("6B3TM", "cert", 0, "57-N-323S LPS", 9.6, 7.92, 865, 0.25, 1.0, 1.0, 60,
+                "SVD through the chest"),
+            false, "пуля из СВД могла пробить грудную секцию"),
+    ];
+
+    /// <summary>
+    /// What each of those six is allowed to fall short by, and why. Empty on purpose
+    /// and kept: a future shortfall belongs here, recorded, not in a loosened test.
+    ///
+    /// The 7N24 entry this table was created for (0.71 — "tungsten carbide on the
+    /// hardness floor, 29% under") is gone the way such entries are supposed to go:
+    /// the core-fate rework gave the term the decision it was missing. A VK-8 core at
+    /// 1300 HV against 613 HV of 44S is a brittle solid against a face hard enough to
+    /// crack it, and a cracked core is spread mass, not a punch — the certificate was
+    /// the anchor that pinned ShatterRatio, and the panel now clears the strict
+    /// criterion with no allowance at all.
+    /// </summary>
+    public static readonly Dictionary<string, (double Reaches, string Why)> Vest6B23Shortfalls =
+        new();
+
+    /// <summary>
     /// The finding this whole fixture was assembled to produce, and the reason stage
     /// three is a rewrite rather than a recalibration.
     ///
-    /// GOST Бр4 names two cartridges. Both must be stopped by the same plate. In
-    /// specific energy they are nowhere near each other — the 5.45 lands more than
-    /// twice as hard as the 7.62x39 — so there is no single J/mm² threshold that
-    /// stops one without being wasteful about the other. Real armour manages it
-    /// because a light fast core has little sectional density and erodes on the way
-    /// in, which is a fact about the core's mass and diameter, not about its energy
-    /// over its area. E/A cannot see it. v_bl(thickness, material, core mass, core
-    /// diameter) can.
+    /// GOST Бр4 names two cartridges. Both must be stopped by the same plate, and in
+    /// specific energy they are not the same threat, so no single J/mm² threshold stops
+    /// one without being wasteful about the other. Real armour manages it because a
+    /// light fast core has little sectional density and erodes on the way in, which is a
+    /// fact about the core's mass and diameter, not about its energy over its area. E/A
+    /// cannot see it. v_bl(thickness, material, core mass, core diameter) can.
+    ///
+    /// **The margin shrank, and honestly so.** This read "more than twice as hard" while
+    /// the 7.62x39 PS was modelled as a full-calibre soft slug. It is not one: the core
+    /// has been heat-treated since 1989 under an unchanged index, so it meets a plate on
+    /// its own 5.6 mm and the two cartridges now sit 1.35x apart rather than 2.2x. The
+    /// argument survives — 35% is not nothing, and one plate still has to stop both — but
+    /// it no longer carries itself, and the weight moves to the evidence that does: the
+    /// RHA-over-mild ladder pair, the hardness separation, and titanium buying its class
+    /// at half the areal density. A threshold below 1.25 would put the spread inside the
+    /// uncertainty of the cartridge data itself, and then this test would be measuring
+    /// nothing.
     /// </summary>
     [Fact]
     public void One_specific_energy_cannot_express_a_class_with_two_test_cartridges()
@@ -746,7 +846,7 @@ public class ArmorStandardTests
         var high = pair.Max(t => t.SpecificEnergy(a.ExpansionOnArmor));
         var low = pair.Min(t => t.SpecificEnergy(a.ExpansionOnArmor));
 
-        Assert.True(high / low > 2.0,
+        Assert.True(high / low > 1.25,
             $"the two Бр4 cartridges now sit {high / low:N2}x apart in specific energy " +
             "- if they ever converge, a single threshold could express the class and " +
             "the case for a ballistic-limit model is weaker than this fixture claims");

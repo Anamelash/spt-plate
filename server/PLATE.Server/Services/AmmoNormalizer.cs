@@ -21,8 +21,26 @@ namespace PLATE.Server.Services;
 public class AmmoNormalizer(
     TemplateTable templateTable,
     ReferenceBook referenceBook,
+    LocaleTable localeTable,
     ISptLogger<AmmoNormalizer> logger)
 {
+    /// <summary>
+    /// Cards that name a GRAU index their round is not. A modernisation that changes
+    /// what is inside a bullet without changing the bullet, its marking or its index
+    /// leaves one name covering two cartridges; the book picks the one in service and
+    /// the card should agree with the book, or the round is described as something the
+    /// mod does not model it as.
+    ///
+    /// Keyed by the template's _name — the same key the reference book uses, so this
+    /// survives an item id changing under it. The replacements come in threes because
+    /// the localisations spell the index in three alphabets: Latin N, Cyrillic Н, and
+    /// a Latin H in the Turkish text.
+    /// </summary>
+    private static readonly Dictionary<string, (string From, string To)[]> CardIndex = new()
+    {
+        ["patron_545x39_PS"] = [("7N6", "7N6M"), ("7Н6", "7Н6М"), ("7H6", "7H6M")],
+    };
+
     /// <summary>One-line result for the startup summary; null if the module did not run.</summary>
     public string? Summary { get; private set; }
 
@@ -130,6 +148,15 @@ public class AmmoNormalizer(
                     r.CoreHardnessHv = bf.CoreHardnessHv;
                 }
 
+                // before the cohort fill below reads it: what flies is not always what the
+                // card weighs, and everything downstream — energy, channel, yaw — is built
+                // on the mass
+                if (bf.MassG > 0)
+                {
+                    r.Notes.Add($"mass {r.P.BulletMassGram:0.##} -> {bf.MassG:0.##} g (book)");
+                    r.P.BulletMassGram = bf.MassG;
+                }
+
                 r.Notes.Add($"book: {bf.Prototype}");
             }
 
@@ -158,6 +185,8 @@ public class AmmoNormalizer(
             r.Notes.Add($"ref specs: {rf.Prototype}");
             refApplied++;
         }
+
+        FixCardIndices(recs);
 
         // --- Fill missing mass/diameter/BC from caliber cohort medians ---
         var byCaliber = recs.GroupBy(r => r.Caliber).ToDictionary(g => g.Key, g => g.ToList());
@@ -342,6 +371,59 @@ public class AmmoNormalizer(
         {
             WriteReport(modPath, recs, a);
             File.WriteAllText(System.IO.Path.Combine(modPath, "plate-ammo-data.json"), PlateAmmoData.Json);
+        }
+    }
+
+    /// <summary>
+    /// Rewrites the GRAU index on the cards listed in <see cref="CardIndex"/>, in every
+    /// localisation that carries one. Display only — nothing reads these strings back,
+    /// and the index is replaced in place rather than explained, because a card is the
+    /// game's voice and not the mod's. Runs with the rest of the normalizer, so a round
+    /// the mod has not touched keeps the description it shipped with.
+    /// </summary>
+    private void FixCardIndices(List<Rec> recs)
+    {
+        var locales = localeTable.Global;
+        if (locales == null)
+        {
+            return;
+        }
+
+        foreach (var r in recs)
+        {
+            if (!CardIndex.TryGetValue(r.Item.Name ?? "", out var fixes))
+            {
+                continue;
+            }
+
+            var key = $"{r.Item.Id} Description";
+            foreach (var (_, lazy) in locales)
+            {
+                lazy.AddTransformer(d =>
+                {
+                    if (d == null || !d.TryGetValue(key, out var text) || string.IsNullOrEmpty(text))
+                    {
+                        return d;
+                    }
+
+                    foreach (var (from, to) in fixes)
+                    {
+                        // Already corrected — the old index is a prefix of the new one,
+                        // so a second pass over the same string would not be a no-op.
+                        if (text.Contains(to))
+                        {
+                            continue;
+                        }
+
+                        text = text.Replace(from, to);
+                    }
+
+                    d[key] = text;
+                    return d;
+                });
+            }
+
+            r.Notes.Add("card index corrected");
         }
     }
 

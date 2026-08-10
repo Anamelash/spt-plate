@@ -1339,7 +1339,7 @@ namespace PLATE.Client.Patches
                         (float)backProf.SpotDamageQ, (float)backProf.WearExponentK, wearRoll);
                 }
 
-                v50 = (float)BallisticLimit.V50(barrier, limitCore, cos, tuning);
+                v50 = (float)BallisticLimit.V50(barrier, limitCore, cos, v, tuning);
                 ratio = v50 > 0f ? v / v50 : 999f;
             }
             else
@@ -1381,7 +1381,7 @@ namespace PLATE.Client.Patches
                 ? $"{barrier.ThicknessMm:0.0} mm, v {v:0}/{v50:0} m/s, " +
                   $"{Mathf.Acos(Mathf.Clamp01(rawCos)) * Mathf.Rad2Deg:0}°" +
                   (rawCos < cos ? " (at the floor)" : "") +
-                  $", H x{BallisticLimit.HardnessFactor(barrier, limitCore, tuning):0.00}"
+                  $", H x{BallisticLimit.HardnessFactor(barrier, limitCore, v, tuning):0.00}"
                 : $"U {uHit:0.#}/{uLimit:0.#} J/mm², " +
                   $"{Mathf.Acos(Mathf.Clamp01(rawCos)) * Mathf.Rad2Deg:0}°" +
                   (rawCos < cos ? " (at the floor)" : "");

@@ -153,6 +153,18 @@ namespace PLATE.Client.Ballistics
 
             /// <summary>Backing material key; empty = aramid, the dominant case.</summary>
             public string BM { get; set; }
+
+            /// <summary>
+            /// The alloy's own shear, yield and hardness, where the product names a grade
+            /// the game's eight materials cannot express — a Russian 44S panel and an
+            /// American AR500 both arrive as "ArmoredSteel" and are not the same steel.
+            /// 0 = whatever the material table says.
+            /// </summary>
+            public double S { get; set; }
+
+            public double Y { get; set; }
+
+            public double H { get; set; }
         }
 
         /// <summary>How a material fails and how strongly, from the reference book.</summary>
@@ -299,12 +311,15 @@ namespace PLATE.Client.Ballistics
                 Class = m.Class,
                 FailureMode = m.FailureMode,
                 ThicknessMm = plate.T,
-                ShearMPa = m.ShearMPa,
-                YieldMPa = m.YieldMPa,
+
+                // the product's own alloy wins over the material's, because the material
+                // is the game's enum and one of its eight names covers every steel there is
+                ShearMPa = plate.S > 0 ? plate.S : m.ShearMPa,
+                YieldMPa = plate.Y > 0 ? plate.Y : m.YieldMPa,
                 CompressiveMPa = m.CompressiveMPa,
                 FibreTensileMPa = m.FibreTensileMPa,
                 FailureStrain = m.FailureStrain,
-                HardnessHv = m.HardnessHv,
+                HardnessHv = plate.H > 0 ? plate.H : m.HardnessHv,
                 DensityGCm3 = m.DensityGCm3,
 
                 // a sewn package is mostly air and only its fibre does any work; the
@@ -322,7 +337,10 @@ namespace PLATE.Client.Ballistics
                     barrier.BackingMm = plate.B;
                     barrier.BackingTensileMPa = bm.FibreTensileMPa;
                     barrier.BackingStrain = bm.FailureStrain;
-                    barrier.BackingPacked = 1;
+                    // a stitched fabric screen is mostly air; a pressed laminate is not
+                    barrier.BackingPacked = backingKey == "Aramid"
+                        ? BallisticLimit.SewnPacked
+                        : 1;
                 }
             }
 

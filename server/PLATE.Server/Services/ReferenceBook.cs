@@ -73,6 +73,15 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         /// </summary>
         public double CoreHardnessHv { get; set; }
 
+        /// <summary>
+        /// Mass of what actually flies, g. 0 = keep the game's figure, which is the normal
+        /// case: the card and the prototype agree for an ordinary bullet. It exists for the
+        /// ones where they cannot — a sabot round leaves the barrel as its penetrator alone,
+        /// and a card that lists the whole projectile is describing something that never
+        /// arrives.
+        /// </summary>
+        public double MassG { get; set; }
+
         public string Source { get; set; } = "";
     }
 
@@ -225,6 +234,23 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         /// </summary>
         public bool Plate { get; set; }
 
+        /// <summary>
+        /// The alloy's own strength, overriding the material's, MPa. 0 = inherit.
+        ///
+        /// The game names eight materials and "ArmoredSteel" is one of them, so every
+        /// steel plate in it — a Russian 44S panel at 2000 MPa yield and an American
+        /// AR500 at 1250 — arrives under the same name and used to get the same numbers.
+        /// The material entry cannot be split, since its key IS the game's enum; the
+        /// grade therefore lives on the product, which is where the rest of the
+        /// construction already lives.
+        /// </summary>
+        public double ShearMPa { get; set; }
+
+        public double YieldMPa { get; set; }
+
+        /// <summary>The alloy's own hardness, HV. 0 = inherit from the material.</summary>
+        public double HardnessHv { get; set; }
+
         /// <summary>Backing package behind the plate, mm of fibre (0 = none).</summary>
         public double BackingMm { get; set; }
 
@@ -361,8 +387,25 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
     /// 5: a bullet with no penetrator drives the limit with its whole mass at its own
     ///    calibre, not with the fraction of it that survives the plate. The ceramic
     ///    brackets moved with it.
+    /// 8: the 5.45 PS is the modernised cartridge, not the 1974 original. The index
+    ///    never changed with the core, so one name covers a mild core and a hardened
+    ///    one, and the round in service is the hardened one: 410 HV spread over the
+    ///    whole bullet becomes 697 HV concentrated on the core's own 4.0 mm.
+    /// 9: the MAI AP is a sabot round carrying a tungsten carbide penetrator, per the
+    ///    only description of it that exists. It was being read as lead, and as the whole
+    ///    projectile at a velocity only the penetrator reaches.
+    /// 13: the Soviet vests' package is 7.6 mm, borrowed from a certified IIIA package
+    ///    that publishes a thickness, instead of an unsourced flat 8.
+    /// 12: the Бр4 titanium rung re-solved from 11.2 to 11.5 mm - the corrected 7.62x39
+    ///    PS binds it now, where the 7N10 used to.
+    /// 11: Russian steel panels carry their own alloy (44S at 2050 MPa yield) instead of
+    ///    the AR500 datasheet the one game material had to serve for every steel.
+    /// 10: the 7.62x39 PS is the modernised cartridge, on the same evidence and by the
+    ///    same argument as the 5.45 PS in version 8 — one index over two cores, and the
+    ///    one in service is hardened. The MAI penetrator gained a width, and with it a
+    ///    mass that its own volume allows rather than one read off the calibre's energy.
     /// </summary>
-    private const int ShippedVersion = 7;
+    private const int ShippedVersion = 13;
 
     private AmmoReference _cached;
 
@@ -553,9 +596,11 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // different maker, M993 and 7N37, land at 0.49 and 0.53 of their bullet's area.
           "Bullets": {
             // --- 5.45x39. Core masses: ru.wikipedia, sourced to the GRAU indices;
-            // core diameters and hardness: Adept Armor threat survey ---
-            "patron_545x39_PS":   { "Prototype": "7N6 PS",        "X": 0.25, "CoreAreaFrac": 1.0, "CoreMassFrac": 0.42, "CoreHardnessHv": 410,
-                                    "Source": "core 1.43 g of Steel 10 in a 3.4 g bullet, 4.0 mm, 40-45 HRC - mild, so the area fraction stays 1: it upsets against a plate rather than punching through it" },
+            // core diameters and hardness: Adept Armor threat survey, except the PS,
+            // which is the one round in the calibre where the survey and the Russian
+            // sources describe different cartridges - see its own Source line ---
+            "patron_545x39_PS":   { "Prototype": "7N6M PS",       "X": 0.25, "CoreAreaFrac": 0.51, "CoreMassFrac": 0.42, "CoreHardnessHv": 697,
+                                    "Source": "core 1.43 g of Steel 65G in a 3.4 g bullet, 4.0 mm, 60 HRC. The 1987 modernisation changed the core steel and its heat treatment without changing the bullet, the marking or the index, so 7N6 names both this and the untreated Steel 10 original it replaced - which has not been produced since. The survey that reads this core at 40-45 HRC gives no year for its sample, and 40-45 HRC is what the literature gives for that original" },
             "patron_545x39_PP":   { "Prototype": "7N10 PP",       "X": 0.15, "CoreAreaFrac": 0.532, "CoreMassFrac": 0.478, "CoreHardnessHv": 697,
                                     "Source": "core 1.72-1.80 g of Steel 70/75 in a 3.62-3.74 g bullet, 4.1 mm, 60 HRC" },
             "patron_545x39_BP":   { "Prototype": "7N22 BP",       "X": 0.08, "CoreAreaFrac": 0.507, "CoreMassFrac": 0.477, "CoreHardnessHv": 765,
@@ -595,12 +640,13 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "patron_556x45_varmageddon":  { "Prototype": "Varmageddon", "X": 0.95 },
 
             // --- 7.62x39 ---
-            "patron_762x39_PS":     { "Prototype": "57-N-231 PS",  "X": 0.25, "CoreAreaFrac": 1.0, "CoreMassFrac": 0.468, "CoreHardnessHv": 390,
-                                      "Source": "55-60 gr steel slug in a lead sheath, 5.6 mm, 35-45 HRC - a lead substitute, not a penetrator, so the area fraction stays 1" },
+            "patron_762x39_PS":     { "Prototype": "57-N-231 PS",  "X": 0.25, "CoreAreaFrac": 0.50, "CoreMassFrac": 0.468, "CoreHardnessHv": 697,
+                                      "Source": "core 55-60 gr of 65G/70/75 spring steel in a 7.9 g bullet, 5.6 mm, heat-treated. The 1989 modernisation changed the core steel and its heat treatment without changing the index - the same story as the 5.45 PS, and the penetration moved with it: a helmet at 1000 m rather than 900, a fragmentation vest at 700 rather than 600, and a rifle-rated vest at 100 m, which the mild core could not do at any range. The geometry is the survey's and is not in dispute; its 35-45 HRC is, and is what the literature gives for the pre-1989 steel 10 it evidently sampled" },
             "patron_762x39_BP":     { "Prototype": "7N23 BP",      "X": 0.07, "CoreAreaFrac": 0.399, "CoreMassFrac": 0.492, "CoreHardnessHv": 697,
                                       "Source": "60 gr hardened core, 5.0 mm, 60 HRC, in the same 123 gr bullet as the PS" },
             "patron_762x39_pp":     { "Prototype": "7N27 PP",      "X": 0.15 },
-            "patron_762x39_mai_ap": { "Prototype": "MAI AP",       "X": 0.05 },
+            "patron_762x39_mai_ap": { "Prototype": "MAI AP",       "X": 0.05, "CoreAreaFrac": 0.125, "MassG": 2.0, "CoreHardnessHv": 1300,
+                                      "Source": "no published prototype - not in the Russian ammunition literature, on the forums or in the patent record, and evidently the game's own invention. What the game does state is a construction: a two-part projectile, a sabot carrying a tungsten carbide penetrator. Hardness is that material at the 1300 HV this book already carries for it (5.45 BS on VK-8, 7N39 on 92% WC). The rest follows from one assumption, that a sub-calibre penetrator is half the width of the calibre's ordinary core: 2.8 mm against the PS core's 5.6, which is 0.125 of the bullet's face. Mass is then not free - 2.8 mm of tungsten carbide at 14.8 g/cm3 over a 22 mm rod, the longest that fits inside a bullet of this calibre, is 2.0 g. The card's 7.9 g is the whole projectile including the sabot that never arrives, and at the card's 875 m/s it claims 3024 J, half again what this case can deliver at all" },
             "patron_762x39_T45M":   { "Prototype": "T-45M tracer", "X": 0.25 },
             "patron_762x39_fmj":    { "Prototype": "7.62x39 FMJ",  "X": 0.30 },
             "patron_762x39_sp":     { "Prototype": "7.62x39 SP",   "X": 0.70 },
@@ -994,18 +1040,33 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // published: 11.2 kg/m2 at 1350 gives 8.3 mm against a measured 7.3 +/- 0.8.
           "ArmorPlates": {
             // --- vests ---
+            // The Soviet vests all carry 7.6 mm of package, and that number is borrowed
+            // rather than computed. Their own specification gives a layer count, not a
+            // thickness — 30 layers of TSVM-DZh in the 6B5, 30 of TSVM-2 in the 6B23 —
+            // and the fabric's areal density is not published anywhere reachable. What IS
+            // published is what those 30 layers are worth: NIJ IIIA. So the thickness
+            // comes from a certified IIIA package that does publish one, the IOTV Gen4
+            // torso at 7.6 mm and 4.79 kg/m2. Two published facts, no arithmetic of ours.
+            // It replaced a flat 8 mm that nobody had sourced, and moved nothing by 5%.
+            //
+            // Only the old vests carry it. The 6B23 is modelled by the game as separate
+            // soft-armour zones plus separate steel plates, so its package is already a
+            // layer of its own and putting one on the plate as well would count it twice;
+            // the 6B5 and 6B3TM are single items per zone, titanium and fabric together,
+            // and for them this field is the only way the fabric exists at all.
+            //
             // 6B5-16 is differential like the 6B3TM-01: a rifle-class front and a
             // fragment-class back. Eight 6.5 mm tiles in front plus three to five thin
             // ones, seven 1.25 mm tiles behind
-            "6b5-16":     { "Prototype": "6B5-16, ADU 605T-83", "Material": "Titan", "ThicknessMm": 6.5, "BackingMm": 8,
+            "6b5-16":     { "Prototype": "6B5-16, ADU 605T-83", "Material": "Titan", "ThicknessMm": 6.5, "BackingMm": 7.6,
                             "Source": "8 tiles of 6.5 mm titanium in front plus 3-5 of 1.25; 30-layer TSVM-DZh; 7.5 kg" },
-            "6b5-16_level3_soft_armor_back": { "Prototype": "6B5-16 back, ADU 605-80", "Material": "Titan", "ThicknessMm": 1.25, "BackingMm": 8,
+            "6b5-16_level3_soft_armor_back": { "Prototype": "6B5-16 back, ADU 605-80", "Material": "Titan", "ThicknessMm": 1.25, "BackingMm": 7.6,
                             "Source": "the back is 7 tiles of 1.25 mm, a class below the front" },
 
             // 6B2 / Zh-81: nineteen thin titanium tiles, doubled over the heart
-            "6b2":        { "Prototype": "6B2 / Zh-81, ADU-605-80", "Material": "Titan", "ThicknessMm": 1.25, "BackingMm": 8,
+            "6b2":        { "Prototype": "6B2 / Zh-81, ADU-605-80", "Material": "Titan", "ThicknessMm": 1.25, "BackingMm": 7.6,
                             "Source": "VT-14 titanium 1.25 mm (to 1.4 with tolerance), 19 tiles in three rows of three with the heart area DOUBLED to two layers. 4.2-4.8 kg over a published 28-30 dm2, class 2" },
-            "6b5-15":     { "Prototype": "6B5-15, ADU 14.20.00.000", "Material": "Ceramic", "ThicknessMm": 13, "BackingMm": 8,
+            "6b5-15":     { "Prototype": "6B5-15, ADU 14.20.00.000", "Material": "Ceramic", "ThicknessMm": 13, "BackingMm": 7.6, "BackingMaterial": "UHMWPE",
                             "DensityGCm3": 2.52,
                             "Source": "boron carbide 13 mm, 17-20 tiles a side, on a fabric package" },
             "kora_kulon": { "Prototype": "Kora-Kulon", "Material": "ArmoredSteel", "ThicknessMm": 4.3, "BackingMm": 6,
@@ -1014,18 +1075,18 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             // the 6B3TM-01 is two different vests front and back, and the game splits it
             // the same way: class 4 in front, class 2 behind. One entry for the pair gave
             // the front the back's plate and made it five times too thin
-            "6b3TM":      { "Prototype": "6B3TM-01, VT-23", "Material": "Titan", "ThicknessMm": 6.5, "BackingMm": 8,
+            "6b3TM":      { "Prototype": "6B3TM-01, VT-23", "Material": "Titan", "ThicknessMm": 6.5, "BackingMm": 7.6,
                             "Source": "12-15 tiles of 6.5 mm VT-23 titanium" },
-            "6b3TM_level2_soft_armor_back": { "Prototype": "6B3TM-01 back, VT-14", "Material": "Titan", "ThicknessMm": 1.25, "BackingMm": 8,
+            "6b3TM_level2_soft_armor_back": { "Prototype": "6B3TM-01 back, VT-14", "Material": "Titan", "ThicknessMm": 1.25, "BackingMm": 7.6,
                             "Source": "the -01 swaps the back for 7 tiles of 1.25 mm VT-14" },
-            "6b3TM_level2_soft_armor_groin_back": { "Prototype": "6B3TM-01 back, VT-14", "Material": "Titan", "ThicknessMm": 1.25, "BackingMm": 8,
+            "6b3TM_level2_soft_armor_groin_back": { "Prototype": "6B3TM-01 back, VT-14", "Material": "Titan", "ThicknessMm": 1.25, "BackingMm": 7.6,
                             "Source": "the -01 swaps the back for 7 tiles of 1.25 mm VT-14" },
 
             // --- plates ---
-            "sapi_6_frontback":         { "Prototype": "ESAPI", "Material": "Ceramic", "ThicknessMm": 10, "BackingMm": 12,
+            "sapi_6_frontback":         { "Prototype": "ESAPI", "Material": "Ceramic", "ThicknessMm": 10, "BackingMm": 12, "BackingMaterial": "UHMWPE",
                                           "DensityGCm3": 2.52,
                                           "Source": "boron carbide 10 mm on a UHMWPE backer; 5.5 lb over a 9.5x12.5 in medium is 3.26 g/cm2" },
-            "SSAPI_ESBI_6_side":        { "Prototype": "ESBI side insert", "Material": "Ceramic", "ThicknessMm": 10, "BackingMm": 10,
+            "SSAPI_ESBI_6_side":        { "Prototype": "ESBI side insert", "Material": "Ceramic", "ThicknessMm": 10, "BackingMm": 10, "BackingMaterial": "UHMWPE",
                                           "DensityGCm3": 2.52,
                                           "Source": "the ESAPI construction in a side cut; 2.25 lb over 6x8 in is the same 3.30 g/cm2" },
             // A plate's outer rectangle is not the armour. Tekhinkom's panels carry a
@@ -1038,32 +1099,41 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             // comes out at one areal density per class — Br4 at 3.57, 3.57 and 3.61
             // g/cm² across the three sizes, Br5 at 4.13, 4.10 and 4.10. Over the outer
             // rectangles that agreement falls apart.
-            "granitBr4":                { "Prototype": "Granit Br4 (Granit-5A)", "Material": "Ceramic", "ThicknessMm": 6, "BackingMm": 12,
+            "granitBr4":                { "Prototype": "Granit Br4 (Granit-5A)", "Material": "Ceramic", "ThicknessMm": 6, "BackingMm": 12, "BackingMaterial": "UHMWPE",
                                           "Source": "2.55 / 2.70 / 3.05 kg over 7.14 / 7.56 / 8.46 dm² rated - 3.6 g/cm² at every size" },
-            "granitBr5":                { "Prototype": "Granit Br5", "Material": "Ceramic", "ThicknessMm": 6.8, "BackingMm": 14,
+            "granitBr5":                { "Prototype": "Granit Br5", "Material": "Ceramic", "ThicknessMm": 6.8, "BackingMm": 14, "BackingMaterial": "UHMWPE",
                                           "Source": "2.95 / 3.10 / 3.47 kg over 7.14 / 7.56 / 8.46 dm² rated - 4.1 g/cm² at every size" },
-            "granit4_5class_front":     { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 6.8, "BackingMm": 14,
+            "granit4_5class_front":     { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 6.8, "BackingMm": 14, "BackingMaterial": "UHMWPE",
                                           "Source": "the Br5 of the line, 3.10 kg over 7.56 dm² rated" },
-            "granit4_5class_back":      { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 6.8, "BackingMm": 14,
+            "granit4_5class_back":      { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 6.8, "BackingMm": 14, "BackingMaterial": "UHMWPE",
                                           "Source": "the Br5 of the line, 3.10 kg over 7.56 dm² rated" },
-            "granit4rs":                { "Prototype": "Granit-4RS", "Material": "Ceramic", "ThicknessMm": 6.8, "BackingMm": 13,
+            "granit4rs":                { "Prototype": "Granit-4RS", "Material": "Ceramic", "ThicknessMm": 6.8, "BackingMm": 13, "BackingMaterial": "UHMWPE",
                                           "Source": "365x290x20 mm and 3.8 kg outside; at the line's 4.1 g/cm² that is 9.3 dm² rated" },
-            "granit":                   { "Prototype": "Granit Br5, first execution", "Material": "Ceramic", "ThicknessMm": 7.7, "BackingMm": 15,
+            "granit":                   { "Prototype": "Granit Br5, first execution", "Material": "Ceramic", "ThicknessMm": 7.7, "BackingMm": 15, "BackingMaterial": "UHMWPE",
                                           "Source": "305x263x22 mm, 3.45 kg - the heavy execution, above the rest of the line" },
             "granit4_zhukBr3_3class_front": { "Prototype": "Zhuk-3", "Material": "UHMWPE", "ThicknessMm": 23,
                                           "Source": "300x250 mm SAPI cut, 23 mm, 1.70 kg - all polyethylene, and the mass over that face comes to the 23" },
             // one size only, and KlASS and its owners agree on the rated 6.0 dm²
-            "korund_vmk_6class_front":  { "Prototype": "Korund-VM-K", "Material": "Ceramic", "ThicknessMm": 7.2, "BackingMm": 16,
+            "korund_vmk_6class_front":  { "Prototype": "Korund-VM-K", "Material": "Ceramic", "ThicknessMm": 7.2, "BackingMm": 16, "BackingMaterial": "UHMWPE",
                                           "Source": "2.6 kg over 6.0 dm² rated; 260x260x23 mm outside" },
-            "korund_vm_k_6class_back":  { "Prototype": "Korund-VM-K", "Material": "Ceramic", "ThicknessMm": 7.2, "BackingMm": 16,
+            "korund_vm_k_6class_back":  { "Prototype": "Korund-VM-K", "Material": "Ceramic", "ThicknessMm": 7.2, "BackingMm": 16, "BackingMaterial": "UHMWPE",
                                           "Source": "2.6 kg over 6.0 dm² rated; 260x260x23 mm outside" },
+            // Russian steel panels are 44S unless the product says otherwise: NII Stali's
+            // ultra-high-strength grade, 55-57 HRC, UTS 2250-2350, yield 2000-2100, which
+            // the maker puts level with MARS-300 and ARMOX-600 and which is nothing like
+            // the AR500 datasheet the material entry carries. Shear is 0.45*UTS by the same
+            // through-hardened rule the material uses; hardness 56 HRC -> 613 HV.
             "korund_back_6b23_2":       { "Prototype": "6B23 steel panel, 44S", "Material": "ArmoredSteel", "ThicknessMm": 6.3,
-                                          "Source": "6.3 mm of 44S steel, rated against the heat-hardened AKM core" },
+                                          "ShearMPa": 1035, "YieldMPa": 2050, "HardnessHv": 613,
+                                          "Source": "6.3 mm of 44S steel, rated against the heat-hardened AKM core. The 6B23 certificate names its whole schedule: 57-N-231 heat-hardened core at 10 m, 7N22 and M193/M855 at 25, 7N24 and 57-N-323S at 50" },
             "korund":                   { "Prototype": "Korund-VM steel panel", "Material": "ArmoredSteel", "ThicknessMm": 6.3,
+                                          "ShearMPa": 1035, "YieldMPa": 2050, "HardnessHv": 613,
                                           "Source": "Br4 steel; 15.9 dm2 of panel at 6.3 mm is 7.9 kg of the vest's 9.8" },
             "korund_vm":                { "Prototype": "Korund-VM steel panel", "Material": "ArmoredSteel", "ThicknessMm": 6.3,
+                                          "ShearMPa": 1035, "YieldMPa": 2050, "HardnessHv": 613,
                                           "Source": "Br4 steel; 15.9 dm2 of panel at 6.3 mm is 7.9 kg of the vest's 9.8" },
             "korund_6b12":              { "Prototype": "6B12 chest plate", "Material": "ArmoredSteel", "ThicknessMm": 6,
+                                          "ShearMPa": 1035, "YieldMPa": 2050, "HardnessHv": 613,
                                           "Source": "the 6B12 chest and abdomen plates are 6 mm of steel; the back one is 2" },
 
             // --- Western plates, nearly all with a published thickness ---
@@ -1104,10 +1174,10 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                           "Source": "0.34 in total published including the FragLock coat; the steel core is the industry-standard 0.25 in and the rest is non-ballistic. 'Legacy' was never a SKU - the 3.85 kg in game matches the Heritage's 8.5 lb" },
             "SAPI_SPRTN_Omega":         { "Prototype": "Spartan Omega AR500", "Material": "ArmoredSteel", "ThicknessMm": 6.35,
                                           "Source": "0.25 in of AR500 published. Full Coat takes the OVERALL thickness to 0.5 in but the extra is polyurea, not armour" },
-            "sapi":                     { "Prototype": "SAPI", "Material": "Ceramic", "ThicknessMm": 6.1, "BackingMm": 10,
+            "sapi":                     { "Prototype": "SAPI", "Material": "Ceramic", "ThicknessMm": 6.1, "BackingMm": 10, "BackingMaterial": "UHMWPE",
                                           "DensityGCm3": 2.52,
                                           "Source": "medium 1.82 kg over a published 241x318 mm = 7.66 dm2. Boron or silicon carbide on Spectra. The game's 1.82 kg is exact. DoD protocol, not NIJ" },
-            "SSAPI_5_side":             { "Prototype": "SAPI side insert", "Material": "Ceramic", "ThicknessMm": 5.6, "BackingMm": 8,
+            "SSAPI_5_side":             { "Prototype": "SAPI side insert", "Material": "Ceramic", "ThicknessMm": 5.6, "BackingMm": 7.6, "BackingMaterial": "UHMWPE",
                                           "Source": "~1 kg over the 6x8 in cut = 3 dm². Not a disguise - SSAPI is the real DoD designation for the plain-family side plate" },
 
             // material corrections where nobody publishes an amount
@@ -1227,7 +1297,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                   "DensityGCm3": 1.055, "Source": "the same shell" },
 
             // --- helmets: metal shells ---
-            "altin":            { "Prototype": "Altyn", "Material": "Titan", "ThicknessMm": 3, "BackingMm": 8,
+            "altin":            { "Prototype": "Altyn", "Material": "Titan", "ThicknessMm": 3, "BackingMm": 7.6,
                                   "Source": "3 mm titanium on a 15-30 layer TSVM-DZh backing; 4.1 kg with the visor" },
             "helmet_altyn_face_shield": { "Prototype": "Altyn visor", "Material": "Titan", "ThicknessMm": 3,
                                   "Source": "3 mm titanium, as the shell" },
@@ -1297,7 +1367,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                   "Source": "1.8 kg over a published 4.7 dm2 - the densest of the Russian visors. Br1 against the shell's Br4" },
 
             // the ceramic applique of the Bastion, which the game files as a shield
-            "item_equipment_helmet_diamond_age_bastion_shield": { "Prototype": "Bastion ceramic applique", "Material": "Ceramic", "ThicknessMm": 7.91, "BackingMm": 4,
+            "item_equipment_helmet_diamond_age_bastion_shield": { "Prototype": "Bastion ceramic applique", "Material": "Ceramic", "ThicknessMm": 7.91, "BackingMm": 4, "BackingMaterial": "UHMWPE",
                                   "DensityGCm3": 3.15,
                                   "Source": "MEASURED - 7.72/7.70/8.10/8.13 mm, 0.354 kg, slip-cast SILICON CARBIDE on carbon fibre. Chesapeake Testing; no penetration from M855A1 at 926 m/s, 7.5 mm backface" },
 
@@ -1395,8 +1465,8 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
 
             "Titan/4":        { "SameAs": "6b3TM",
                                 "Source": "the 6B3TM-01 front: 6.5 mm of VT-23 titanium over a 30-layer package - the game itself rates it class 4; ARMOR-TABLE holds its layout, not a Br class, so this is a construction borrowed, not a certificate claimed" },
-            "Titan/5":        { "Prototype": "titanium, Br4",          "ThicknessMm": 11.2,
-                                "Source": "computed, last resort: the one titanium-faced rifle plate in the book (Adept Mantis) is a thin face on a thick PE backer, not a titanium plate. Solved under zero-of-five; 5.0 g/cm2" },
+            "Titan/5":        { "Prototype": "titanium, Br4",          "ThicknessMm": 11.5,
+                                "Source": "computed, last resort: the one titanium-faced rifle plate in the book (Adept Mantis) is a thin face on a thick PE backer, not a titanium plate. Solved under zero-of-five with the rung's recorded shortfall; 5.1 g/cm2. Re-solved from 11.2 when the 7.62x39 PS became the hardened core it has been since 1989: that cartridge now binds the rung instead of the 7N10, and demands 11.44 mm where the 5.45 asks 11.17. Nothing in the game resolves to this rung - the one class-5 titanium item is the Adept Mantis and it has its own entry - so this number moves no armour; it exists so that an item nobody has yet added is not silently given a thickness solved against a cartridge that no longer exists" },
             "Titan/6":        { "Prototype": "titanium, Br5",          "ThicknessMm": 14.4,
                                 "Source": "computed, last resort: nobody makes one. Solved under zero-of-five; 6.3 g/cm2" },
 

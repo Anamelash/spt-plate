@@ -51,6 +51,17 @@ namespace PLATE.Server.Services;
 /// </summary>
 public static class BallisticLimit
 {
+    /// <summary>
+    /// How much of a sewn fabric package is actually fibre. A stitched aramid screen sits
+    /// at 0.63 g/cm³ against the fibre's own 1.44, so 44% of it works and the rest is air
+    /// between the layers — the same rule the face already obeys through PackedFraction.
+    /// A pressed polyethylene laminate is essentially solid and does not use this.
+    ///
+    /// It exists because both the client and the fixture used to build a backing at
+    /// packed = 1, crediting every vest screen with more than twice the fibre it has.
+    /// </summary>
+    public const double SewnPacked = 0.44;
+
     /// <summary>How the barrier gives way. Matches ArmorMaterialRef.Class.</summary>
     public const string Ductile = "Ductile";
     public const string Brittle = "Brittle";
@@ -271,6 +282,40 @@ public static class BallisticLimit
         /// <summary>How steeply the hardness ratio bites. 1 = the plain ratio.</summary>
         public double HardnessExponent;
 
+        /// <summary>
+        /// Dynamic yield strength per Vickers point, MPa. Tabor's constraint factor
+        /// reads hardness as about three times the flow stress; 3.27 is where the
+        /// 44S datasheet lands (613 HV against a published 2000-2100 MPa yield).
+        /// </summary>
+        public double HvToYieldMPa;
+
+        /// <summary>
+        /// The hardness above which a steel core arrives intact at any speed the game
+        /// can fire it — quenched tool steel, not construction steel. See FateOf.
+        /// </summary>
+        public double DeformCoreMaxHv;
+
+        /// <summary>
+        /// How much of the plate's own strength joins the stagnation pressure in the
+        /// contact stress that crushes a soft core. See FateOf.
+        /// </summary>
+        public double DeformPlateSupport;
+
+        /// <summary>How the dead-core factor grows with the hardness ratio. See FateOf.</summary>
+        public double DeformSpreadExponent;
+
+        /// <summary>The least a core that dies on the face is worth to the plate.</summary>
+        public double DeformFloor;
+
+        /// <summary>Vickers hardness above which a core is a brittle solid, not a steel.</summary>
+        public double BrittleCoreMinHv;
+
+        /// <summary>
+        /// Plate-over-core hardness ratio above which a brittle core cracks on the
+        /// face instead of punching through it. See FateOf.
+        /// </summary>
+        public double ShatterRatio;
+
         /// <summary>Smallest cosine an oblique hit is read at, so a graze is not infinite.</summary>
         public double MinCos;
 
@@ -308,14 +353,24 @@ public static class BallisticLimit
             // ceramic strength. The tile solves to 0.827, but a nil-residual DOP is a
             // one-sided statement — "the limit is AT OR ABOVE the velocity fired" — so
             // the certified plates act as the check that pins the value inside the
-            // band: 1.04 is the smallest constant at which every certified ceramic
-            // product holds its own class, with the Granit-4RS binding, and the tile is
-            // then read at +12% of the trial velocity, inside the +20% its method earns.
+            // band: 0.98 is the smallest constant at which every certified ceramic
+            // product without a recorded shortfall holds its class at the criterion the
+            // tests actually enforce (zero-of-five, about +9% in velocity), with the
+            // Бр4 Granit against the 7N10 binding at 0.976, and the tile is then read
+            // at +9% of the trial velocity, inside the +20% its method earns.
+            //
+            // It was 1.04, derived at the BARE test velocity over a mixed set of
+            // products and computed rungs — a reading no enforcement test uses — and
+            // the two derivations agreed only until the backing data was fixed: the
+            // named UHMWPE backings and the sewn-screen packing made every ceramic
+            // assembly stronger, the bare-velocity reading drifted to 0.94, and the
+            // shipped value survived its own justification by 6% until this was
+            // re-derived under the criterion the certificates are actually held to.
             //
             // It barely moved when the projectile was re-read, and that is the point of
             // MassAgainst: a tile meets the whole bullet, so the measured jacket-carry —
             // which is a metal-plate result — does not reach it.
-            BrittleK = 1.04,
+            BrittleK = 0.98,
             // A 33 mm polyethylene plate certified to stop M80 at 847, and a 7.6 mm
             // aramid package stopping the 9x18 GOST fires at Бр1, once the package's
             // 44% packing is taken out. The value is the FLOOR those certificates
@@ -409,25 +464,148 @@ public static class BallisticLimit
             // 580 HV AR500 meeting a 697 HV core apart. Two independent datasets, one
             // constant, to within a percent — the same agreement the old pair had.
             HardnessExponent = 1.96,
+            // Tabor's constraint factor, pinned where a published pair exists to pin
+            // it: 44S is 613 HV against a 2000-2100 MPa yield, and 3.27 is that
+            // arithmetic. It only ever appears multiplied by a hardness, on both
+            // sides of the same inequality, so its absolute scale nearly cancels —
+            // what it prices is the STAGNATION term against the hardness terms.
+            HvToYieldMPa = 3.27,
+            // The boundary between a core that upsets at rifle-impact contact stress
+            // and one that arrives intact. The corpus pins the window and nothing in
+            // it names the point: the 390 HV pre-1989 PS core deforms on a titanium
+            // vest (the 6B3TM passport holds it, and no rigid reading can - the
+            // factor it needs is above 1 at a ratio below 1), while the 570 HV M2 AP
+            // is rigid through the whole RHA ladder, including its 818 m/s top row.
+            // Midpoint of (390, 570); the measurement that would name it properly is
+            // a hardness ladder of one core geometry - Anderson, Hohler, Walker &
+            // Stilp 1999, which is exactly that experiment, remains unread (no
+            // access); its published conclusion (performance rises monotonically
+            // with hardness over 200-750 HV) is consistent with a threshold in this
+            // window but does not place it.
+            DeformCoreMaxHv = 480,
+            // What fraction of the plate's own strength joins the stagnation
+            // pressure in the contact stress. Window [0.096, 0.199): below 0.096
+            // the 6B3TM titanium cannot crush the mild PS core at 720 m/s
+            // (0.5*rho*v^2 alone is 1166 MPa against the core's 1275) and its
+            // passport gate fails; at 0.199 the 9x18 Pst's 250 HV core would die on
+            // a Бр1 steel panel at 335 m/s, and the Бр1/Бр2 rungs stop being
+            // distinguishable. Near the midpoint.
+            DeformPlateSupport = 0.14,
+            // How the dead-core factor grows with the ratio. Window [0.323, 0.405]:
+            // the smallest value at which M80 ball still drives the one soft-core
+            // certificate (AR500 Level III) up to the ceiling that certificate
+            // demands, and 0.405 is where the 6B3TM chest section would start
+            // stopping the SVD its passport says goes through. Sits just over its
+            // own floor, the way the ceiling sits on the AR500's.
+            DeformSpreadExponent = 0.33,
+            // A core that dies on the face loads the plate over MORE than its own
+            // calibre, never less - 1.0 is the physical floor. The 6B3TM passport
+            // demands 1.035 of it (mild PS at 720 m/s, held); it sits just above.
+            DeformFloor = 1.05,
+            // No steel reaches 1000 HV - hardened tool steels stop at about 800,
+            // and the space above belongs to carbides and ceramics, which fail by
+            // fracture rather than flow. A material bound, not a corpus fit.
+            BrittleCoreMinHv = 1000,
+            // The 6B23 certificate is the one place a brittle core meets a plate
+            // hard enough: 44S at 613 HV shatters the 7N24's VK-8 at 1300 HV, ratio
+            // 0.4715, and the certificate is one-sided - it says this ratio is
+            // enough and nothing about softer plates. The value sits a hair inside
+            // the documented point; titanium at 0.27 stays under it, which keeps
+            // the 7N24 the titanium-killer nothing in the corpus contradicts.
+            ShatterRatio = 0.47,
             MinCos = 0.34,
         };
     }
 
     /// <summary>
-    /// How much harder the barrier is than the core, raised to a power and bounded. Above
-    /// 1 the core is losing the argument and the barrier is worth more than its strength
-    /// alone says; below 1 the core is cutting through and the barrier is worth less.
-    /// Fibre panels have no hardness worth the name and sit at 1.
+    /// What is left of the core's authority once it has met the face. Rigid, deformed
+    /// or shattered — and which one is decided here, because the hardness term's whole
+    /// job depends on it.
     ///
-    /// The exponent is what reconciled the two halves of the evidence. With a plain ratio
-    /// the RHA ladder and the certified Russian plates wanted constants 1.4x apart in
-    /// work, and no value of DuctileK could satisfy both: RHA meets a core it cannot
-    /// touch (320 HV against 730) while an AR500 plate meets one it nearly matches (580
-    /// against 697), and a linear ratio does not separate those two situations enough.
-    /// At 1.32 they land together to within a percent — which is not a fit, it is two
-    /// datasets agreeing once the term between them has the right shape.
+    /// One clamped power of the hardness ratio used to do all three jobs, and the three
+    /// vest-passport gates refuted it with a sign pattern no ratio curve can produce:
+    /// the same titanium vest was under-credited against a mild steel core (the passport
+    /// holds it; the model needed a factor above 1 at a ratio below 1, which a power of
+    /// the ratio cannot say) and over-credited against lead (the passport lets the SVD
+    /// through), while a 44S panel was under-credited against tungsten carbide — a
+    /// factor of 0.41 demanded at a ratio where the RHA ladder pins 0.32, so the term
+    /// cannot even be monotone in the ratio. It is not a curve that was wrong but a
+    /// missing decision: what happened to the core.
+    ///
+    /// **Rigid** — a quenched core (above DeformCoreMaxHv) or any core the plate cannot
+    /// stress to its yield. The contest is whether the plate's shear band or the core
+    /// gives way first, and the clamped power of the ratio keeps that job unchanged,
+    /// floor, ceiling, exponent and the RHA-ladder derivation with it.
+    ///
+    /// **Deformed** — a soft core dies on the face when the contact stress reaches its
+    /// own yield: the Taylor rigidity criterion, two-material form. The stress is the
+    /// stagnation pressure ½ρ_plate·v² plus the share of the plate's own strength
+    /// DeformPlateSupport says, against HvToYieldMPa times the core's hardness. The
+    /// velocity matters and the corpus shows it: the same construction-steel family is
+    /// rigid at 335 m/s out of a PM and dead at 720 out of an AKM. A dead core loads
+    /// the plate as spread mass over more than its calibre — worth DeformFloor at
+    /// least, growing shallowly with the ratio (DeformSpreadExponent), capped by the
+    /// same ceiling the AR500 certificate pins.
+    ///
+    /// **Shattered** — a brittle core (above BrittleCoreMinHv: carbides and ceramics,
+    /// no steel) cracks on a face hard enough (ShatterRatio), and rubble is spread
+    /// mass exactly as a mushroomed slug is: the dead-core factor covers both deaths.
+    /// Velocity is deliberately absent here — the real phenomenon has a shatter gap
+    /// (a slow enough carbide survives) — but below the rigid limit both readings
+    /// block, so the gap cannot show inside the game's velocity range. Recorded in
+    /// MODEL.md under what is deliberately not modelled.
     /// </summary>
-    public static double HardnessFactor(Barrier b, Core c, Tuning t)
+    public enum CoreFate
+    {
+        Rigid,
+        Deformed,
+        Shattered,
+    }
+
+    /// <summary>Which of the three ends this core meets on this face at this speed.</summary>
+    public static CoreFate FateOf(Barrier b, Core c, double v, Tuning t)
+    {
+        if (b.HardnessHv <= 0 || c.HardnessHv <= 0)
+        {
+            return CoreFate.Rigid;
+        }
+
+        if (c.HardnessHv >= t.BrittleCoreMinHv)
+        {
+            return b.HardnessHv / c.HardnessHv >= t.ShatterRatio
+                ? CoreFate.Shattered
+                : CoreFate.Rigid;
+        }
+
+        if (c.HardnessHv >= t.DeformCoreMaxHv)
+        {
+            return CoreFate.Rigid;
+        }
+
+        // Taylor, two-material form, in MPa: stagnation plus the plate's supported
+        // strength against the core's dynamic yield
+        var contact = 0.5 * b.DensityGCm3 * 1000.0 * v * v / 1e6
+                      + t.DeformPlateSupport * t.HvToYieldMPa * b.HardnessHv;
+        return contact >= t.HvToYieldMPa * c.HardnessHv
+            ? CoreFate.Deformed
+            : CoreFate.Rigid;
+    }
+
+    /// <summary>
+    /// How much the hardness argument between core and face is worth, and it is two
+    /// different arguments depending on the core's fate (see CoreFate).
+    ///
+    /// For a rigid core: the clamped power of the plate-over-core ratio. Above 1 the
+    /// core is losing and the barrier is worth more than its strength alone says;
+    /// below 1 the core is cutting through and the barrier is worth less. The exponent
+    /// is what reconciled the RHA ladder with the certified Russian plates — two
+    /// datasets, one constant, to within a percent.
+    ///
+    /// For a dead core — mushroomed or shattered — the plate meets spread mass, never
+    /// worth less than DeformFloor and growing shallowly with the ratio. Fibre panels
+    /// have no hardness worth the name and sit at 1.
+    /// </summary>
+    public static double HardnessFactor(Barrier b, Core c, double v, Tuning t)
     {
         // Fibre has no hardness worth the name. Brittle is excluded for a different
         // reason: at 1500 HV a ceramic sits above every core in the game — even the
@@ -450,6 +628,14 @@ public static class BallisticLimit
         if (b.Class == Ductile && b.FailureMode == HoleExpansion)
         {
             return 1;
+        }
+
+        if (FateOf(b, c, v, t) != CoreFate.Rigid)
+        {
+            var spread = Math.Pow(b.HardnessHv / c.HardnessHv, t.DeformSpreadExponent);
+            return spread < t.DeformFloor ? t.DeformFloor
+                : spread > t.HardnessCeiling ? t.HardnessCeiling
+                : spread;
         }
 
         var ratio = Math.Pow(b.HardnessHv / c.HardnessHv, t.HardnessExponent);
@@ -488,7 +674,7 @@ public static class BallisticLimit
     /// a pack at T² makes a 33 mm polyethylene plate absorb three and a half times
     /// what its certificate says.
     /// </summary>
-    public static double WorkJ(Barrier b, Core c, double cos, Tuning t)
+    public static double WorkJ(Barrier b, Core c, double cos, double v, Tuning t)
     {
         if (b.ThicknessMm <= 0 || c.DiaMm <= 0)
         {
@@ -529,7 +715,7 @@ public static class BallisticLimit
 
         // the hardness argument is between the core and the FACE; the backing is fibre
         // and fibre has no hardness worth the name, so its work is added outside
-        work *= HardnessFactor(b, c, t);
+        work *= HardnessFactor(b, c, v, t);
 
         // the backing catches what is left of the core layer by layer, exactly as a
         // free-standing fibre panel would
@@ -548,10 +734,16 @@ public static class BallisticLimit
     /// Ballistic limit, m/s: below this the barrier holds, above it the core is through.
     /// Returns 0 when there is nothing to compute with, which callers read as "no
     /// geometry for this item, fall back to the class threshold".
+    ///
+    /// v is the speed the round actually arrives at, and it is an input to the LIMIT
+    /// because the limit depends on the state the round arrives in: a soft core that
+    /// dies on the face at full speed would have arrived intact at half of it. The
+    /// number handed back is the limit for a round in the state v puts it in, and the
+    /// caller's question stays the same — is v above it.
     /// </summary>
-    public static double V50(Barrier b, Core c, double cos, Tuning t)
+    public static double V50(Barrier b, Core c, double cos, double v, Tuning t)
     {
-        var w = WorkJ(b, c, cos, t);
+        var w = WorkJ(b, c, cos, v, t);
         var m = MassAgainst(b, c);
         if (w <= 0 || m <= 0)
         {

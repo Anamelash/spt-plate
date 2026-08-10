@@ -165,7 +165,7 @@ public class CalibrationTests
         foreach (var threat in ArmorFixture.Threats(standard, cls))
         {
             var need = CertificationCriteria.RequiredV50(standard, cls, threat.V);
-            var got = BallisticLimit.V50(barrier, ArmorFixture.CoreOf(threat), 1.0, t);
+            var got = BallisticLimit.V50(barrier, ArmorFixture.CoreOf(threat), 1.0, threat.V, t);
             if (need > 0 && got / need < reaches)
             {
                 reaches = got / need;
@@ -269,12 +269,175 @@ public class CalibrationTests
         var rha = ArmorStandardTests.Limits.First(l => l.Material == "ArmoredSteel");
         var m = ArmorStandardTests.LadderMaterials["ArmoredSteel"];
         var factor = BallisticLimit.HardnessFactor(
-            LadderCalibrator.LadderBarrier(rha, m), ArmorFixture.CoreOf(rha.Threat), t);
+            LadderCalibrator.LadderBarrier(rha, m), ArmorFixture.CoreOf(rha.Threat),
+            rha.V50, t);
 
         Assert.True(t.HardnessFloor < factor,
             $"the floor {t.HardnessFloor} is at or above the {factor:0.000} the RHA " +
             "ladder itself earns against its core — a softer plate would now be worth " +
             "more than a harder one against the same bullet");
+    }
+
+    /// <summary>A vest gate's plate with its fabric screen, as the gate test builds it.</summary>
+    private static BallisticLimit.Barrier VestAssembly(int gateIndex)
+    {
+        var g = ArmorStandardTests.VestGates[gateIndex];
+        var (barrier, _) = ArmorFixture.ByProduct(g.PlateKey);
+        var aramid = ReferenceBookTests.ShippedBook().ArmorMaterials["Aramid"];
+        barrier.BackingMm = g.ScreenMm;
+        barrier.BackingTensileMPa = aramid.FibreTensileMPa;
+        barrier.BackingStrain = aramid.FailureStrain;
+        barrier.BackingPacked = BallisticLimit.SewnPacked;
+        return barrier;
+    }
+
+    private static bool GateHolds(int gateIndex, BallisticLimit.Tuning t)
+    {
+        var g = ArmorStandardTests.VestGates[gateIndex];
+        var v50 = BallisticLimit.V50(VestAssembly(gateIndex),
+            ArmorFixture.CoreOf(g.Round), 1.0, g.Round.V, t);
+        return v50 >= g.Round.V;
+    }
+
+    /// <summary>
+    /// The deform floor sits on the one measurement that demands a factor above 1:
+    /// the 6B3TM holding the mild PS core, a passport sentence no rigid reading can
+    /// satisfy (the ratio is below 1 there). One-sided, so the value sits just over
+    /// the demand — at 1.0, the physical floor, the gate must fail, or the floor has
+    /// stopped being load-bearing and should be derived down.
+    /// </summary>
+    [Fact]
+    public void The_deform_floor_sits_on_the_6B3TM_mild_core_passport()
+    {
+        var shipped = BallisticLimit.Tuning.Default;
+        Assert.True(GateHolds(6, shipped), "the anchor gate itself is failing");
+
+        var bare = shipped;
+        bare.DeformFloor = 1.0;
+        Assert.False(GateHolds(6, bare),
+            "the 6B3TM holds the mild PS with no help from the deform floor — the " +
+            "floor is above what anything measured demands and should be derived down");
+
+        // and it is a floor over MORE than the calibre, never less
+        Assert.True(shipped.DeformFloor >= 1.0);
+    }
+
+    /// <summary>
+    /// The spread exponent's window, both walls. Below it the M80 cannot drive the
+    /// AR500 certificate up to the ceiling that certificate pins; above it the 6B3TM
+    /// chest section starts stopping the SVD its own passport says goes through. If
+    /// either probe stops failing, the corpus has loosened and the value should be
+    /// re-derived against whatever moved.
+    /// </summary>
+    [Fact]
+    public void The_spread_exponent_sits_between_the_AR500_and_the_6B3TM_passport()
+    {
+        var shipped = BallisticLimit.Tuning.Default;
+
+        var shallow = shipped;
+        shallow.DeformSpreadExponent = 0.31;
+        Assert.True(Reaches(Ar500LevelIii, "NIJ", "III", shallow).Reaches < 1.0,
+            "the AR500 clears its certificate below the exponent's derived floor — " +
+            "the floor is not where this test thinks it is; re-derive");
+
+        var steep = shipped;
+        steep.DeformSpreadExponent = 0.41;
+        Assert.True(GateHolds(7, steep),
+            "at 0.41 the SVD still pierces the 6B3TM, so the ceiling of the window " +
+            "is not where this test thinks it is; re-derive");
+        Assert.False(GateHolds(7, shipped),
+            "the SVD fails to pierce the 6B3TM at the shipped exponent");
+
+        Assert.True(Reaches(Ar500LevelIii, "NIJ", "III", shipped).Reaches >= 1.0);
+    }
+
+    /// <summary>
+    /// The deform threshold's window, both walls: the 390 HV pre-1989 PS core must
+    /// die on titanium or the 6B3TM passport gate fails, and the 570 HV M2 AP must
+    /// stay rigid or the RHA ladder stops deriving one constant — its top rows would
+    /// arrive above the Taylor stress and flip branches mid-ladder, and the per-row
+    /// solutions tear apart by the ratio of the two factors.
+    /// </summary>
+    [Fact]
+    public void The_deform_threshold_sits_between_the_PS_core_and_the_M2_AP()
+    {
+        var shipped = BallisticLimit.Tuning.Default;
+        Assert.InRange(shipped.DeformCoreMaxHv, 391, 569);
+
+        var below = shipped;
+        below.DeformCoreMaxHv = 390;
+        Assert.False(GateHolds(6, below),
+            "at a threshold of 390 the mild PS core stays rigid and the 6B3TM gate " +
+            "still passes — the lower wall has moved; re-derive");
+
+        var above = shipped;
+        above.DeformCoreMaxHv = 580;
+        var rha = ArmorStandardTests.Limits.Where(l => l.Material == "ArmoredSteel").ToArray();
+        var perRow = rha.Select(r => LadderCalibrator.SolveK(r, above)).ToArray();
+        Assert.True(perRow.Max() / perRow.Min() > 1.5,
+            "with the M2 AP allowed to deform, the RHA ladder still solves to one " +
+            "constant — the upper wall has moved; re-derive");
+        var perRowShipped = rha.Select(r => LadderCalibrator.SolveK(r, shipped)).ToArray();
+        Assert.True(perRowShipped.Max() / perRowShipped.Min() < 1.25,
+            "the ladder no longer agrees with itself even at the shipped threshold");
+    }
+
+    /// <summary>
+    /// The plate-support share, both walls, each pinned by a named round staying on
+    /// its own side of the fate decision: the mild PS core must die on the 6B3TM's
+    /// titanium at 720 m/s (stagnation alone is 109 MPa short there — the term is
+    /// load-bearing), and the 9x18's 250 HV core must survive a Бр1 steel panel at
+    /// 335, or the Бр1 and Бр2 rungs stop being distinguishable.
+    /// </summary>
+    [Fact]
+    public void The_plate_support_sits_between_the_6B3TM_and_the_9x18()
+    {
+        var shipped = BallisticLimit.Tuning.Default;
+
+        var titanium = VestAssembly(6);
+        var ps = ArmorFixture.CoreOf(ArmorStandardTests.VestGates[6].Round);
+        Assert.Equal(BallisticLimit.CoreFate.Deformed,
+            BallisticLimit.FateOf(titanium, ps, 720, shipped));
+        var weak = shipped;
+        weak.DeformPlateSupport = 0.09;
+        Assert.Equal(BallisticLimit.CoreFate.Rigid,
+            BallisticLimit.FateOf(titanium, ps, 720, weak));
+
+        var (br1, _) = ArmorFixture.ByClass("ArmoredSteel", 2);
+        var pst = ArmorFixture.CoreOf(
+            ArmorStandardTests.Gost.Single(t => t.Cartridge.StartsWith("9x18")));
+        Assert.Equal(BallisticLimit.CoreFate.Rigid,
+            BallisticLimit.FateOf(br1, pst, 335, shipped));
+        var strong = shipped;
+        strong.DeformPlateSupport = 0.20;
+        Assert.Equal(BallisticLimit.CoreFate.Deformed,
+            BallisticLimit.FateOf(br1, pst, 335, strong));
+    }
+
+    /// <summary>
+    /// The shatter ratio sits a hair inside its one anchor — the 6B23 certificate,
+    /// where 613 HV of 44S turns back the 7N24's 1300 HV carbide. A certificate is
+    /// one-sided: it says this ratio suffices and nothing about softer plates, so the
+    /// value may not exceed the documented point, and just past it the gate must fail
+    /// or the anchor is not doing the pinning.
+    /// </summary>
+    [Fact]
+    public void The_shatter_ratio_sits_on_the_6B23_anchor()
+    {
+        var shipped = BallisticLimit.Tuning.Default;
+        Assert.True(shipped.ShatterRatio <= 613.0 / 1300.0,
+            "the ratio is past the one documented shatter — nothing measured supports it");
+        Assert.True(GateHolds(4, shipped), "the anchor gate itself is failing");
+
+        var past = shipped;
+        past.ShatterRatio = 0.48;
+        Assert.False(GateHolds(4, past),
+            "the 6B23 holds the 7N24 even with the shatter out of reach — the gate " +
+            "is being carried by something else and the anchor story is stale");
+
+        // and no steel is brittle: the boundary lives above every steel in the corpus
+        Assert.True(shipped.BrittleCoreMinHv > 800);
+        Assert.True(shipped.BrittleCoreMinHv <= 1300);
     }
 
     /// <summary>
@@ -313,7 +476,7 @@ public class CalibrationTests
                     var core = ArmorFixture.CoreOf(threat);
                     var unit = t;
                     unit.FibrousK = 1;
-                    var perK = BallisticLimit.WorkJ(barrier, core, 1.0, unit);
+                    var perK = BallisticLimit.WorkJ(barrier, core, 1.0, threat.V, unit);
                     var need = 0.5 * (BallisticLimit.MassAgainst(barrier, core) / 1000.0) * threat.V * threat.V;
                     if (perK > 0)
                     {
@@ -339,30 +502,47 @@ public class CalibrationTests
     /// BrittleK against both of its anchors at once: the bare tile is a floor, the
     /// certified ceramics are the requirement, and the shipped value is the smallest
     /// that meets the second without leaving the first's band.
+    ///
+    /// Two rules of the derivation, both learned the hard way. The requirement is
+    /// read at the criterion the certificate tests actually enforce — zero-of-five,
+    /// about +9% in velocity — not at the bare test velocity: this test derived at
+    /// bare velocity once, agreed with the enforcement by coincidence, and the
+    /// coincidence died the day the backing data was fixed. And only real products
+    /// WITHOUT a recorded shortfall may demand anything: a computed rung confirms
+    /// nothing (the ceiling's old circular anchor), and a recorded miss is a
+    /// documented gap, not a requirement — letting it bid would push the constant up
+    /// to hide the very physics its entry documents.
     /// </summary>
     [Fact]
     public void BrittleK_is_the_smallest_the_ceramic_certificates_allow()
     {
         var t = BallisticLimit.Tuning.Default;
         var need = 0.0;
-        foreach (var (barrier, standard, cls, _) in Items())
+        foreach (var c in ArmorStandardTests.Certified)
         {
+            if (ArmorStandardTests.CertShortfalls.ContainsKey(c.BookKey))
+            {
+                continue;
+            }
+
+            var (barrier, _) = ArmorFixture.ByProduct(c.BookKey);
             if (barrier.Class != BallisticLimit.Brittle)
             {
                 continue;
             }
 
-            foreach (var threat in ArmorFixture.Threats(standard, cls))
+            foreach (var threat in ArmorFixture.Threats(c.Standard, c.Class))
             {
                 var core = ArmorFixture.CoreOf(threat);
                 var unit = t;
                 unit.BrittleK = 1;
                 var face = barrier;
                 face.BackingMm = 0;
-                var perK = BallisticLimit.WorkJ(face, core, 1.0, unit);
-                var backing = BallisticLimit.WorkJ(barrier, core, 1.0, unit) - perK;
+                var perK = BallisticLimit.WorkJ(face, core, 1.0, threat.V, unit);
+                var backing = BallisticLimit.WorkJ(barrier, core, 1.0, threat.V, unit) - perK;
+                var required = CertificationCriteria.RequiredV50(c.Standard, c.Class, threat.V);
                 var demanded = 0.5 * (BallisticLimit.MassAgainst(barrier, core) / 1000.0)
-                               * threat.V * threat.V;
+                               * required * required;
                 if (perK > 0)
                 {
                     need = Math.Max(need, (demanded - backing) / perK);
@@ -426,7 +606,7 @@ public class CalibrationTests
         // the model's reading of the tile must stay inside the band its method earns
         var m = ArmorStandardTests.LadderMaterials["Ceramic"];
         var v = BallisticLimit.V50(LadderCalibrator.LadderBarrier(tile, m),
-            ArmorFixture.CoreOf(tile.Threat), 1.0, BallisticLimit.Tuning.Default);
+            ArmorFixture.CoreOf(tile.Threat), 1.0, tile.V50, BallisticLimit.Tuning.Default);
         Assert.InRange(v / tile.V50, 1.0 - tile.Band, 1.0 + tile.Band);
     }
 
@@ -465,8 +645,8 @@ public class CalibrationTests
                 unit.BrittleK = 1;
                 var noBacking = barrier;
                 noBacking.BackingMm = 0;
-                var perK = BallisticLimit.WorkJ(noBacking, core, 1.0, unit);
-                var backing = BallisticLimit.WorkJ(barrier, core, 1.0, unit) - perK;
+                var perK = BallisticLimit.WorkJ(noBacking, core, 1.0, threat.V, unit);
+                var backing = BallisticLimit.WorkJ(barrier, core, 1.0, threat.V, unit) - perK;
                 var demanded = 0.5 * (BallisticLimit.MassAgainst(barrier, core) / 1000.0) * threat.V * threat.V;
                 var k = (demanded - backing) / perK;
                 need = Math.Max(need, k);

@@ -83,12 +83,16 @@ public static class ArmorFixture
             Class = physics.Class,
             FailureMode = physics.FailureMode,
             ThicknessMm = entry.ThicknessMm,
-            ShearMPa = physics.ShearMPa,
-            YieldMPa = physics.YieldMPa,
+
+            // the product's own alloy wins, exactly as the client resolves it from the
+            // wire: the material key is the game's enum and one of its eight names covers
+            // every steel there is, from RHA to 44S
+            ShearMPa = entry.ShearMPa > 0 ? entry.ShearMPa : physics.ShearMPa,
+            YieldMPa = entry.YieldMPa > 0 ? entry.YieldMPa : physics.YieldMPa,
             CompressiveMPa = physics.CompressiveMPa,
             FibreTensileMPa = physics.FibreTensileMPa,
             FailureStrain = physics.FailureStrain,
-            HardnessHv = physics.HardnessHv,
+            HardnessHv = entry.HardnessHv > 0 ? entry.HardnessHv : physics.HardnessHv,
             DensityGCm3 = density,
             PackedFraction = physics.DensityGCm3 > 0 ? density / physics.DensityGCm3 : 1,
         };
@@ -104,7 +108,10 @@ public static class ArmorFixture
             barrier.BackingMm = entry.BackingMm;
             barrier.BackingTensileMPa = backing.FibreTensileMPa;
             barrier.BackingStrain = backing.FailureStrain;
-            barrier.BackingPacked = 1;
+            // same rule the client applies: a stitched screen is mostly air
+            barrier.BackingPacked = backingKey == "Aramid"
+                ? BallisticLimit.SewnPacked
+                : 1;
         }
 
         return (barrier, entry.ThicknessMm);
@@ -116,10 +123,13 @@ public static class ArmorFixture
             t.CoreHardnessHv, BallisticLimit.Tuning.Default);
     }
 
-    /// <summary>Perpendicular hit on an undamaged plate — the conditions a standard tests at.</summary>
+    /// <summary>
+    /// Perpendicular hit on an undamaged plate — the conditions a standard tests at.
+    /// The threat's own velocity decides the state the round arrives in.
+    /// </summary>
     public static double V50(BallisticLimit.Barrier barrier, ArmorStandardTests.Threat t)
     {
-        return BallisticLimit.V50(barrier, CoreOf(t), 1.0, BallisticLimit.Tuning.Default);
+        return BallisticLimit.V50(barrier, CoreOf(t), 1.0, t.V, BallisticLimit.Tuning.Default);
     }
 
     /// <summary>Every cartridge a standard fires at this class.</summary>

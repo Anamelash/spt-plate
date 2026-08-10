@@ -35,7 +35,7 @@ public static class LadderCalibrator
         var unit = tuning;
         unit.DuctileK = unit.HoleGrowthK = unit.BrittleK = unit.FibrousK = 1;
 
-        var perK = BallisticLimit.WorkJ(barrier, core, 1.0, unit);
+        var perK = BallisticLimit.WorkJ(barrier, core, 1.0, row.V50, unit);
         if (perK <= 0)
         {
             throw new InvalidOperationException(

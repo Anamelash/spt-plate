@@ -179,11 +179,21 @@ the projectile has to defeat it with specific energy:
   are the fallback for armor nothing is known about. Bottom-tier "class 1" junk
   headwear (construction helmets and the like) is fragment protection only — it
   will not stop a pistol bullet.
-- **Hardness decides who wins.** A core softer than the plate flattens on its face
-  and stops being a punch. This is the difference between the two 7.62×39 loads
-  and between the two 62-grain 5.56 loads, and it is why 25 mm of polyethylene
-  shrugs off a mild-steel-cored rifle round and is beaten by a small hard core
-  carrying half the energy.
+- **Hardness decides who wins — by deciding what happens to the core.** A
+  quenched core arrives intact and the contest is between it and the plate's
+  strength. A softer core is crushed on the face when the impact is fast enough —
+  the same mild steel that punches titanium at pistol speed dies on it out of a
+  rifle — and a crushed core loads the plate as a spread slug, not a punch. A
+  carbide core is the third case: it does not flatten, it *cracks*, but only on a
+  face hard enough to crack it — the 6B23's ultra-hard steel panel turns back the
+  7N24's tungsten carbide exactly as its maker's certificate says, while the same
+  round goes through titanium, which is too soft to break it. This is the
+  difference between the two 7.62×39 loads and between the two 62-grain 5.56
+  loads, and it is why 25 mm of polyethylene shrugs off a mild-steel-cored rifle
+  round and is beaten by a small hard core carrying half the energy. Every branch
+  of it is pinned by a published vest passport: the 6B3TM holds the mild PS its
+  papers claim and is pierced by the SVD its papers admit, and the 6B23 stops all
+  six rounds on its maker's schedule.
 - **Materials behave like themselves.** Ceramic offers the highest threshold
   and grinds down even hard AP cores, but cracks in tiles — a follow-up hit
   into the same segment meets rubble. Armor steel is expensive to defeat and
@@ -249,6 +259,25 @@ limits used in armor certification.
   happened to have, so clones of one bullet could come out with different physics
   and a plain M80 could be read as an expanding round. Ammunition the table does
   not name still falls back to that inference.
+- **The 7.62x39 MAI AP is the round its own description says it is.** The game calls
+  it a sabot carrying a tungsten carbide penetrator; the mod was reading it as lead,
+  because no core was on file for it and lead is what the absence of one means. It
+  now carries the hardness of that material, which is what decides everything it does
+  against a metal plate. Its mass is also corrected: the card lists the whole
+  projectile at a velocity only the penetrator reaches, and the energy that produces
+  is half again what a 7.62x39 case can deliver. A sabot round flies as its
+  penetrator, so it weighs what the calibre's own energy allows at that speed. Expect
+  it to go through steel and titanium far better than before, and through ceramic
+  and fabric worse — it was living on borrowed energy.
+- **The 5.45x39 PS is the cartridge that is actually issued, and its card says so.**
+  The game describes it as GRAU 7N6, and that index covers two different rounds: the
+  1974 original, whose core is untreated mild steel, and the 1987 modernisation, whose
+  core is a harder steel heat-treated to 60 HRC. The modernisation changed nothing
+  visible — not the bullet, not the marking, not the index — which is why one name
+  still covers both, and the original has not been produced since. PLATE models the
+  round in service: the PS meets armor on its core's own 4.0 mm instead of on the
+  whole 5.6 mm bullet, which moves it from well under the PP to just under it. The
+  index on the card is corrected to 7N6M to match.
 - Every round in the database — including rounds added by other mods — is
   normalized from its physical data. Shotgun shells receive real pellet counts,
   pellet masses and velocities of their prototypes (vanilla systematically

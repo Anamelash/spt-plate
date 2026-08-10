@@ -111,8 +111,104 @@ public class GostPenetrationTests
                 $"{cls} {material} {thickness:N1} mm turns {t.Cartridge} back only up to " +
                 $"{v50:N0} m/s; the standard fires it at {t.V:N0}, zero-of-five " +
                 $"demands {required:N0} and the recorded shortfall allows no less " +
-                $"than {required * reaches:N0}");
+                $"than {required * reaches:N0}. " +
+                "If this rung's Source says it was COMPUTED, the answer is to re-solve " +
+                $"its thickness — {thickness * required * reaches / v50:N2} mm closes it — " +
+                "because the number was solved under this very criterion and an input to " +
+                "it has moved. Do NOT reach for the material's strength or the model's " +
+                "constants: a computed rung falling short is a stale number, not weak " +
+                "steel. For a rung that names a real product, the opposite holds — the " +
+                "thickness is published and it is the physics that has to answer for it");
         }
+    }
+
+    public static TheoryData<int> VestGateIndices()
+    {
+        var data = new TheoryData<int>();
+        for (var i = 0; i < ArmorStandardTests.VestGates.Length; i++)
+        {
+            data.Add(i);
+        }
+
+        return data;
+    }
+
+    /// <summary>
+    /// The vest as a whole — plate plus the fabric it sits in — against what its maker
+    /// says happens. The bare-plate tests above ask a question no certificate answers;
+    /// this one asks the certificate's own.
+    ///
+    /// Both directions are asserted. "Holds" uses the firing velocity rather than the
+    /// zero-of-five margin, because a passport sentence is a statement about the round
+    /// being stopped, not about a five-shot protocol; the strict criterion has its own
+    /// tests. "Pierces" is the half that keeps the model honest in the other direction,
+    /// and there is no margin to give it: if the maker says the SVD goes through, a V50
+    /// above the firing velocity is simply wrong.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(VestGateIndices))]
+    public void A_vest_does_what_its_passport_says(int index)
+    {
+        var g = ArmorStandardTests.VestGates[index];
+        var (barrier, thickness) = ArmorFixture.ByProduct(g.PlateKey);
+
+        // the vest's fabric screen, stated here because the game models it as its own item
+        // and so the plate entry carries none. Sewn, therefore mostly air — the same rule
+        // ArmorFixture applies to a backing the book does declare.
+        var aramid = ReferenceBookTests.ShippedBook().ArmorMaterials["Aramid"];
+        barrier.BackingMm = g.ScreenMm;
+        barrier.BackingTensileMPa = aramid.FibreTensileMPa;
+        barrier.BackingStrain = aramid.FailureStrain;
+        barrier.BackingPacked = BallisticLimit.SewnPacked;
+
+        var v50 = ArmorFixture.V50(barrier, g.Round);
+        var held = v50 >= g.Round.V;
+
+        Assert.True(held == g.MustHold,
+            $"{g.Vest}: {thickness:N1} mm plate + {g.ScreenMm:N1} mm screen versus " +
+            $"{g.Round.Cartridge} at {g.Round.V:N0} m/s reads V50 {v50:N0}, so the model " +
+            $"says it {(held ? "holds" : "is pierced")} — the maker says it " +
+            $"{(g.MustHold ? "holds" : "is pierced")}. Source: {g.Source}");
+    }
+
+    public static TheoryData<string> Vest6B23Rounds()
+    {
+        var data = new TheoryData<string>();
+        foreach (var t in ArmorStandardTests.Vest6B23)
+        {
+            data.Add(t.Cartridge);
+        }
+
+        return data;
+    }
+
+    /// <summary>
+    /// The 6B23 steel panel against the six rounds its maker names, one test per round so
+    /// that a failure says which one. This is the corpus's densest anchor — one plate, one
+    /// alloy, one thickness, six cartridges — and it is the only place where the model is
+    /// asked the same question the certificate answers, rather than a class-shaped
+    /// paraphrase of it.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Vest6B23Rounds))]
+    public void The_6B23_panel_stops_what_its_maker_says_it_stops(string cartridge)
+    {
+        var t = ArmorStandardTests.Vest6B23.Single(x => x.Cartridge == cartridge);
+        var (barrier, thickness) = ArmorFixture.ByProduct("korund_back_6b23_2");
+
+        var reaches = ArmorStandardTests.Vest6B23Shortfalls.TryGetValue(cartridge, out var s)
+            ? s.Reaches
+            : 1.0;
+
+        var v50 = ArmorFixture.V50(barrier, t);
+        var required = CertificationCriteria.RequiredV50("GOST", "Бр4", t.V);
+
+        Assert.True(v50 >= required * reaches,
+            $"{thickness:N1} mm of 44S turns {cartridge} ({t.Source}) back only up to " +
+            $"{v50:N0} m/s; it is fired at {t.V:N0}, zero-of-five demands {required:N0} " +
+            $"and the recorded shortfall allows no less than {required * reaches:N0}. " +
+            "The panel's thickness and alloy are both published, so this is the physics " +
+            "answering for itself — not a number to be re-solved");
     }
 
     /// <summary>
@@ -279,7 +375,7 @@ public class GostPenetrationTests
         var core = CoreOf(t);
         var tuning = BallisticLimit.Tuning.Default;
 
-        var v50 = BallisticLimit.V50(barrier, core, 1.0, tuning);
+        var v50 = BallisticLimit.V50(barrier, core, 1.0, t.V, tuning);
         var plug = BallisticLimit.PlugMassG(barrier, core, 1.0, tuning);
         var vr = BallisticLimit.ResidualVelocity(t.V, v50, core.MassG, plug);
 
@@ -327,9 +423,10 @@ public class GostPenetrationTests
 
         foreach (var t in ArmorStandardTests.All)
         {
-            var known = BallisticLimit.V50(barrier, CoreOf(t), 1.0, tuning);
+            var known = BallisticLimit.V50(barrier, CoreOf(t), 1.0, t.V, tuning);
             var blind = BallisticLimit.V50(barrier,
-                BallisticLimit.Driving(t.MassG, t.DiaMm, 1, 1, t.CoreHardnessHv, tuning), 1.0, tuning);
+                BallisticLimit.Driving(t.MassG, t.DiaMm, 1, 1, t.CoreHardnessHv, tuning),
+                1.0, t.V, tuning);
 
             Assert.InRange(known / blind, 0.5, 2.0);
         }
@@ -376,8 +473,8 @@ public class GostPenetrationTests
         var core = CoreOf(t);
         var tuning = BallisticLimit.Tuning.Default;
 
-        var square = BallisticLimit.V50(barrier, core, 1.0, tuning);
-        var glancing = BallisticLimit.V50(barrier, core, 0.4, tuning);
+        var square = BallisticLimit.V50(barrier, core, 1.0, t.V, tuning);
+        var glancing = BallisticLimit.V50(barrier, core, 0.4, t.V, tuning);
 
         Assert.True(glancing > square * 2, $"{square:N0} head-on against {glancing:N0} at 66°");
     }

@@ -23,7 +23,7 @@ public class ObliquityTests
     private static double Model(ArmorStandardTests.ObliqueLimit row)
     {
         return BallisticLimit.V50(LadderCalibrator.ObliqueBarrier(row),
-            ArmorFixture.CoreOf(row.Threat), row.Cos, BallisticLimit.Tuning.Default);
+            ArmorFixture.CoreOf(row.Threat), row.Cos, row.V50, BallisticLimit.Tuning.Default);
     }
 
     public static TheoryData<string, int> Series()

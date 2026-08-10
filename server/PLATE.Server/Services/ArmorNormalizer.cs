@@ -49,6 +49,12 @@ public class ArmorNormalizer(
     /// </summary>
     private readonly Dictionary<string, (double Mm, string Material)> _backing = new();
 
+    /// <summary>
+    /// Per-item alloy, where the product names one the game's material cannot express.
+    /// Keyed by item id, same as the tables above.
+    /// </summary>
+    private readonly Dictionary<string, (double Shear, double Yield, double Hv)> _grade = new();
+
     /// <summary>How many items carried a class their construction cannot hold.</summary>
     private int _reRated;
 
@@ -287,6 +293,11 @@ public class ArmorNormalizer(
                 _backing[item.Id] = (spec.BackingMm, spec.BackingMaterial);
             }
 
+            if (spec.ShearMPa > 0 || spec.YieldMPa > 0 || spec.HardnessHv > 0)
+            {
+                _grade[item.Id] = (spec.ShearMPa, spec.YieldMPa, spec.HardnessHv);
+            }
+
             // the game is right about the material far more often than not, so this
             // corrects the exceptions rather than overriding everything
             if (spec.Material.Length > 0 && spec.Material != material)
@@ -334,11 +345,18 @@ public class ArmorNormalizer(
             var own = _density.TryGetValue(id, out var d) ? d : 0;
 
             var backing = _backing.TryGetValue(id, out var bk) ? bk : (Mm: 0.0, Material: "");
+            var grade = _grade.TryGetValue(id, out var g) ? g : (Shear: 0.0, Yield: 0.0, Hv: 0.0);
 
             plates[id.ToString()] = new
             {
                 T = Math.Round(thickness, 3),
                 M = material,
+
+                // the alloy, where the product names one the eight game materials cannot
+                // tell apart; zero means "whatever the material says"
+                S = Math.Round(grade.Shear, 1),
+                Y = Math.Round(grade.Yield, 1),
+                H = Math.Round(grade.Hv, 1),
 
                 // how much of this entry is actually the material and how much is the air
                 // between its layers; 1 for anything solid

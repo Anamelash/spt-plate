@@ -98,9 +98,14 @@ public class BallisticLadderTests
             .ToArray();
 
         var spread = ratios.Max() / ratios.Min();
+
+        // ratios are ordered by thickness, so the ends are the ends — the message used to
+        // call Min "thin" and Max "thick", which for the mild ladder names them backwards:
+        // it runs +9% at the thin end and −14% at the thick one
         Assert.True(spread < 1.15,
-            $"{material}: the model is off by {ratios.Min():0.00}x at the thin end and " +
-            $"{ratios.Max():0.00}x at the thick end — that is the law's shape, not a constant");
+            $"{material}: the model is off by {ratios[0]:0.00}x at the thin end and " +
+            $"{ratios[^1]:0.00}x at the thick end, a spread of {spread:0.00}x " +
+            "— that is the law's shape, not a constant");
     }
 
     /// <summary>
