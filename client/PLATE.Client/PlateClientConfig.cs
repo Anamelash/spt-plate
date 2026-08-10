@@ -113,6 +113,12 @@ namespace PLATE.Client
         public static ConfigEntry<float> BoneChanceCalf;
         public static ConfigEntry<float> BoneChanceUpperArm;
         public static ConfigEntry<float> BoneChanceForearm;
+        public static ConfigEntry<float> FractureDestroyedMult;
+        public static ConfigEntry<float> FractureChanceMultPlayer;
+        public static ConfigEntry<float> FractureChanceMultPmc;
+        public static ConfigEntry<float> FractureChanceMultScav;
+        public static ConfigEntry<bool> SurgeryHealsFracture;
+        public static ConfigEntry<bool> BrokenLegGroundsBots;
         public static ConfigEntry<float> GuaranteedBleedMinDamage;
         public static ConfigEntry<float> ThresholdTier1;
         public static ConfigEntry<float> ThresholdTier2;
@@ -196,7 +202,7 @@ namespace PLATE.Client
         public static ConfigFile Source => _cfg;
 
         /// <summary>Bump on every change to an existing setting's default.</summary>
-        private const int CurrentConfigVersion = 7;
+        private const int CurrentConfigVersion = 8;
 
         /// <summary>Shown on a key that only exists to be read once by a migration.</summary>
         private const string RetiredNote =
@@ -505,6 +511,11 @@ namespace PLATE.Client
                 "A surgical kit (CMS, Surv12) also closes the bleedings on the limb it " +
                 "repairs. Vanilla leaves them running, which under PLATE keeps draining " +
                 "blood out of a limb that was just operated on.");
+            SurgeryHealsFracture = Bind(sBlood, "Surgical kit sets a fracture", true,
+                "A surgical kit also sets the broken bone in the limb it repairs. Vanilla " +
+                "clears the bleedings on a restored limb and leaves the fracture standing, " +
+                "which reads as an operation that rebuilt the limb around an untouched " +
+                "break. A splint still works on its own and is still the cheap answer.");
             InternalBleedPmc = Bind(sBlood, "Internal bleeding: PMC", true,
                 "Same for PMC bots (USEC/BEAR).");
             InternalBleedScav = Bind(sBlood, "Internal bleeding: Scav", true,
@@ -544,6 +555,15 @@ namespace PLATE.Client
             FractureFallDelay = Bind(sBlood, "Fracture fall delay, s", 0.8f,
                 "Seconds of moving on a broken leg before collapsing.",
                 new AcceptableValueRange<float>(0.1f, 5f));
+            BrokenLegGroundsBots = Bind(sBlood, "Broken leg keeps bots down", true,
+                "A bot with a broken leg stays on the ground instead of standing up and " +
+                "falling over a step later. It is still let up for the one thing worth " +
+                "standing for — throwing a grenade — and a splint lifts it entirely. " +
+                "Note that a bot on the ground does not crawl: the game's own prone " +
+                "command stops him where he is, and moving while down is not something " +
+                "its AI does. So this trades a bot who hops up and falls over for a bot " +
+                "who lies still and shoots from there. Turn off if you would rather have " +
+                "the hopping.");
             TransfusionMlPerUse = Bind(sBlood, "Transfusion ml per use", 500f,
                 "How many ml one use of a blood pack restores (sold by Therapist).",
                 new AcceptableValueRange<float>(100f, 2000f));
@@ -592,17 +612,37 @@ namespace PLATE.Client
             FractureEnergyFull = Bind(sBlood, "Bone fracture energy full, J", 900f,
                 "From this energy on, a bone hit breaks it guaranteed.",
                 new AcceptableValueRange<float>(200f, 5000f), true);
-            BoneChanceThigh = Bind(sBlood, "Bone chance thigh", 0.35f,
+            // These four are the one roll that answers both "did the bullet stop in the
+            // limb" and "did the bone break", so changing them moves overpenetration as
+            // well as fractures.
+            BoneChanceThigh = Bind(sBlood, "Bone chance thigh", 0.175f,
                 "Probability of clipping the femur on a thigh hit.",
                 new AcceptableValueRange<float>(0f, 1f), true);
-            BoneChanceCalf = Bind(sBlood, "Bone chance calf", 0.45f,
+            BoneChanceCalf = Bind(sBlood, "Bone chance calf", 0.225f,
                 "Calf: the tibia sits near the surface.",
                 new AcceptableValueRange<float>(0f, 1f), true);
-            BoneChanceUpperArm = Bind(sBlood, "Bone chance upper arm", 0.35f,
+            BoneChanceUpperArm = Bind(sBlood, "Bone chance upper arm", 0.175f,
                 "Upper arm (humerus).", new AcceptableValueRange<float>(0f, 1f), true);
-            BoneChanceForearm = Bind(sBlood, "Bone chance forearm", 0.5f,
+            BoneChanceForearm = Bind(sBlood, "Bone chance forearm", 0.25f,
                 "Forearm: two bones in a small cross-section.",
                 new AcceptableValueRange<float>(0f, 1f), true);
+            FractureDestroyedMult = Bind(sBlood,
+                "Bullet fracture chance mult on a destroyed limb", 2f,
+                "Multiplier on the fracture chance when the limb is already blacked out. " +
+                "A blacked limb is one that has stopped doing its job, not one that is no " +
+                "longer attached: the bone in it has already been hit and the tissue that " +
+                "was bracing it is gone, so the next round breaks it more easily, not less. " +
+                "The game itself refuses to fracture such a limb at all; this is where the " +
+                "mod parts company with it.",
+                new AcceptableValueRange<float>(1f, 5f), true);
+            FractureChanceMultPmc = Bind(sBlood, "Bullet fracture chance mult: PMC", 1.0f,
+                "Multiplier on the chance a bullet breaks a PMC's bone. The chance itself " +
+                "comes from the model — the bone under that hitbox and the energy behind " +
+                "the round — and this scales it: 1 = the model's own number, 0 = bullets " +
+                "never fracture them. The Player half of this group is in section 7.",
+                new AcceptableValueRange<float>(0f, 5f));
+            FractureChanceMultScav = Bind(sBlood, "Bullet fracture chance mult: Scav", 1.0f,
+                "The same for Scavs.", new AcceptableValueRange<float>(0f, 5f));
             GuaranteedBleedMinDamage = Bind(sBlood, "Guaranteed bleed min damage", 3f,
                 "Any penetrating wound with damage above this threshold is guaranteed to bleed.",
                 new AcceptableValueRange<float>(0f, 20f), true);
@@ -722,6 +762,13 @@ namespace PLATE.Client
                 "Leg fracture without a splint: collapse to prone when trying to walk, " +
                 "and a jump ban (also with a destroyed stomach/leg). A splint lifts the " +
                 "restrictions.");
+            FractureChanceMultPlayer = Bind(sSurv, "Bullet fracture chance mult: Player", 1.0f,
+                "Multiplier on the chance a bullet breaks YOUR bone. The chance itself " +
+                "comes from the model — the bone under that hitbox and the energy behind " +
+                "the round — and this scales it: 1 = the model's own number, 0 = bullets " +
+                "never fracture you. Falls and the other vanilla sources are untouched " +
+                "either way. The PMC and Scav halves of this group are in section 3.",
+                new AcceptableValueRange<float>(0f, 5f));
             PlayerBleedChance = Bind(sSurv, "Bleeding chance on hits to you", 1f,
                 "Multiplier on the chance that a hit ON YOU starts a bleeding — heavy, " +
                 "guaranteed light, and the internal ones from opened organs, destroyed " +
@@ -965,6 +1012,21 @@ namespace PLATE.Client
             if (ConfigVersion.Value < 7)
             {
                 Migrate(HudEta, true, false);
+            }
+
+            // v8: the four bone chances are halved. They were set when the fracture roll
+            // never fired and so were never seen doing anything; once it did, a limb hit
+            // broke a bone far too readily. They are also the roll that stops a bullet in
+            // the limb, so this loosens overpenetration by the same factor — one number
+            // for one physical question, deliberately. Its own block, for the same reason
+            // v5 was: a config already at 7 would skip an addition folded into an earlier
+            // one.
+            if (ConfigVersion.Value < 8)
+            {
+                Migrate(BoneChanceThigh, 0.35f, 0.175f);
+                Migrate(BoneChanceCalf, 0.45f, 0.225f);
+                Migrate(BoneChanceUpperArm, 0.35f, 0.175f);
+                Migrate(BoneChanceForearm, 0.5f, 0.25f);
             }
 
             ConfigVersion.Value = CurrentConfigVersion;

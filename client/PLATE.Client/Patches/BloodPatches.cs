@@ -463,15 +463,30 @@ namespace PLATE.Client.Patches
         private static void TryBoneFracture(ActiveHealthController ahc, EBodyPart bodyPart,
             DamageInfo damageInfo, float applied)
         {
-            var bone = BoneChance(damageInfo.BodyPartColliderType);
+            var collider = ResolveWoundSegment(bodyPart, damageInfo);
+            var bone = BoneChance(collider);
             if (bone <= 0f)
             {
-                return;
+                return; // torso or head — bullet fractures only on limbs, like vanilla
             }
+
+            // A blacked-out limb is one that has stopped doing its job, not one that has
+            // left the body — nobody carries it to the surgeon in a bag. So it still has a
+            // bone in it, that bone has already been hit, and the tissue that was bracing
+            // it is gone: the next round through it breaks it more easily, not less.
+            // Vanilla disagrees and refuses outright (see ApplyFracture), which is why the
+            // roll has to be told about it here rather than left to DoFracture.
+            var destroyed = ahc.GetBodyPartHealth(bodyPart, false).Current <= 0f;
 
             if (Blood.CrippleSystem.HasActiveFracture(ahc, bodyPart))
             {
-                return; // already fractured
+                return; // already fractured — nothing to roll, so it is not a roll
+            }
+
+            _fractureRolls++;
+            if (destroyed)
+            {
+                _fractureOnDestroyed++;
             }
 
             var e = BallisticsPatches.ShotEnergyThisFrame;
@@ -485,8 +500,39 @@ namespace PLATE.Client.Patches
             var ramp = Mathf.Clamp01((e - eMin) /
                 Mathf.Max(PlateClientConfig.FractureEnergyFull.Value - eMin, 1f));
 
+            // The multipliers ride on the ramp, and the clamp closes over both, before the
+            // two paths below diverge. Doing it after instead made them disagree: in the
+            // shared-roll path the bone term is already spent upstream, so the clamp bit a
+            // bare ramp, while the joint path clamped the whole product — a factor of two
+            // apart at rifle energies, where the clamp is the only thing doing any work.
+            //
+            // What a wrecked limb changes is how easily the bone that was found gives way,
+            // not how often the bullet finds it: that roll happens upstream, where the
+            // limb's state is not known.
+            if (destroyed)
+            {
+                ramp *= PlateClientConfig.FractureDestroyedMult.Value;
+            }
+
+            ramp *= PlateBloodManager.CategoryValue(ahc.Player,
+                PlateClientConfig.FractureChanceMultPlayer.Value,
+                PlateClientConfig.FractureChanceMultPmc.Value,
+                PlateClientConfig.FractureChanceMultScav.Value);
+
+            ramp = Mathf.Clamp01(ramp);
+
+            // What this roll was worth before any dice were read, so the report can say
+            // what it should have produced next to what it did. Always bone·ramp, in both
+            // paths: where the bone roll was made upstream it still happened with that
+            // probability, and a roll that returns below because the bone was missed is a
+            // roll that was worth this much and came up empty. Sum against fired, and a
+            // probability that does not match its own outcomes says so within one raid
+            // instead of needing two to be compared — which they cannot honestly be, since
+            // the mix of energies and wrecked limbs is never the same twice.
+            _fractureExpected += bone * ramp;
+
             float p;
-            if (BallisticsPatches.TryGetBoneHit(damageInfo.BodyPartColliderType, out var boneHit))
+            if (BallisticsPatches.TryGetBoneHit(collider, out var boneHit))
             {
                 if (!boneHit)
                 {
@@ -502,11 +548,111 @@ namespace PLATE.Client.Patches
 
             if (p > 0f && UnityEngine.Random.value < p)
             {
-                ahc.DoFracture(bodyPart);
-                Overlay.HitFeed.PushPanel(
-                    $"  bone fracture {bodyPart} ({damageInfo.BodyPartColliderType}, " +
-                    $"{e:0}J, p={p:0.00})");
+                ApplyFracture(ahc, bodyPart, destroyed);
+                _fractureFired++;
+                Overlay.HitFeed.PushPanel($"  bone fracture {bodyPart} ({collider}, {e:0}J, " +
+                    $"p={p:0.00}{(destroyed ? ", limb blacked" : "")})");
             }
+        }
+
+        /// <summary>
+        /// Vanilla's <c>DoFracture</c> walks four guards before it adds anything: alive,
+        /// damage coefficient above zero, the part is one of the four limbs, and the part
+        /// is not destroyed. The first three the mod agrees with. The fourth encodes a
+        /// reading of "blacked out" the mod does not share — that the limb is gone rather
+        /// than wrecked — so for that one case the effect is added the same way the game
+        /// adds it, straight through <c>AddEffect</c>, which carries no such guard.
+        ///
+        /// A live limb still goes through <c>DoFracture</c>. Departing from vanilla only
+        /// where vanilla would refuse keeps the normal path normal, and anything else in
+        /// the game or in another mod that fractures a limb still gets the stock rules.
+        /// The argument list mirrors the one vanilla passes — a zero delay and defaults
+        /// for the rest — so the two produce the same effect.
+        /// </summary>
+        private static void ApplyFracture(ActiveHealthController ahc, EBodyPart bodyPart,
+            bool destroyed)
+        {
+            if (!destroyed)
+            {
+                ahc.DoFracture(bodyPart);
+                return;
+            }
+
+            Blood.EffectUtil.Add(ahc, PatchTargets.FractureEffect, bodyPart,
+                delay: 0f, workTime: null, residue: null, strength: null);
+
+            // DoFracture is what the cripple state listens to; going around it means
+            // saying so, or the jump ban waits for the next poll
+            PlateBloodManager.RequestRefresh(ahc.Player);
+        }
+
+        /// <summary>
+        /// Which limb segment the wound is in. A thigh is not a calf and an upper arm is
+        /// not a forearm — they carry different bones and so different odds — but only the
+        /// ballistics side knows which of them the bullet went into: it reads the collider
+        /// the shot actually struck. <see cref="DamageInfo"/> carries a field of the same
+        /// name and it does not arrive usable here; over a raid of 1625 limb hits the
+        /// fracture roll fired exactly zero times, and the only gate that can swallow all
+        /// of them is this one returning a segment with no bone chance. The other two
+        /// cannot: the shared bone roll takes at most its own 35%, and the "already
+        /// fractured" check is honest — on a limb still above zero one fracture blocks
+        /// every later roll on it, which is exactly what the next raid's journal showed.
+        ///
+        /// So ask the ballistics side first, take DamageInfo only if it names a limb, and
+        /// otherwise fall back to the body part — which is always right — reading it as the
+        /// limb's proximal segment, the larger of the two and so the likelier to be hit.
+        /// </summary>
+        private static EBodyPartColliderType ResolveWoundSegment(EBodyPart bodyPart,
+            DamageInfo damageInfo)
+        {
+            if (BallisticsPatches.TryGetHitCollider(out var struck) && BoneChance(struck) > 0f)
+            {
+                return struck;
+            }
+
+            if (BoneChance(damageInfo.BodyPartColliderType) > 0f)
+            {
+                return damageInfo.BodyPartColliderType;
+            }
+
+            switch (bodyPart)
+            {
+                case EBodyPart.LeftArm:
+                    return EBodyPartColliderType.LeftUpperArm;
+                case EBodyPart.RightArm:
+                    return EBodyPartColliderType.RightUpperArm;
+                case EBodyPart.LeftLeg:
+                    return EBodyPartColliderType.LeftThigh;
+                case EBodyPart.RightLeg:
+                    return EBodyPartColliderType.RightThigh;
+                default:
+                    return EBodyPartColliderType.None;
+            }
+        }
+
+        // per-raid tally: a roll that never fires looks exactly like a roll that is never
+        // reached, and telling those apart took a whole raid's journal once already. The
+        // third counter is there because the second thing this mechanism did wrong was to
+        // fire and leave nothing behind, which reads as success in any report that only
+        // counts rolls.
+        private static int _fractureRolls;
+        private static int _fractureFired;
+        private static int _fractureOnDestroyed;
+        private static float _fractureExpected;
+
+        public static IEnumerable<string> FractureReport()
+        {
+            yield return $"-- bone fractures: {_fractureFired} fired, {_fractureExpected:0.0} " +
+                         $"expected of {_fractureRolls} rolls, {_fractureOnDestroyed} on a " +
+                         $"blacked limb";
+        }
+
+        public static void ResetFractureTally()
+        {
+            _fractureRolls = 0;
+            _fractureFired = 0;
+            _fractureOnDestroyed = 0;
+            _fractureExpected = 0f;
         }
 
         internal static float BoneChance(EBodyPartColliderType collider)
@@ -625,6 +771,54 @@ namespace PLATE.Client.Patches
 
             PlateBloodManager.RequestRefresh(__instance.Player);
             StopBleedingAfterSurgery(__instance, bodyPart);
+            SetFractureAfterSurgery(__instance, bodyPart);
+        }
+
+        /// <summary>
+        /// A surgical kit also sets the bone in the limb it repairs.
+        ///
+        /// Vanilla's own restore clears the bleedings on the part and steps over the
+        /// fracture, which was harmless while a destroyed limb could not carry one. Now
+        /// that it can, leaving it reads as an operation that rebuilt the limb around an
+        /// untouched break — and it would be a break the mod put there, not the game.
+        /// Treated limb only; a splint remains the cheap answer for a limb still standing.
+        /// </summary>
+        private static void SetFractureAfterSurgery(ActiveHealthController ahc, EBodyPart bodyPart)
+        {
+            if (!PlateClientConfig.SurgeryHealsFracture.Value || ahc == null || !ahc.IsAlive ||
+                PatchTargets.FractureEffect == null)
+            {
+                return;
+            }
+
+            try
+            {
+                var set = 0;
+                // ToList: ForceRemove mutates the controller's effect collection
+                foreach (var effect in ahc.GetAllActiveEffects().ToList())
+                {
+                    // the fracture class itself is not referenceable from here — it is a
+                    // protected nested type, which is why PatchTargets resolves it by
+                    // name; the base effect is, and that is what carries ForceRemove
+                    if (effect is ActiveHealthController.Effect e &&
+                        PatchTargets.FractureEffect.IsInstanceOfType(e) &&
+                        e.BodyPart == bodyPart)
+                    {
+                        e.ForceRemove();
+                        set++;
+                    }
+                }
+
+                if (set > 0)
+                {
+                    Overlay.HitFeed.PushPanel(
+                        $"{Overlay.OverlayHud.NameOf(ahc.Player)} SURGERY {bodyPart}: fracture set");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogError(nameof(SetFractureAfterSurgery), ex);
+            }
         }
 
         /// <summary>

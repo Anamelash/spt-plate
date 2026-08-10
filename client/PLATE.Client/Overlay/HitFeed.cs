@@ -172,11 +172,15 @@ namespace PLATE.Client.Overlay
 
             LogBuffer.AddRange(PatchStats.Report());
             LogBuffer.AddRange(Ballistics.OrganZones.Report());
+            LogBuffer.AddRange(Patches.BloodPatches.FractureReport());
+            LogBuffer.AddRange(Blood.CrippleSystem.FallReport());
             LogBuffer.AddRange(Blood.PlateBloodManager.Report());
             FlushLog();
 
             // the counts are per raid
             Ballistics.OrganZones.ResetTally();
+            Patches.BloodPatches.ResetFractureTally();
+            Blood.CrippleSystem.ResetFallTally();
             Blood.PlateBloodManager.ResetTally();
         }
 

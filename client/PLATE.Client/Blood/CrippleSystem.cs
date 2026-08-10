@@ -23,6 +23,22 @@ namespace PLATE.Client.Blood
         public static readonly HashSet<MovementContext> JumpBanned =
             new HashSet<MovementContext>();
 
+        /// <summary>
+        /// Bots that are to stay on the ground while a leg of theirs is broken (read by
+        /// the BotLay.GetUp patch). Standing up is not one decision in the AI — a dozen
+        /// places call GetUp directly, from pathing to being shot at — so the ban is held
+        /// here and enforced at the one point they all pass through, the same way the
+        /// sprint and jump bans are held for the player.
+        /// </summary>
+        public static readonly HashSet<BotOwner> GroundedBots = new HashSet<BotOwner>();
+
+        /// <summary>Whether this bot is currently held down. Null-safe: a null owner is a
+        /// human player, and this ban is not theirs.</summary>
+        public static bool IsGrounded(BotOwner owner)
+        {
+            return owner != null && GroundedBots.Contains(owner);
+        }
+
         private static MethodInfo _findFracture;
         private static bool _findFractureBroken;
 
@@ -150,6 +166,21 @@ namespace PLATE.Client.Blood
 
             s.JumpBanned = jumpBan;
 
+            // a bot on a broken leg stays on the ground: getting up only to fall over a
+            // step later is the part that reads as slapstick rather than injury
+            var owner = player.AIData?.BotOwner;
+            if (owner != null)
+            {
+                if (s.HasBrokenLeg && PlateClientConfig.BrokenLegGroundsBots.Value)
+                {
+                    GroundedBots.Add(owner);
+                }
+                else
+                {
+                    GroundedBots.Remove(owner);
+                }
+            }
+
             if (!PlateClientConfig.CrippleEnabled.Value)
             {
                 if (s.Crippled)
@@ -189,11 +220,46 @@ namespace PLATE.Client.Blood
             {
                 SprintBanned.Add(mc);
                 mc.EnableSprint(false);
+
+                // the speed limit is read where movement is actually resolved, which both
+                // sides go through, so this one knob covers everyone
                 mc.AddStateSpeedLimit(PlateClientConfig.CrippleSpeedLimit.Value,
                     Player.ESpeedLimit.HealthCondition);
             }
 
+            BanBotSprint(player);
             ZeroSkillBuffs(player.Skills);
+        }
+
+        /// <summary>
+        /// A bot never asks the gates the player runs into: it decides to sprint inside its
+        /// own mover, so <c>EnableSprint(false)</c> and the CanSprint patch slide straight
+        /// past it — which is how a boss kept running down the map on two destroyed legs.
+        ///
+        /// Its own brake is <c>NoSprint</c>, and that is a deadline rather than a flag:
+        /// <c>SprintPause</c> writes "no sprinting until t", and the mover consults it every
+        /// time it tries to start. So the ban has to be renewed rather than set, and the
+        /// renewal has to outlast the gap between two cripple recalculations — hence the
+        /// margin over that interval. <c>Sprint(false)</c> on top of it stops a sprint that
+        /// is already running instead of waiting for the bot to finish it.
+        /// </summary>
+        private static void BanBotSprint(Player player)
+        {
+            var mover = player.AIData?.BotOwner?.Mover;
+            if (mover == null)
+            {
+                return;
+            }
+
+            try
+            {
+                mover.Sprint(false, false);
+                mover.SprintPause(PlateBloodManager.CrippleRefreshMaxSec * 2f);
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogWarning($"[PLATE] Cripple: bot sprint ban failed: {ex.Message}");
+            }
         }
 
         private static void Release(Player player)
@@ -203,6 +269,21 @@ namespace PLATE.Client.Blood
             {
                 SprintBanned.Remove(mc);
                 mc.RemoveStateSpeedLimit(Player.ESpeedLimit.HealthCondition);
+            }
+
+            // expire the deadline now rather than leaving the bot walking out the rest of
+            // it after the limb it lost was put back
+            var mover = player.AIData?.BotOwner?.Mover;
+            if (mover != null)
+            {
+                try
+                {
+                    mover.SprintPause(0f);
+                }
+                catch (Exception ex)
+                {
+                    Plugin.Log.LogWarning($"[PLATE] Cripple: bot sprint release failed: {ex.Message}");
+                }
             }
 
             RestoreSkillBuffs(player.Skills);
@@ -305,6 +386,91 @@ namespace PLATE.Client.Blood
         }
 
         /// <summary>
+        /// Whether this participant is already on the ground, asked of whoever actually
+        /// knows. Not of <c>MovementContext.IsInPronePose</c>: that flag is maintained by
+        /// the movement state machine, and code that sets it from outside desynchronises
+        /// it from the pose the body is really in — which is how the player used to fall
+        /// exactly once and then walk on two broken legs forever, the flag stuck at true
+        /// while the state machine had never entered prone at all.
+        /// </summary>
+        private static bool IsDown(Player player)
+        {
+            var lay = BotLayOf(player);
+            return lay != null ? lay.IsLay : player.MovementContext.IsInPronePose;
+        }
+
+        /// <summary>
+        /// Puts this participant on the ground through the path their own side uses, and
+        /// says whether it took. A bot is not a player with a different skin: writing the
+        /// prone flag at one is silently dropped (<c>set_IsInPronePose</c> returns early
+        /// for a simplified skeleton), which is why they used to "collapse" on a metronome
+        /// every fall-delay seconds without ever leaving their feet. They have their own
+        /// lay system, and it answers whether it managed.
+        /// </summary>
+        private static bool TryPutDown(Player player)
+        {
+            _fallsAsked++;
+            var lay = BotLayOf(player);
+            if (lay != null)
+            {
+                // Not TryLay(): that is the bot's tactical decision to go prone and it
+                // asks tactical questions — is there an enemy, is he far enough, has the
+                // period elapsed. A broken femur is none of those, and in a close fight
+                // the answer came back no four times out of five. The work itself is done
+                // by the IsLay setter, which TryLay reaches only after its checks: pose to
+                // zero, DoProne, the rest of it. So say what happened rather than ask.
+                lay.IsLay = true;
+                if (!lay.IsLay)
+                {
+                    return false; // the lay system refused it anyway
+                }
+
+                _fallsDone++;
+                return true;
+            }
+
+            // the player goes through the movement state, so the state machine owns the
+            // pose and can bring them back up again
+            if (!(player.CurrentState is MovementState state))
+            {
+                return false;
+            }
+
+            state.Prone();
+            _fallsDone++;
+            return true;
+        }
+
+        private static BotLay BotLayOf(Player player)
+        {
+            return player.AIData?.BotOwner?.BotLay;
+        }
+
+        // asked versus happened, per raid: a collapse that is requested and quietly
+        // dropped reads exactly like a collapse that worked, and that cost a raid once
+        private static int _fallsAsked;
+        private static int _fallsDone;
+
+        /// <summary>Counted by the GetUp patch: how often a bot on a broken leg was kept
+        /// down, and how often it was let up anyway for something worth standing for.</summary>
+        public static int GetUpsBlocked;
+        public static int GetUpsAllowed;
+
+        public static IEnumerable<string> FallReport()
+        {
+            yield return $"-- collapses: {_fallsDone} of {_fallsAsked} requested; " +
+                         $"bots kept down {GetUpsBlocked}, let up {GetUpsAllowed}";
+        }
+
+        public static void ResetFallTally()
+        {
+            _fallsAsked = 0;
+            _fallsDone = 0;
+            GetUpsBlocked = 0;
+            GetUpsAllowed = 0;
+        }
+
+        /// <summary>
         /// Every frame: moving on a broken leg without a splint -> a delayed collapse
         /// to prone ("take a step — fall down"). Changing stance is allowed — but walk
         /// again and you fall again.
@@ -318,7 +484,7 @@ namespace PLATE.Client.Blood
             }
 
             var mc = s.Player?.MovementContext;
-            if (mc == null || mc.IsInPronePose)
+            if (mc == null || IsDown(s.Player))
             {
                 s.FallTimer = 0f;
                 return;
@@ -337,7 +503,11 @@ namespace PLATE.Client.Blood
             }
 
             s.FallTimer = 0f;
-            mc.IsInPronePose = true; // collapsed
+            if (!TryPutDown(s.Player))
+            {
+                return; // refused — no pain, and nothing in the journal claiming a fall
+            }
+
             var ahc = s.Player.ActiveHealthController;
             if (ahc != null)
             {
@@ -357,6 +527,7 @@ namespace PLATE.Client.Blood
         {
             SprintBanned.Clear();
             JumpBanned.Clear();
+            GroundedBots.Clear();
             SavedBuffs.Clear();
         }
     }

@@ -566,13 +566,24 @@ namespace PLATE.Client.Blood
             }
         }
 
+        /// <summary>
+        /// The safety-net poll interval for cripple state, jittered between these two so
+        /// bots do not all recalculate on the same frame. Named because anything that has
+        /// to outlive one poll — a bot's sprint ban is a deadline, not a flag — has to be
+        /// able to say so in terms of this rather than by guessing a number.
+        /// </summary>
+        internal const float CrippleRefreshMinSec = 5f;
+
+        internal const float CrippleRefreshMaxSec = 7f;
+
         private static void TickOne(BloodState s, float dt)
         {
             // cripples: push model (RequestRefresh on damage/fracture/splint/surgery) +
             // infrequent safety-net polling; jitter desyncs bots across frames
             if (Time.time >= s.NextCrippleCheck)
             {
-                s.NextCrippleCheck = Time.time + 5f + UnityEngine.Random.Range(0f, 2f);
+                s.NextCrippleCheck = Time.time + CrippleRefreshMinSec +
+                    UnityEngine.Random.Range(0f, CrippleRefreshMaxSec - CrippleRefreshMinSec);
                 var t = PerfTrace.Begin();
                 CrippleSystem.Refresh(s);
                 ApplyStamina(s);

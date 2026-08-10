@@ -33,6 +33,23 @@ projectile actually brought in. Consequences you will feel:
   deposits almost nothing and flies on.
 - **Vital zones are honest.** Brain and neck hits are dramatically more
   damaging than muscle; a jaw hit is grave but survivable.
+- **A blacked-out limb is wrecked, not missing.** The base game treats a limb at
+  zero as gone: it will not put a fracture in one, whatever hits it. PLATE reads it
+  as a limb that has stopped working while still being attached to you, so it keeps
+  bleeding and keeps breaking — and breaks *more* easily than a sound one, because
+  the bone has already been struck and the tissue that brace it is gone. A limb
+  still above zero is handled by the game's own rules, unchanged.
+- **A bot with a broken leg stays on the ground.** It used to stand up the instant
+  anything asked it to — a route, a patrol, a turn, or simply being shot at — and go
+  down again a step later, which read as slapstick rather than injury. Now it stays
+  down and fights from there — lying still, because the game's prone command stops a
+  bot where he is and its AI has no notion of moving while down. It is still let up
+  for the one thing worth standing for, throwing a grenade, and a splint lifts the
+  whole thing. Toggleable.
+- **A surgical kit sets the bone it operates around.** Repairing a limb clears its
+  bleedings (already the case) and now also its fracture — the base game leaves the
+  break standing in a limb it has just rebuilt. A splint remains the cheap answer
+  for a limb that is still standing. Toggleable.
 - **Bones matter.** A limb hit can stop a bullet in the bone — with a fracture
   and full energy transfer — or punch through and continue into the torso.
 - **Over-penetration is an energy balance.** A bullet exits a body part with

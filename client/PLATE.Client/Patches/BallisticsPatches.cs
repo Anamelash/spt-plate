@@ -980,6 +980,24 @@ namespace PLATE.Client.Patches
         }
 
         /// <summary>
+        /// Which hitbox this frame's bullet went into, read off the collider it actually
+        /// struck. The health controller is handed the same fact in DamageInfo and it does
+        /// not survive the trip, so anything downstream that needs the segment rather than
+        /// the body part has to ask here.
+        /// </summary>
+        internal static bool TryGetHitCollider(out EBodyPartColliderType collider)
+        {
+            if (_boneFrame == Time.frameCount)
+            {
+                collider = _boneCollider;
+                return true;
+            }
+
+            collider = EBodyPartColliderType.None;
+            return false;
+        }
+
+        /// <summary>
         /// Physical overpenetration decision instead of the vanilla
         /// penPower·CF > PenetrationLevel. Exit ⇔ L(v_impact) > T_chord and not
         /// stopped by bone. Armor block (BlockedBy) is kept as in vanilla.
