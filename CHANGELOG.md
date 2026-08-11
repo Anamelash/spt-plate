@@ -413,7 +413,64 @@ broken — results in combination with PLATE. Mods that overhaul the same system
 
 ## Release history
 
-### 1.1.0
+### 1.2.0
+
+- **The hardness term now decides what happened to the core, not just who is
+  harder.** One clamped curve used to price every core-versus-plate meeting, and
+  three published vest passports refuted it with errors in both directions at
+  once. The term now branches on the core's fate: a quenched core arrives rigid
+  and keeps the old physics untouched; a soft core is crushed on the face when
+  the impact is fast enough (Taylor's rigidity criterion, two-material form —
+  the same mild steel that punches titanium at pistol speed dies on it out of a
+  rifle); a carbide core cracks, but only against a face hard enough to crack
+  it. What you will meet in raids:
+  - the 6B23 stops the 7N24 BS its certificate lists — tungsten carbide
+    shatters on the panel's ultra-hard 44S steel — while the same round still
+    goes through titanium, which is too soft to break it;
+  - the 6B3TM behaves like its own passport: holds the old mild-core PS,
+    pierced by the SVD through the chest;
+  - deformable-tipped rounds (M855 and kin) fare a little better against very
+    hard thin steel than before — a 40 HRC tip is not a punch, but it is not
+    worth the old flat 2.08x credit to the plate either;
+  - lead against titanium is credited at 1.79x instead of the 2.08x ceiling.
+  Every constant of the new branch is pinned by a window the test corpus closes
+  from both sides, and an independent measurement arrived after the fact: TNO's
+  PASS 2024 paper shows a 30 HRC fragment simulator deforming above ~550 m/s
+  and penetrating 86 m/s *worse* than the same projectile hardened to 60 HRC —
+  a projectile that dies on the face is easier to stop, which is this branch
+  measured by someone else.
+- **Ceramic plates read about 3% weaker in velocity.** The brittle constant
+  outlived its own derivation when the backing data improved, and is re-derived
+  at 0.98 under the criterion the certificates are actually enforced at, with
+  the Бр4 Granit binding. The recorded ceramic allowances were re-measured at
+  the same time — up to 13% of stale headroom had accumulated inside them.
+- **Bone fractures actually roll now.** The limb segment a bullet struck was
+  lost in transit to the health code, so over a measured raid of 1625 limb hits
+  the fracture roll fired exactly zero times. The segment is now read off the
+  collider the ballistics actually hit. With the roll alive, the rest of the
+  fracture arc landed too: a blacked-out limb can break (vanilla refuses — it
+  reads "blacked" as "gone"), a bot with a broken leg stays on the ground
+  instead of standing up and falling over every other step (let up only to
+  throw a grenade; a splint lifts the ban), and a surgical kit sets the bone in
+  the limb it rebuilds. All toggleable, chances per segment in config.
+- **Plates wear by what the hit did to them, not by what they ate.** The
+  published multi-hit record splits by material, and the mod now follows it:
+  - steel and titanium do not wear at all unless the hit bites past half the
+    plate's thickness — real armour steel has taken repeated AP hits on the
+    same spot without losing resistance, and the "gong" is now true in game;
+    your plate carrier stops being a consumable against pistol fire;
+  - a bullet that flattened on the face digs far shallower than a hard core at
+    the same speed, so a magazine of soft-point rifle ball point-blank dents a
+    steel panel instead of eating it — while ball arriving near the plate's
+    limit still pays almost full price;
+  - UHMWPE and aramid pay durability only when actually penetrated — published
+    panels *gain* ballistic limit over an eight-shot test rather than losing
+    it;
+  - ceramic keeps paying for every stop with the energy it absorbed, which
+    lands exactly in the certified budgets: roughly 2–4 full-power rifle stops,
+    5–10 intermediate, 10–20 pistol.
+- **HUD setting descriptions cleaned up.** They no longer name a third-party
+  mod or quote its layout; the text says what the setting does and stops there.
 
 - **Nothing about the physics changed.** No formula, constant or calibration anchor
   moved in this release. It is the blood readout and the settings around it.
