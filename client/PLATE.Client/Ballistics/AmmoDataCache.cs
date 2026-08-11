@@ -101,6 +101,17 @@ namespace PLATE.Client.Ballistics
             /// <summary>Spread of a deformable bullet on the panel face: area × (1 + this·X).</summary>
             public double ExpansionOnArmor { get; set; } = 0.6;
 
+            /// <summary>
+            /// The fraction of its thickness a hit must bite into before a ductile
+            /// plate wears at all (ArmorDamageCalculator). The initializer is the
+            /// shipped default, kept for a payload from an older server.
+            /// </summary>
+            public double WearDepthFraction { get; set; } = 0.5;
+
+            /// <summary>The share of the energy price a fibre pack pays for a hit it
+            /// stopped; 0 = the published multi-hit evidence.</summary>
+            public double FibreBlockWearFraction { get; set; }
+
             public Dictionary<string, ArmorMatProfile> Materials { get; set; }
 
             private static readonly ArmorMatProfile Default = new()

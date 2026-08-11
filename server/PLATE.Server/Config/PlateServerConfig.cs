@@ -121,6 +121,29 @@ public class PlateServerConfig
         /// </summary>
         public double ExpansionOnArmor { get; set; } = 0.6;
 
+        /// <summary>
+        /// The fraction of its thickness a hit must bite into before a ductile plate
+        /// (steel, titanium, aluminium) wears at all. Below it a stopped bullet leaves
+        /// a dent and nothing else — no durability, no wear spot; above it the price
+        /// ramps to the full energy price at the ballistic limit. Anchored on Armox
+        /// 600T taking repeated 7.62 M61 AP on the same spot without losing resistance
+        /// (Göde et al. 2023, 10.1016/j.jestch.2023.101337) and on MIL-STD-662F
+        /// reading a metal plate as pristine two calibres from a crater; 0.5 is the
+        /// chosen point inside what those allow. 0 = the old behaviour, every stop
+        /// pays in full.
+        /// </summary>
+        public double WearDepthFraction { get; set; } = 0.5;
+
+        /// <summary>
+        /// The share of the energy price a fibre pack (UHMWPE, aramid) pays for a hit
+        /// it STOPPED. 0 = what the published multi-hit data shows: Dyneema HB26
+        /// panels gain V50 during their own eight-shot test rather than losing it,
+        /// and a hybrid soft pack shot at 75 mm spacing outperforms the same pack at
+        /// 150 (van Es; van der Jagt-Deutekom &amp; Broos, PASS 2024,
+        /// 10.52202/080042-0031). Penetrations pay in full — those fibres are cut.
+        /// </summary>
+        public double FibreBlockWearFraction { get; set; }
+
         /// <summary>Armor material profiles (key — EFT MaterialType).</summary>
         public Dictionary<string, MaterialProfile> Materials { get; set; } = new()
         {

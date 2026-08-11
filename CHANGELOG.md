@@ -227,8 +227,21 @@ the projectile has to defeat it with specific energy:
   does not depend on what the plate is made of. Steep
   angles beyond that push the interaction toward ricochet mechanics.
 - **Worn armor protects worse,** and durability loss itself is now driven by
-  the energy the armor absorbed — brittle materials wear out in a few stops,
-  steel lasts.
+  the energy the armor absorbed — but whether a hit is allowed to charge that
+  price is the material's decision, because the published multi-hit record
+  splits three ways. A steel or titanium plate does not wear at all unless the
+  hit bites past half its thickness — and a bullet that flattened on the face
+  bites far shallower than a hard core of the same speed, so soft lead never
+  eats a steel plate from below the limit: real armour steel has taken repeated
+  AP hits *on the same spot* without losing resistance, and the "gong" that
+  shrugs off hundreds of rounds is now true in game. A fibre plate pays
+  durability only when actually penetrated — polyethylene panels in published
+  tests *gain* ballistic limit over an eight-shot series rather than losing
+  it. Ceramic keeps paying for every stop with the energy it ate, which is
+  exactly the certified budget: a ceramic plate is good for roughly 2–4
+  full-power rifle stops, 5–10 intermediate, 10–20 pistol — the same windows
+  ESAPI's three-shots-per-threat protocol and destructive tests put real
+  plates in.
 - **Blocked hits still hurt.** Behind-armor blunt trauma follows the published
   Sturdivan blunt criterion: energy through the panel produces pain, contusion
   and, at high transfer, internal bleeding and winded breathing — spread over

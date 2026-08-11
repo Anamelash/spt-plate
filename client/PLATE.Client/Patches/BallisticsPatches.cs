@@ -1135,37 +1135,44 @@ namespace PLATE.Client.Patches
             marks.Add(new ArmorHitMark { Zone = bpc.BodyPartColliderType, LocalPos = localPos });
         }
 
-        // --- Durability wear from absorbed energy (frame+armor context) ---
+        // --- Durability loss handoff (frame+armor context) ---
+        //
+        // Priced where the hit is decided (the penetration prefix knows v, the limit,
+        // the material's failure class and what the plate absorbed — see
+        // ArmorDamageCalculator), applied where vanilla writes durability (the
+        // ApplyDamage postfix), so the write always overrides vanilla's own wear —
+        // including with a loss of zero, which is what a sub-half-depth dent on steel
+        // now costs.
 
-        private static int _absorbFrame = -1;
-        private static readonly List<KeyValuePair<ArmorComponent, float>> _absorbed =
+        private static int _duraLossFrame = -1;
+        private static readonly List<KeyValuePair<ArmorComponent, float>> _duraLoss =
             new List<KeyValuePair<ArmorComponent, float>>(4);
 
-        private static void RecordAbsorbedEnergy(ArmorComponent armor, float joules)
+        private static void RecordDurabilityLoss(ArmorComponent armor, float loss)
         {
-            if (_absorbFrame != Time.frameCount)
+            if (_duraLossFrame != Time.frameCount)
             {
-                _absorbed.Clear();
-                _absorbFrame = Time.frameCount;
+                _duraLoss.Clear();
+                _duraLossFrame = Time.frameCount;
             }
 
-            _absorbed.Add(new KeyValuePair<ArmorComponent, float>(armor, joules));
+            _duraLoss.Add(new KeyValuePair<ArmorComponent, float>(armor, loss));
         }
 
-        private static bool TryConsumeAbsorbedEnergy(ArmorComponent armor, out float joules)
+        private static bool TryConsumeDurabilityLoss(ArmorComponent armor, out float loss)
         {
-            joules = 0f;
-            if (_absorbFrame != Time.frameCount)
+            loss = 0f;
+            if (_duraLossFrame != Time.frameCount)
             {
                 return false;
             }
 
-            for (var i = 0; i < _absorbed.Count; i++)
+            for (var i = 0; i < _duraLoss.Count; i++)
             {
-                if (ReferenceEquals(_absorbed[i].Key, armor))
+                if (ReferenceEquals(_duraLoss[i].Key, armor))
                 {
-                    joules = _absorbed[i].Value;
-                    _absorbed.RemoveAt(i);
+                    loss = _duraLoss[i].Value;
+                    _duraLoss.RemoveAt(i);
                     return true;
                 }
             }
@@ -1389,12 +1396,28 @@ namespace PLATE.Client.Patches
             if (!pierce || eOut < 1f)
             {
                 shot.BlockedBy = armor.Item.Id; // block (or lodged in the soft pack) -> BABT
-                if (bpc != null)
+
+                // what the stop cost the plate: nothing at all for a metal dent under
+                // half depth, the spot but no durability for a fibre pack, the full
+                // energy price for a ceramic — see ArmorDamageCalculator. A projectile
+                // that died on the face digs shallower than a rigid punch, and the
+                // fate is already this hit's own physics
+                var wear = ArmorDamageCalculator.Assess(
+                    haveGeometry ? barrier.Class : null,
+                    haveGeometry ? barrier.FailureMode : null,
+                    penetrated: false, v, v50, e, (float)prof.JPerDurability,
+                    (float)cfg.WearDepthFraction, (float)cfg.FibreBlockWearFraction,
+                    haveGeometry && BallisticLimit.FateOf(barrier, limitCore, v, tuning)
+                        != BallisticLimit.CoreFate.Rigid);
+                if (bpc != null && wear.RecordSpot)
                 {
                     RecordArmorHit(armor, bpc, localPos); // a blocked hit damages the zone too
                 }
 
-                RecordAbsorbedEnergy(armor, e); // all the energy goes into the armor
+                if (prof.JPerDurability > 0)
+                {
+                    RecordDurabilityLoss(armor, wear.DurabilityLoss);
+                }
                 // the victim comes from this shot's own collider rather than _shotCtx:
                 // a stale frame there would put someone else's name on the line
                 Overlay.HitFeed.PushHit(bpc?.Player as Player,
@@ -1424,13 +1447,24 @@ namespace PLATE.Client.Patches
             _xOvrShot = shot;
             _xOvrValue = xOut;
 
-            if (bpc != null)
+            // the penetration work plus whatever the shed jacket was still carrying
+            var wearPen = ArmorDamageCalculator.Assess(
+                haveGeometry ? barrier.Class : null,
+                haveGeometry ? barrier.FailureMode : null,
+                penetrated: true, v, v50, eCost + exit.JacketEnergyJ,
+                (float)prof.JPerDurability,
+                (float)cfg.WearDepthFraction, (float)cfg.FibreBlockWearFraction,
+                haveGeometry && BallisticLimit.FateOf(barrier, limitCore, v, tuning)
+                    != BallisticLimit.CoreFate.Rigid);
+            if (bpc != null && wearPen.RecordSpot)
             {
                 RecordArmorHit(armor, bpc, localPos); // a hole weakens the zone
             }
 
-            // the penetration work plus whatever the shed jacket was still carrying
-            RecordAbsorbedEnergy(armor, eCost + exit.JacketEnergyJ);
+            if (prof.JPerDurability > 0)
+            {
+                RecordDurabilityLoss(armor, wearPen.DurabilityLoss);
+            }
 
             Overlay.HitFeed.PushHit(bpc?.Player as Player,
                 $"armor {armor.Template.ArmorMaterial} cl.{armor.ArmorClass}: " + geometry +
@@ -1550,21 +1584,19 @@ namespace PLATE.Client.Patches
 
             try
             {
-                // physical armor: wear from absorbed energy (J per durability point,
-                // per material); fallback — vanilla loss with material multipliers
+                // physical armor: the loss was priced at the penetration decision
+                // (ArmorDamageCalculator), this write applies it over vanilla's —
+                // a zero restores the pre-hit durability, which is what a metal
+                // plate dented under half depth is owed. Fallback — vanilla loss
+                // with material multipliers.
                 var armorData = AmmoDataCache.Armor;
                 if (PlateClientConfig.PhysDamageModel.Value &&
                     PlateClientConfig.PhysArmorModel.Value &&
                     armorData is { Enabled: true } &&
-                    TryConsumeAbsorbedEnergy(__instance, out var absorbedJ))
+                    TryConsumeDurabilityLoss(__instance, out var duraLoss))
                 {
-                    var jPerDura = armorData
-                        .Profile(__instance.Template.ArmorMaterial.ToString()).JPerDurability;
-                    if (jPerDura > 0)
-                    {
-                        __instance.Repairable.Durability = Mathf.Max(0f,
-                            __state.Durability - absorbedJ / (float)jPerDura);
-                    }
+                    __instance.Repairable.Durability = Mathf.Max(0f,
+                        __state.Durability - duraLoss);
                 }
                 else
                 {

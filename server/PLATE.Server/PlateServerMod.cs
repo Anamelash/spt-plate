@@ -296,6 +296,20 @@ public class PlateServerMod(
             // finished loading it: impact area x (1 + this*X). A core concentrates the
             // energy, deformation spreads it. 0 = every bullet loads its own calibre
             "ExpansionOnArmor": 0.6,
+            // The fraction of its thickness a hit must bite into before a ductile plate
+            // (steel/titanium/aluminium) wears at all: below it a stopped bullet leaves
+            // a dent and nothing else — no durability loss, no wear spot; above it the
+            // price ramps to the full energy price at the ballistic limit. Anchors:
+            // Armox 600T takes repeated 7.62 M61 AP on the same spot without losing
+            // resistance (10.1016/j.jestch.2023.101337); MIL-STD-662F reads metal as
+            // pristine two calibres from a crater. 0 = old behaviour, every stop pays
+            "WearDepthFraction": 0.5,
+            // Share of the energy price a fibre pack (UHMWPE/aramid) pays for a hit it
+            // STOPPED. 0 = the published multi-hit data: Dyneema HB26 panels GAIN V50
+            // during their own eight-shot test, and a soft pack shot at 75 mm spacing
+            // outperforms the same pack at 150 (10.52202/080042-0031). Penetrations
+            // pay in full — those fibres are cut
+            "FibreBlockWearFraction": 0.0,
             // Material profiles: ULimitMult/ECostMult — threshold and energy-cost
             // multipliers (E_cost = ECostMult·U_eff·A_core); KDef — deformation
             // (X_out = X + KDef·X); KFrag — erosion of whatever comes through, a

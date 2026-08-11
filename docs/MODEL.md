@@ -711,14 +711,61 @@ standards space their scored shots so that damage zones do not interact — NIJ
 but for *spaced* hits, not one spot), and are marked as such in the config, on a
 par with the certification criterion's `P_pass`.
 
-Durability loss is driven by absorbed energy rather than by hit count:
+Durability loss is driven by absorbed energy rather than by hit count —
 
 ```
 Δdurability = E_absorbed / JPerDurability
 ```
 
-where a blocked hit absorbs the full energy and a penetration absorbs only
-`E_cost`. Brittle materials wear out in a few stops, steel lasts.
+— where a blocked hit absorbs the full energy and a penetration absorbs only
+`E_cost`. But whether a hit is *allowed* to charge that price, and to record a
+wear spot at all, is the material's decision (`ArmorDamageCalculator`), because
+the multi-hit evidence splits three ways:
+
+- **Ductile metal wears only past `WearDepthFraction` (0.5) of its thickness.**
+  Partial-penetration depth follows from the failure law's own work integral —
+  plugging work grows as `T²` so `p/T = v/v50`, hole-expansion flow grows as `T`
+  so `p/T = (v/v50)²`. Below the fraction a stopped bullet leaves a dent and
+  nothing else: no durability, no spot. Above it the price ramps linearly to the
+  full energy price at the limit (a step would make `0.49·v50` free and
+  `0.51·v50` full). The anchors: Armox 600T took repeated 7.62 M61 AP **on the
+  same spot** without losing resistance — the craters do not deepen
+  cumulatively, the dent floor work-hardens (Göde et al., *Eng. Sci. Tech.* 38,
+  2023, `10.1016/j.jestch.2023.101337`) — and MIL-STD-662F reads a metal plate
+  as pristine two projectile diameters from a crater, which is also what pins
+  the metal `DAreaMm` at 15–20 mm.
+
+  A projectile that **died on the face** (CoreFate other than rigid) reads its
+  depth at `(v/v50)²` whatever the plate's own law: the linear reading belongs
+  to a rigid punch boring its own calibre, and a mushroomed slug spreads over
+  several calibres and shoves metal aside — the flow reading. This is the steel
+  gong made honest: a magazine of soft-point 7.62x39 point-blank at 0.7 of the
+  limit dents a Бр3 panel and costs it nothing, while ball arriving near the
+  limit still pays most of the full price — which keeps the AR500 Level III
+  certificate's six M80 a real test. Surfaced by a raid, not a paper: the first
+  build of this rule read a lead slug's depth linearly and a Бр3 panel ate a
+  magazine it should have shrugged off.
+- **Fibre pays durability only for penetration.** Dyneema HB26 panels *gain*
+  V50 during their own eight-shot test, and a hybrid soft pack shot at 75 mm
+  spacing outperforms the same pack at 150 (van Es; van der Jagt-Deutekom &
+  Broos, PASS 2024, `10.52202/080042-0031`). A blocked hit costs
+  `FibreBlockWearFraction` (0) of the energy price — but still records its
+  spot: the caught bullet has cut the fibres of its own channel, and the
+  clearing evidence is spaced shots, not repeats into one crater.
+- **Ceramic pays the full energy price both ways, unchanged.** The
+  certification budgets land where that price already puts a ~45-durability
+  plate — ~2 full-power rifle stops, ~3.4 intermediate, ~13 pistol — against
+  ESAPI's three shots per threat (Rev G: three each of six threats), NIJ
+  0101.06's one .30-06 AP for Level IV and six M80 for Level III, GOST's five
+  shots at five-calibre spacing, and the observed 2–4 / 5–10 / 10–20 from
+  destructive tests. Two hits into a ceramic/UHMWPE assembly leave a third of
+  the one-hit residual strength, and a tiled face keeps double the residual of
+  a monolithic one (Guo et al., *Materials* 15(3):901, 2022) — the tile-versus-
+  monolith distinction is deliberately not modelled yet, one datapoint being
+  too few to calibrate on.
+
+An item the server has no geometry for (`v50 = 0`) pays the old full price —
+there is no thickness to take half of.
 
 ## Behind-armor blunt trauma
 
@@ -1062,6 +1109,16 @@ against the shipped values):
    exists; its published conclusion (effectiveness rises monotonically with
    hardness over 200–750 HV) is consistent with a threshold in the window but
    does not place it.
+
+   One measurement did arrive after the fact and confirms the branch from
+   outside the corpus. TNO's "deformation gap" (van der Jagt-Deutekom & Broos,
+   PASS 2024, `10.52202/080042-0031`): the standard 30 HRC FSP starts to
+   deform on UHMWPE helmet shells around 550 m/s, and the same FSP hardened to
+   60 HRC never deforms — and penetrates **86 m/s more easily**. A projectile
+   that dies on the face is easier to arrest than one that arrives intact,
+   which is `DeformFloor > 1` measured by someone else, and the hardness
+   boundary between the two behaviours sits between 30 and 60 HRC — bracketing
+   the `DeformCoreMaxHv` window from both sides on an independent projectile.
 4. `BrittleK` from the bare-tile DOP point read one-sided ("the limit is at or
    above the velocity fired"), with the ceramic certificates pinning where in
    the tile's band the constant sits — **0.98**, the smallest value at which

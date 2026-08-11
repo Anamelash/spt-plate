@@ -634,6 +634,8 @@ public class AmmoNormalizer(
             cfg.Armor.AngleMinCos,
             cfg.Armor.ClassULimitJmm2,
             cfg.Armor.ExpansionOnArmor,
+            cfg.Armor.WearDepthFraction,
+            cfg.Armor.FibreBlockWearFraction,
             cfg.Armor.Materials,
         };
         return JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
