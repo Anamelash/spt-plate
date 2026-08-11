@@ -439,11 +439,40 @@ broken — results in combination with PLATE. Mods that overhaul the same system
   and penetrating 86 m/s *worse* than the same projectile hardened to 60 HRC —
   a projectile that dies on the face is easier to stop, which is this branch
   measured by someone else.
+- **The reference book grew six versions of armour and ammunition data** (8
+  through 13), and most of it is visible on a card or at a plate:
+  - **both PS cartridges are the modernised loads their index has meant since
+    1989.** The 5.45 PS and the 7.62x39 PS have carried heat-treated cores
+    under an unchanged GRAU index for decades, and the book now reads them as
+    the cartridge actually in service — which moves both their card numbers
+    and what they do to a plate.
+  - **cards that name a GRAU index their round is not are corrected** in the
+    item description, across every localisation — the index is written with a
+    Latin N, a Cyrillic Н or a Latin H depending on the language, and all
+    three spellings are handled.
+  - **the 7.62x39 MAI AP is modelled as what its own description says it is**:
+    a sabot round carrying a tungsten carbide penetrator — 2.0 g and 2.8 mm of
+    carbide at 1300 HV, not 7.9 g of full-calibre bullet. The card weighs the
+    sabot that never arrives at the target; the book weighs what flies.
+  - **Russian steel panels carry their own alloy.** A 6B23 back panel is NII
+    Stali's 44S at a published 2000+ MPa yield, not the generic AR500 figures
+    the game's one steel material used to hand every plate. The panel now
+    clears its certificate on its own steel.
+  - **the ceramic lines sit on the backing they are built on**: alumina over
+    UHMWPE instead of a defaulted aramid, and a stitched fabric screen counts
+    only the fibre it actually holds (0.44 by volume) rather than being read
+    as a solid laminate.
+  - **the old Soviet vests got real constructions**: the 6B2 and the 6B3TM
+    back at 1.25 mm of VT-14 titanium, the 6B3TM chest at 6.5 mm of VT-23,
+    the 6B5-15 at 13 mm of boron carbide tiles, the 6B5-16 at 6.5 mm of
+    titanium — each over its 30-layer fabric screen.
 - **Ceramic plates read about 3% weaker in velocity.** The brittle constant
-  outlived its own derivation when the backing data improved, and is re-derived
-  at 0.98 under the criterion the certificates are actually enforced at, with
-  the Бр4 Granit binding. The recorded ceramic allowances were re-measured at
-  the same time — up to 13% of stale headroom had accumulated inside them.
+  outlived its own derivation when the backing data above improved, and is
+  re-derived at 0.98 under the criterion the certificates are actually
+  enforced at, with the Бр4 Granit binding. The recorded ceramic allowances
+  were re-measured at the same time — up to 13% of stale headroom had
+  accumulated inside them. The titanium Бр4 class rung re-solved from 11.2 to
+  11.5 mm under the corrected PS.
 - **Bone fractures actually roll now.** The limb segment a bullet struck was
   lost in transit to the health code, so over a measured raid of 1625 limb hits
   the fracture roll fired exactly zero times. The segment is now read off the
@@ -469,8 +498,6 @@ broken — results in combination with PLATE. Mods that overhaul the same system
   - ceramic keeps paying for every stop with the energy it absorbed, which
     lands exactly in the certified budgets: roughly 2–4 full-power rifle stops,
     5–10 intermediate, 10–20 pistol.
-- **HUD setting descriptions cleaned up.** They no longer name a third-party
-  mod or quote its layout; the text says what the setting does and stops there.
 
 - **Nothing about the physics changed.** No formula, constant or calibration anchor
   moved in this release. It is the blood readout and the settings around it.
