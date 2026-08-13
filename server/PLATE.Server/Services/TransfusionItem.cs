@@ -68,9 +68,19 @@ public class TransfusionItem(
             return;
         }
 
+        // model: the built Unity bundle (blood bag model) if deployed next to the
+        // mod; otherwise the vanilla bloodset. The icon is rendered from the same prefab.
+        var customBundle = System.IO.Path.Combine(modPath, "bundles", "plate", "blood_bag.bundle");
+        var hasCustomModel = File.Exists(customBundle);
+        var prefabPath = hasCustomModel ? CustomBundleKey : BloodsetPrefabPath;
+
         if (items.ContainsKey(new MongoId(Tpl)))
         {
-            return; // idempotency in case of a repeated call
+            // Already registered — normally by PlateItemRegistration, which runs
+            // before the server validates profiles against the item DB. This pass
+            // only owes the startup summary its line.
+            Summary ??= $"transfusion item ({(hasCustomModel ? "custom model" : "vanilla model")})";
+            return;
         }
 
         // base — Emergency Water Ration (see the comment at WaterRationTpl)
@@ -82,12 +92,6 @@ public class TransfusionItem(
 
         var sourceHandbook = templateTable.Handbook?.Items?
             .FirstOrDefault(h => h.Id == source.Id);
-
-        // model: the built Unity bundle (blood bag model) if deployed next to the
-        // mod; otherwise the vanilla bloodset. The icon is rendered from the same prefab.
-        var customBundle = System.IO.Path.Combine(modPath, "bundles", "plate", "blood_bag.bundle");
-        var hasCustomModel = File.Exists(customBundle);
-        var prefabPath = hasCustomModel ? CustomBundleKey : BloodsetPrefabPath;
 
         var result = customItemService.CreateItemFromClone(new NewItemFromCloneDetails
         {
