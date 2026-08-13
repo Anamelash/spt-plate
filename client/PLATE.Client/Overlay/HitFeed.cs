@@ -122,6 +122,18 @@ namespace PLATE.Client.Overlay
             PushPanel($"  {OverlayHud.NameOf(victim)} | {line}");
         }
 
+        /// <summary>
+        /// The head line of a hit: who fired, from what, into whom. Only the head line
+        /// carries the origin — the chain under it (armor, zones, bleed) stays keyed by
+        /// the victim alone, so one hit reads as one block.
+        /// </summary>
+        public static void PushHit(EFT.Player victim, string origin, string line)
+        {
+            PushPanel(string.IsNullOrEmpty(origin)
+                ? $"  {OverlayHud.NameOf(victim)} | {line}"
+                : $"  {origin} -> {OverlayHud.NameOf(victim)} | {line}");
+        }
+
         public static void PushPanel(string line)
         {
             var stamped = $"[{DateTime.Now:HH:mm:ss.f}] {line}";

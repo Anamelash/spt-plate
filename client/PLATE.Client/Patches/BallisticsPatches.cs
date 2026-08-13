@@ -82,6 +82,7 @@ namespace PLATE.Client.Patches
             public float EnergyJ;
             public float DiameterMm;
             public Player Victim;
+            public Player Attacker;
             public int Frame;
         }
 
@@ -227,6 +228,7 @@ namespace PLATE.Client.Patches
                     EnergyJ = 0.5f * (shot.BulletMassGram / 1000f) * v * v,
                     DiameterMm = shot.BulletDiameterMilimeters,
                     Victim = bpc.Player as Player,
+                    Attacker = shot.Player?.iPlayer as Player,
                     Frame = Time.frameCount,
                 };
 
@@ -317,7 +319,7 @@ namespace PLATE.Client.Patches
             var alongMm = Mathf.Max(Mathf.Min(chordMm, d.ChannelMm), 1f);
 
             var ammo = AmmoLabel(shot);
-            Overlay.HitFeed.PushHit(bpc.Player as Player, d.Contact
+            Overlay.HitFeed.PushHit(bpc.Player as Player, ShotOrigin(shot), d.Contact
                 ? $"W {ammo} {bpc.BodyPartType}: contact {v:0} m/s -> {__instance.Damage:0.#}"
                 : $"W {ammo} {bpc.BodyPartColliderType}: {v:0}/{shot.InitialSpeed:0} m/s" +
                   $", L {d.ChannelMm:0}" +
@@ -341,7 +343,54 @@ namespace PLATE.Client.Patches
                 spread);
 
             ApplyWoundBleeding(ref __instance, shot, bpc, d, alongMm, wound);
+
+            // The stretch component of a penetrating wound is the blunt insult the
+            // torso feels: a pistol through-and-through barely disturbs breathing
+            // (TC ~ 0 below the Fackler sigmoid), a rifle's cavity winds hard.
+            // Blocked hits are excluded — their blow is the behind-armour energy and
+            // ApplyBabt delivers it. Backface hits are excluded too: they are the
+            // flesh crossings of a bullet whose forward (plate) hit already brought
+            // its whole cavity here, and counting both would wind twice per bullet.
+            if (!shot.BlockedBy.HasValue && !d.Contact && d.Tc > 0f &&
+                __instance.IsForwardHit &&
+                WoundBleeding.Region(bpc.BodyPartColliderType) == BleedRegion.Torso)
+            {
+                Blood.WindedSystem.OnTorsoImpact(bpc.Player as Player,
+                    shot.Player?.iPlayer as Player,
+                    d.Tc * (float)wound.TcEnergyPerHp, __instance.HitPoint);
+            }
+
+            WarnIfEngineDiscards(ref __instance, bpc);
             LogAnatomy(bpc, __instance.HitPoint);
+        }
+
+        /// <summary>
+        /// A wound the engine is about to throw away, called out in the journal.
+        /// BodyPartCollider.ApplyHit forwards only forward hits to ApplyShot: a child
+        /// spawned inside a collider (typically the flesh box a pierced plate collider
+        /// is embedded in) meets its back face first, and the whole DamageInfo is
+        /// dropped, wound and all. Zero damage the model itself expects stays silent:
+        /// a blocked hit is paid in BABT, a corpse and an already-blacked part take
+        /// nothing by design, and a sliver below 1 HP is not worth a line.
+        /// </summary>
+        private static void WarnIfEngineDiscards(ref DamageInfo info, BodyPartCollider bpc)
+        {
+            if (info.IsForwardHit || info.Damage < 1f || info.BlockedBy.HasValue)
+            {
+                return;
+            }
+
+            var victim = bpc.Player as Player;
+            var ahc = victim?.ActiveHealthController;
+            if (ahc == null || !ahc.IsAlive ||
+                ahc.GetBodyPartHealth(bpc.BodyPartType).Current <= 0f)
+            {
+                return;
+            }
+
+            Overlay.HitFeed.PushHit(victim,
+                $"  ! W {info.Damage:0.#} to {bpc.BodyPartColliderType} discarded by the engine " +
+                "(backface hit: ApplyHit applies forward hits only)");
         }
 
         /// <summary>
@@ -734,7 +783,7 @@ namespace PLATE.Client.Patches
         /// </summary>
         private static string AmmoLabel(Shot shot)
         {
-            var name = shot?.Ammo?.Template?.Name;
+            var name = RawTemplateName(shot?.Ammo?.Template);
             if (string.IsNullOrEmpty(name))
             {
                 return "?";
@@ -743,6 +792,51 @@ namespace PLATE.Client.Patches
             return name.StartsWith("patron_", StringComparison.OrdinalIgnoreCase)
                 ? name.Substring("patron_".Length)
                 : name;
+        }
+
+        /// <summary>
+        /// The template's internal _name, never its display Name. BSG clones new items
+        /// from old ones and leaves _props.Name stale — by that field every 12.7x33
+        /// round "is" 9x19 PSO, every 12x70 slug "is" buckshot and the Desert Eagle
+        /// "is" an M1911 (108 of 199 vanilla ammo templates carry someone else's
+        /// name). _name is what the database is keyed by and is always the item's own.
+        /// </summary>
+        private static string RawTemplateName(EFT.InventoryLogic.ItemTemplate template)
+        {
+            var name = template?._name;
+            return string.IsNullOrEmpty(name) ? template?.Name ?? "" : name;
+        }
+
+        /// <summary>
+        /// Who fired and from what, for the head line of a hit. The weapon is the
+        /// template name with its "weapon_" prefix dropped — the same technical
+        /// register as the ammo label — and the shooter goes through NameOf, so the
+        /// local player reads YOU here exactly as they do as a victim. A shot with no
+        /// owner (environmental, some mod paths) degrades to the old victim-only line.
+        /// </summary>
+        private static string ShotOrigin(Shot shot)
+        {
+            try
+            {
+                var shooter = shot?.Player?.iPlayer as Player;
+                if (shooter == null)
+                {
+                    return "";
+                }
+
+                var weapon = RawTemplateName(shot?.Weapon?.Template);
+                if (weapon.StartsWith("weapon_", StringComparison.OrdinalIgnoreCase))
+                {
+                    weapon = weapon.Substring("weapon_".Length);
+                }
+
+                var name = Overlay.OverlayHud.NameOf(shooter);
+                return weapon.Length > 0 ? $"{name} [{weapon}]" : name;
+            }
+            catch
+            {
+                return "";
+            }
         }
 
         /// <summary>
@@ -1615,9 +1709,27 @@ namespace PLATE.Client.Patches
                 if (PlateClientConfig.PhysDamageModel.Value && PlateClientConfig.PhysArmorModel.Value &&
                     AmmoDataCache.Armor is { Enabled: true } && AmmoDataCache.Wound is { Enabled: true })
                 {
-                    // the armor already took its price in energy/mass/deformation on
-                    // penetration — W in DamageInfo was computed from the weakened
-                    // projectile, no multiplier needed
+                    // The armor already took its price in energy/mass/deformation at the
+                    // penetration decision — W in DamageInfo was computed from the
+                    // weakened projectile, no multiplier needed. But the vanilla original
+                    // has just run, and on a penetrated hit it does not leave Damage
+                    // alone: a hit on an armor-plate collider is zeroed outright (vanilla
+                    // expects the flesh colliders behind the plate to deal the damage —
+                    // our model has already priced them into this very W, and the engine
+                    // discards their own hits as backface anyway), and a penetrated soft
+                    // panel is scaled by the resistance CF. Either write destroys the
+                    // wound — put it back. Deflections keep vanilla's halving: a ricochet
+                    // is not a penetration and its wound is not this branch's to restore.
+                    if (!damageInfo.DeflectedBy.HasValue &&
+                        !Mathf.Approximately(damageInfo.Damage, __state.Damage))
+                    {
+                        var victim = _shotCtx.Frame == Time.frameCount ? _shotCtx.Victim : null;
+                        Overlay.HitFeed.PushHit(victim,
+                            $"  dmg restored {damageInfo.Damage:0.#} -> {__state.Damage:0.#} " +
+                            "(vanilla zeroes pierced plate hits, scales soft pen by CF)");
+                        damageInfo.Damage = __state.Damage;
+                    }
+
                     return;
                 }
 
@@ -1715,6 +1827,15 @@ namespace PLATE.Client.Patches
             }
 
             damageInfo.Damage = dmg;
+
+            // the same behind-armour energy, read as a blow to the diaphragm: a
+            // blocked hit winds the torso whether or not it bruised it
+            if (WoundBleeding.Region(damageInfo.BodyPartColliderType) ==
+                BleedRegion.Torso)
+            {
+                Blood.WindedSystem.OnTorsoImpact(_shotCtx.Victim, _shotCtx.Attacker,
+                    bfd, damageInfo.HitPoint);
+            }
 
             ApplyBabtEffects(_shotCtx.Victim, damageInfo.BodyPartColliderType, bc, bc1, bc2);
             Overlay.HitFeed.PushHit(_shotCtx.Victim,

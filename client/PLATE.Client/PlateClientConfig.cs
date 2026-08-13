@@ -106,6 +106,17 @@ namespace PLATE.Client
         public static ConfigEntry<bool> FractureCollapsePlayer;
         public static ConfigEntry<bool> FractureCollapsePmc;
         public static ConfigEntry<bool> FractureCollapseScav;
+        public static ConfigEntry<bool> WindedPlayer;
+        public static ConfigEntry<bool> WindedPmc;
+        public static ConfigEntry<bool> WindedScav;
+        public static ConfigEntry<float> WindedOnsetJ;
+        public static ConfigEntry<float> WindedFullJ;
+        public static ConfigEntry<float> WindedMaxLockSec;
+        public static ConfigEntry<bool> WindedDisorientEnabled;
+        public static ConfigEntry<float> WindedDisorientSec;
+        public static ConfigEntry<float> DisorientAimRadiusM;
+        public static ConfigEntry<float> DisorientSprayM;
+        public static ConfigEntry<float> DisorientRetreatM;
         public static ConfigEntry<float> FractureFallDelay;
         public static ConfigEntry<float> FractureEnergyMin;
         public static ConfigEntry<float> FractureEnergyFull;
@@ -202,7 +213,7 @@ namespace PLATE.Client
         public static ConfigFile Source => _cfg;
 
         /// <summary>Bump on every change to an existing setting's default.</summary>
-        private const int CurrentConfigVersion = 8;
+        private const int CurrentConfigVersion = 9;
 
         /// <summary>Shown on a key that only exists to be read once by a migration.</summary>
         private const string RetiredNote =
@@ -351,28 +362,28 @@ namespace PLATE.Client
                 "model is calibrated on torso muscle; the brain is more sensitive per mm³ destroyed.",
                 new AcceptableValueRange<float>(1f, 10f), true);
             VitalJawMult = Bind(sBal, "Vital multiplier: jaw", 1.5f,
-                "Jaw zone multiplier (grievous, but it is not the brain — Garand Thumb).",
+                "Jaw zone multiplier (grievous, but it is not the brain).",
                 new AcceptableValueRange<float>(1f, 10f), true);
             VitalNeckMult = Bind(sBal, "Vital multiplier: neck", 2.0f,
                 "Neck multiplier (major vessels; the blood loss itself comes from the blood system).",
                 new AcceptableValueRange<float>(1f, 10f), true);
             OrganTissueStrengthMPa = Bind(sBal, "Organ: tissue radial strength, MPa", 1.0f,
                 "The one constant behind the temporary cavity radius: dE/dx = pi r^2 sigma. " +
-                "Calibrated on published cavity diameters — 7.62x51 comes out near 60 mm of " +
-                "radius, 9x19 near 30. Lower it and cavities reach further.",
+                "At the default, 7.62x51 makes a cavity of about 60 mm radius, 9x19 about " +
+                "30. Lower it and cavities reach further.",
                 new AcceptableValueRange<float>(0.1f, 10f), true);
             OrganKHeart = Bind(sBal, "Organ: heart severity", 2.8f,
                 "Damage multiplier for a cavity that reaches the heart and mediastinum, at " +
-                "full overlap. From the ratio of AIS squares against one lobe of lung (25/9). " +
-                "A channel straight through the heart does not use this — it is fatal.",
+                "full overlap. A channel straight through the heart does not use this — " +
+                "it is fatal.",
                 new AcceptableValueRange<float>(1f, 10f), true);
             OrganKLiver = Bind(sBal, "Organ: liver severity", 1.8f,
-                "Same for the liver (AIS 4, 16/9). Applies in full to a channel through it " +
-                "that did not avulse it, and by overlap to one that only stretched it.",
+                "Same for the liver. Applies in full to a channel through it that did not " +
+                "avulse it, and by overlap to one that only stretched it.",
                 new AcceptableValueRange<float>(1f, 10f), true);
             OrganKSpine = Bind(sBal, "Organ: spinal cord severity", 2.3f,
-                "Same for the cord (AIS 4-5). Only for a cavity beside it — a channel " +
-                "through the plate severs it.",
+                "Same for the cord. Only for a cavity beside it — a channel through the " +
+                "plate severs it.",
                 new AcceptableValueRange<float>(1f, 10f), true);
             OrganArrestChance = Bind(sBal, "Organ: cardiac arrest chance", 0.15f,
                 "Ceiling on traumatic cardiac arrest from a cavity that passed beside the " +
@@ -380,9 +391,9 @@ namespace PLATE.Client
                 "high-velocity sigmoid, so pistols practically never do it.",
                 new AcceptableValueRange<float>(0f, 1f), true);
             OrganAvulsionChance = Bind(sBal, "Organ: liver avulsion chance", 0.35f,
-                "Ceiling on tearing the liver loose — the injury the combat autopsy series " +
-                "lists as unsurvivable. Scaled by the high-velocity sigmoid and by the " +
-                "cavity radius against the organ's own.",
+                "Ceiling on tearing the liver loose — an unsurvivable wound. Scaled by " +
+                "the high-velocity sigmoid and by the cavity radius against the " +
+                "organ's own.",
                 new AcceptableValueRange<float>(0f, 1f), true);
             OrganLiverRadiusMm = Bind(sBal, "Organ: liver radius, mm", 70f,
                 "Half the liver's span. A cavity this wide can tear the whole organ off its " +
@@ -397,8 +408,7 @@ namespace PLATE.Client
             BleedVesselsTorso = Bind(sBal, "Bleed vessels: torso, per mm²", 6e-5f,
                 "Major vessels per mm² of the plane a wound channel sweeps, in general " +
                 "torso. Chance of an arterial bleed = 1 - exp(-density × swept), so a " +
-                "longer or wider channel cuts more. Calibrated so a rifle round across a " +
-                "chest lands near where the old per-cartridge chance was.",
+                "longer or wider channel cuts more.",
                 new AcceptableValueRange<float>(0f, 0.01f), true);
             BleedVesselsJunction = Bind(sBal, "Bleed vessels: junction, per mm²", 1.8e-4f,
                 "Same for neck, groin and shoulder — where a major vessel runs and a " +
@@ -416,11 +426,10 @@ namespace PLATE.Client
                 new AcceptableValueRange<float>(0f, 1f), true);
             YawSpreadSigma = Bind(sBal, "Spread: yaw neck sigma", 0.35f,
                 "How much the travel before a projectile goes broadside varies, as the " +
-                "sigma of a log-normal about the cartridge's median. The single most " +
-                "variable quantity in wound ballistics — one cartridge's neck length " +
-                "varies twofold in gelatin. 0 makes every shot the median one. Drawn once " +
-                "per shot: this is where the difference between two identical hits comes " +
-                "from, instead of a die rolled on the damage.",
+                "sigma of a log-normal about the cartridge's median. 0 makes every shot " +
+                "the median one. Drawn once per shot: this is where the difference " +
+                "between two identical hits comes from, instead of a die rolled on the " +
+                "damage.",
                 new AcceptableValueRange<float>(0f, 1f), true);
             TissueSpread = Bind(sBal, "Spread: tissue density sigma", 0.15f,
                 "How much the tissue along a channel varies from the calibrated average — " +
@@ -482,11 +491,11 @@ namespace PLATE.Client
                 "energy/damage (fallback).",
                 new AcceptableValueRange<float>(0f, 0.9f), true);
             FragBlockEnergyJ = Bind(sBal, "Frag block energy, J", 400f,
-                "Fragment block threshold for class 1 armor: energy of the GOST Br1 test " +
-                "bullet (5.9 g x 335 m/s = 331 J) +20% for fragment shape. Below it — guaranteed block.",
+                "Fragment impact energy below which class 1 armor blocks it outright; " +
+                "higher classes raise the threshold by the class factor below.",
                 new AcceptableValueRange<float>(100f, 1500f), true);
             FragBlockClassFactor = Bind(sBal, "Frag block class factor", 1.45f,
-                "Threshold multiplier per armor class above 1 (GOST Br1->Br2 step: 331->485 J).",
+                "Threshold multiplier per armor class above 1.",
                 new AcceptableValueRange<float>(1f, 3f), true);
             LargeFragShare = Bind(sBal, "Large fragment share (fallback)", 0.02f,
                 "Fallback share of large fragments (base plate/fuze) when the server did " +
@@ -530,6 +539,47 @@ namespace PLATE.Client
                 "Same for PMC bots (USEC/BEAR).");
             FractureCollapseScav = Bind(sBlood, "Fracture collapse: Scav", true,
                 "Same for all Savage-side NPCs.");
+            // Winded: the breath knocked out of the torso by a heavy impact, blocked by
+            // armour or not. The ": Player" half lives in section 7 with the rest of
+            // what decides how long you last.
+            WindedPmc = Bind(sBlood, "Winded: PMC", true,
+                "A heavy blow to the torso — blocked by armour included — knocks the " +
+                "breath out of a PMC bot: no sprinting while it lasts, and a blow at " +
+                "full severity disorients (see Winded disorientation below).");
+            WindedScav = Bind(sBlood, "Winded: Scav", true,
+                "Same for all Savage-side NPCs.");
+            WindedOnsetJ = Bind(sBlood, "Winded onset, J", 60f,
+                "Energy into the torso below which a blow does not disturb breathing. " +
+                "Behind-armour energy for a blocked hit, the temporary-cavity deposit " +
+                "for a penetrating one; a volley landing in one frame counts as one " +
+                "blow.",
+                new AcceptableValueRange<float>(0f, 500f));
+            WindedFullJ = Bind(sBlood, "Winded full effect, J", 300f,
+                "Energy at which the effect saturates: stamina fully emptied, the " +
+                "full recovery lock, bots eligible for disorientation. Between onset " +
+                "and this the effect scales linearly.",
+                new AcceptableValueRange<float>(50f, 2000f));
+            WindedMaxLockSec = Bind(sBlood, "Winded max recovery lock, s", 10f,
+                "Stamina restoration (legs and arms) is held for severity times this. " +
+                "Proportionally shorter for weaker blows.",
+                new AcceptableValueRange<float>(0f, 60f));
+            WindedDisorientEnabled = Bind(sBlood, "Winded disorientation", false,
+                "Bots: a blow at full winded severity disorients — the bot falls back " +
+                "from the shooter and, if it saw the shooter at that moment, fires " +
+                "blindly around where they stood until the effect ends.");
+            WindedDisorientSec = Bind(sBlood, "Winded disorientation, s", 3f,
+                "How long the disorientation lasts.",
+                new AcceptableValueRange<float>(0f, 15f));
+            DisorientAimRadiusM = Bind(sBlood, "Disorientation aim circle, m", 1f,
+                "Radius of the circle around the shooter's torso the mag-dump anchor " +
+                "is drawn on.",
+                new AcceptableValueRange<float>(0f, 5f), true);
+            DisorientSprayM = Bind(sBlood, "Disorientation spray, m", 0.5f,
+                "Scatter of the mag-dump around its anchor — the panic fan.",
+                new AcceptableValueRange<float>(0f, 3f), true);
+            DisorientRetreatM = Bind(sBlood, "Disorientation retreat, m", 6f,
+                "How far away from the shooter the disoriented bot tries to fall back.",
+                new AcceptableValueRange<float>(0f, 20f), true);
             // not a player switch — it changes how a destroyed limb behaves for everyone,
             // which is why it sits with the rest of the trauma rules rather than in 7
             LimbHitsCanKill = Bind(sBlood, "Limb hits can kill", true,
@@ -628,12 +678,9 @@ namespace PLATE.Client
                 new AcceptableValueRange<float>(0f, 1f), true);
             FractureDestroyedMult = Bind(sBlood,
                 "Bullet fracture chance mult on a destroyed limb", 2f,
-                "Multiplier on the fracture chance when the limb is already blacked out. " +
-                "A blacked limb is one that has stopped doing its job, not one that is no " +
-                "longer attached: the bone in it has already been hit and the tissue that " +
-                "was bracing it is gone, so the next round breaks it more easily, not less. " +
-                "The game itself refuses to fracture such a limb at all; this is where the " +
-                "mod parts company with it.",
+                "Multiplier on the fracture chance when the limb is already blacked out: " +
+                "the bone in it has already been hit and the tissue that was bracing it " +
+                "is gone, so the next round breaks it more easily, not less.",
                 new AcceptableValueRange<float>(1f, 5f), true);
             FractureChanceMultPmc = Bind(sBlood, "Bullet fracture chance mult: PMC", 1.0f,
                 "Multiplier on the chance a bullet breaks a PMC's bone. The chance itself " +
@@ -762,6 +809,12 @@ namespace PLATE.Client
                 "Leg fracture without a splint: collapse to prone when trying to walk, " +
                 "and a jump ban (also with a destroyed stomach/leg). A splint lifts the " +
                 "restrictions.");
+            WindedPlayer = Bind(sSurv, "Winded: Player", true,
+                "A heavy blow to YOUR torso — blocked by armour included — knocks the " +
+                "breath out: stamina of legs and arms drops with the blow and does not " +
+                "recover for a few seconds. On is the model as designed; off is a " +
+                "survivability choice. The PMC and Scav halves of this group are in " +
+                "section 3.");
             FractureChanceMultPlayer = Bind(sSurv, "Bullet fracture chance mult: Player", 1.0f,
                 "Multiplier on the chance a bullet breaks YOUR bone. The chance itself " +
                 "comes from the model — the bone under that hitbox and the energy behind " +
@@ -824,11 +877,8 @@ namespace PLATE.Client
                 "Second line: how fast blood is being lost, in ml/s.");
             HudEta = Bind(sHud, "Time estimate", false,
                 "Second line: time left at the current rate until the next hypovolemia " +
-                "tier, or until bleeding out at tier 3. Off by default because nobody " +
-                "can do this for themselves — a casualty cannot measure their own blood " +
-                "loss, and even a clinician grades shock from pulse and mental state " +
-                "rather than predicting a clock. It is a game affordance, not something " +
-                "the model claims a person would know.");
+                "tier, or until bleeding out at tier 3. A game affordance — no casualty " +
+                "can time their own blood loss.");
 
             // --- 8. HUD (advanced — presentation constants) ---
             HudIconHue = Bind(sHud, "Icon hue", 0f,
@@ -1028,6 +1078,11 @@ namespace PLATE.Client
                 Migrate(BoneChanceUpperArm, 0.35f, 0.175f);
                 Migrate(BoneChanceForearm, 0.5f, 0.25f);
             }
+
+            // v9 existed for one evening (winded bot blind 4 -> 1 s) and died with the
+            // vanilla flash effect it tuned: the blind knob is gone, replaced by the
+            // custom disorientation whose keys are new and need no migration. The
+            // version number stays spent — a config stamped 9 must not replay anything.
 
             ConfigVersion.Value = CurrentConfigVersion;
             Plugin.Log.LogInfo($"[PLATE] Config migrated to v{CurrentConfigVersion}");

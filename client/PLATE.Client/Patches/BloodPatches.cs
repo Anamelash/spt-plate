@@ -1026,7 +1026,10 @@ namespace PLATE.Client.Patches
             try
             {
                 var player = __instance.Player;
-                PlateBloodManager.MarkDead(player?.ProfileId);
+                if (!PlateBloodManager.MarkDead(player?.ProfileId))
+                {
+                    return; // the game calls Kill twice — count and log the death once
+                }
 
                 // Which of the two ways a wound kills. The design has a measured target
                 // for the split — 35% at the moment of wounding against 52% over the

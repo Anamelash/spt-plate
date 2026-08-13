@@ -917,6 +917,55 @@ open an internal bleed instead, scaled by how much of the organ was involved, an
 no bandage, tourniquet or hemostatic reaches it. Counting them in both places
 would have been the same vessels twice, once in a form a field kit closes.
 
+### Winded
+
+A heavy blow to the torso knocks the breath out — a transient diaphragm spasm and
+vagal response, not an injury. It happens well below the energies BABT reads as
+trauma, and it happens whether or not the armour held, which is why it is its own
+term rather than a side effect of damage.
+
+The insult is the energy the torso actually received, in joules: the behind-armour
+energy `E·BluntThroughput` for a blocked hit — the same quantity BABT is computed
+from — and the temporary-cavity deposit for a penetrating one. Reading the stretch
+component as the blunt insult gives the penetrating case its known physiology for
+free: a pistol through-and-through sits below the Fackler sigmoid, deposits almost
+no cavity and barely disturbs breathing; a rifle wound winds hard. Pellets landing
+in the same frame sum into one blow before the ramp is read — eight buckshot
+impacts on a vest are one strike to the chest, not eight small ones. Hits on
+limbs, junctions and the head do not reach the diaphragm and are excluded.
+
+Severity is a linear ramp between two configured energies. The onset (60 J) sits
+where thoracic less-lethal impact studies (Bir) begin recording transient
+respiratory disruption in volunteers, of the order of the historic 79 J (58 ft·lbf)
+casualty criterion. Saturation (300 J) is calibrated at the edges: a blocked 12ga
+slug on a steel plate (~430 J behind it) must saturate, and a blocked 9x19 on an
+aramid vest (~220 J) winds about two thirds. A spent bullet dying in the far panel
+of a vest (tens of joules) does nothing.
+
+What severity `t` does: both stamina pools (legs and arms) are multiplied by
+`1 − t` and their restoration is held for `t` times a configured maximum (10 s)
+through the game's own downtime deadline — an empty pool with no restoration is a
+player who cannot sprint, and the heavy breathing and sway follow from the vanilla
+exhaustion machinery untouched. A bot does not run on stamina, so it receives the
+mover's sprint-pause deadline for the same duration, and a blow that saturates the
+ramp can disorient it outright for a configured few seconds (3 s; its own switch,
+off by default): the bot falls back
+away from the shooter and — only if its own vision had the shooter at the moment
+of the blow — mag-dumps at where it believes the shooter is: a point drawn once on
+a one-metre circle around the shooter's torso, sprayed around between trigger
+pulls, fired through the bot's own trigger path so reloading and readiness stay
+its own logic. Hit from a direction it never saw, it only falls back. The effect is deliberately
+custom rather than the vanilla flashbang: the flash machinery wipes the bot's
+enemy memory and posts a search point for its whole group, and raid testing had
+entire groups standing dazed at walls, deaf to a visible player. Per-side
+switches; the player's own is a section-7 choice.
+
+Deliberately simplified: the ramp is linear because the volunteer data gives a
+band, not a curve; the criterion is energy rather than chest-wall velocity (the
+viscous criterion needs a deformation history no game hit carries); and the blind
+effect borrows the flashbang's machinery wholesale rather than inventing a
+concussion model for AI.
+
 ## Ammunition normalization
 
 Every round in the database, including rounds added by other mods, is re-derived
@@ -1223,6 +1272,16 @@ third, separate knob.
   needs a measured neck per cartridge that no template carries.
 - **Bone geometry.** Bone is a probability per collider scaled by energy, not a
   skeleton.
+- **A separate deposit for the flesh behind a pierced plate.** The engine spawns
+  the post-plate projectile inside the torso box the plate collider is embedded
+  in, so its hits on that box arrive at the back face and are discarded wholesale
+  (`ApplyHit` forwards forward hits only — no damage, no armor roll). The wound
+  model therefore prices the whole chord through the body part into the plate
+  hit's own damage — which vanilla zeroes for a pierced plate collider and the
+  mod restores after the vanilla armor call — and the discarded flesh hits stay
+  discarded: applying them too would count the same tissue twice. Every such
+  discard above 1 HP on a live, non-blacked part is called out in the event log
+  with a `!` line, so the bookkeeping is visible rather than assumed.
 - **Ricochet angles** beyond the floor on the cosine term; vanilla handles the
   bounce itself. The secant law the floor sits on is verified to 45° and
   extrapolated from there — see "The ballistic limit" — and no published series
@@ -1282,6 +1341,9 @@ third, separate knob.
 - **Sturdivan, Viano & Champion**, *Journal of Trauma* (2004) — the Blunt Criterion
   and injury-risk curves for blunt ballistic chest impact; validated in blunt
   impact research at **Wayne State University** (Bir, Viano).
+- **Bir**, Wayne State University — thoracic response to less-lethal kinetic
+  impacts: the energy band where transient respiratory disruption begins in
+  volunteers, the anchor of the winded onset.
 - **Clinical literature on behind-armor blunt trauma** in military medicine, with
   the backface-deformation limits used in armor certification.
 - **GOST body-armor protection classes** and their certification test cartridges.

@@ -85,6 +85,14 @@
       <HintPath>$(SptGameDir)\EscapeFromTarkov_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.AIModule">
+      <HintPath>$(SptGameDir)\EscapeFromTarkov_Data\Managed\UnityEngine.AIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="DissonanceVoip">
+      <HintPath>$(SptGameDir)\EscapeFromTarkov_Data\Managed\DissonanceVoip.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine.PhysicsModule">
       <HintPath>$(SptGameDir)\EscapeFromTarkov_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
       <Private>false</Private>

@@ -296,19 +296,36 @@ namespace PLATE.Client.Blood
             }
         }
 
-        public static void MarkDead(string profileId)
+        /// <summary>
+        /// Marks the participant dead; true when this is news. The game calls Kill
+        /// twice per death, and everything downstream of this flag — the death line
+        /// in the journal, the wounds/bleeding death split — must count once. An
+        /// untracked profile cannot be deduplicated and reports true both times:
+        /// better a doubled line in a corner case than a death the journal misses.
+        /// </summary>
+        public static bool MarkDead(string profileId)
         {
             var s = Get(profileId);
-            if (s != null)
+            if (s == null)
             {
-                s.Dead = true;
+                return true;
             }
+
+            if (s.Dead)
+            {
+                return false;
+            }
+
+            s.Dead = true;
+            return true;
         }
 
         public static void Clear()
         {
             States.Clear();
             CrippleSystem.Clear();
+            WindedSystem.Clear();
+            DisorientationSystem.Clear();
         }
 
         /// <summary>

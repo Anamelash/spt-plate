@@ -12,7 +12,7 @@ namespace PLATE.Client
     {
         public const string Guid = "com.anamelash.plate";
         public const string Name = "P.L.A.T.E.";
-        public const string Version = "1.2.0";
+        public const string Version = "1.3.0";
 
         internal static ManualLogSource Log;
         internal static Harmony HarmonyInstance;
@@ -52,6 +52,9 @@ namespace PLATE.Client
             {
                 BallisticsPatches.Apply(HarmonyInstance);
                 GrenadePatches.Apply(HarmonyInstance); // grenade fragment range per config
+                // drives the winded disorientation of bots (retreat + magdump) — the
+                // trigger sits in the wound model, so the ticker follows this module
+                gameObject.AddComponent<Blood.DisorientationTicker>();
                 Log.LogInfo("[PLATE] Ballistics enabled");
             }
 
