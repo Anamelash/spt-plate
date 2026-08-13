@@ -13,7 +13,7 @@ armor material and the actual path through the body all matter. If the rest of
 your SPT mod setup handles AI, spawns, progression, quests, loot or graphics,
 P.L.A.T.E. handles what happens when the shooting starts.
 
-**Current release:** P.L.A.T.E. 1.2.0
+**Current release:** P.L.A.T.E. 1.3.0
 
 **Supported game:** SPT 4.1.x (including the current 4.1.2) / EFT 0.16.9.40087
 
@@ -128,6 +128,13 @@ raids and recovers gradually; Therapist sells Blood Transfusion Kits, which can
 also be crafted at the Hideout Medstation. Check whether you are leaking before
 vacuuming six magazines of warm PRS off a body.
 
+A heavy blow to the torso — stopped by armor or not — also knocks the wind out.
+Stamina drops in proportion to the energy the body received and refuses to
+recover for several seconds: after a blocked 12-gauge slug nobody sprints
+anywhere, you and bots alike. Optionally, a full-force blow can leave a bot
+disoriented — backing away and firing blind around where it last saw the
+shooter (off by default).
+
 The full system is documented under
 [blood and trauma](docs/MODEL.md#blood-and-trauma).
 
@@ -162,8 +169,8 @@ loss rate. Position, scale, color and an optional time estimate are configurable
   necessarily cut the broadest wound.
 - Short barrels and long distances can strip the magic out of a light, fast
   rifle bullet.
-- A stopped round can leave the wearer bruised, concussed or worse without
-  granting the projectile a penetration it did not earn.
+- A stopped round can leave the wearer bruised, concussed, winded or worse
+  without granting the projectile a penetration it did not earn.
 - An enemy who breaks contact may be flanking. He may also be emptying his
   tactical fluid behind a bush. The same rules apply to you.
 
@@ -191,7 +198,7 @@ For the complete player-facing comparison, see
 
 | Component | Required version |
 |---|---|
-| P.L.A.T.E. | 1.2.0 |
+| P.L.A.T.E. | 1.3.0 |
 | SPT | 4.1.x, including the current 4.1.2 |
 | EFT client | 0.16.9.40087 |
 | .NET SDK | 10, only when building from source |
@@ -246,9 +253,9 @@ GitHub Issues are the official feedback channel:
 - [Request a feature](https://github.com/Anamelash/spt-plate/issues/new?template=feature_request.yml)
 
 For a strange hit, attach the relevant lines from
-`BepInEx/plugins/PLATE/events.log`. They contain the projectile, impact energy,
-wound channel, armor decision and exit state; without them, a penetration report
-is mostly a campfire story.
+`BepInEx/plugins/PLATE/events.log`. They contain who fired and from what, the
+projectile, impact energy, wound channel, armor decision and exit state;
+without them, a penetration report is mostly a campfire story.
 
 Other diagnostics:
 
