@@ -349,8 +349,18 @@ own resource, and it kills you on its own terms.
   hands, and a blood transfusion kit (sold by Therapist, craftable at the med
   station) is the only way to put volume back in during a raid. Going in light
   on medical is now a real decision, not a slot you skipped.
-- Fractures come from actual bone hits with energy behind them, not from a
-  damage-number lottery.
+- **A heavy blow to the torso knocks the wind out — armour or not.** Vanilla has
+  no such notion: a plate either holds or it does not, and either way you keep
+  sprinting. Under PLATE the energy that reaches the torso — behind-armour energy
+  on a blocked hit, the stretch cavity's deposit on a penetrating one — drains
+  leg and arm stamina in proportion and holds their recovery for up to ten
+  seconds. A blocked 12ga slug empties the bar outright; a spent bullet dying in
+  the back of your vest does nothing; a volley of buckshot counts as the one blow
+  it is. Real thoracic-impact research is where the thresholds come from, and
+  every one of them is a config knob, switchable per side with your own half in
+  the survivability section. Bots can additionally be *disoriented* by a
+  full-severity blow — fall back and fire blind around where the shooter stood —
+  but that one ships **off by default**.
 - A destroyed abdomen bleeds into the belly, behind-armor trauma to the torso or
   head bleeds into a cavity, and nearby explosions can add blast barotrauma —
   none of those three can be closed in the field. A destroyed limb bleeds hard
@@ -399,7 +409,11 @@ which is what makes a tourniquet applied late still worth applying.
   material profiles, model constants — lives in the config files next to the
   mod, server side and client side.
 - An event journal (`events.log`, size-capped) records every hit with its full
-  physical breakdown — please attach it to bug reports.
+  physical breakdown — who fired, from what weapon, into whom, and what the
+  round did on the way. The names in it are the templates' internal ones,
+  because the display fields BSG leaves on cloned items lie wholesale: by those,
+  every .50 AE round "is" a 9x19 PSO and the Desert Eagle "is" an M1911. Please
+  attach the journal to bug reports.
 
 ## Compatibility note
 
@@ -413,7 +427,44 @@ broken — results in combination with PLATE. Mods that overhaul the same system
 
 ## Release history
 
-### 1.2.0
+### 1.3.0
+
+- **The wound now survives the vanilla armour call.** The game zeroes the body
+  damage of any hit that pierced an armor-plate collider — by vanilla design the
+  flesh colliders behind the plate were supposed to deal it, and by vanilla
+  geometry those hits arrive at their back faces and are discarded wholesale. In
+  PLATE the full wound rides on that very hit, so a bot in a plate carrier could
+  soak ten .338 rounds through the chest while his heart was being declared
+  destroyed in the log, over and over, to no effect. The wound is now restored
+  after the vanilla armour call — a pierced plate kills the way the model always
+  said it did. The same restore removes vanilla's hidden damage cut on soft-armor
+  penetrations. This is the headline fix of the release: hard-plate targets
+  stopped being bullet sponges.
+- **The breath can be knocked out of you now — see the new entry under Blood and
+  trauma.** Winded: a heavy torso impact, blocked or not, drains stamina and
+  locks its recovery in proportion to the blow. On for everyone by default, with
+  per-side switches and your own in section 7. The optional bot *disorientation*
+  on a full-severity blow (fall back + blind fire around the shooter's last seen
+  spot) ships off by default.
+- **A blood bag in the stash no longer marks the profile invalid.** SPT 4.1.2
+  started validating every profile against the item database at server startup,
+  before mods finish loading; PLATE registered its transfusion kit late, so a bag
+  brought home from a raid tripped the check on the next server start. The item
+  now registers before profiles are read. The invalid flag was never written to
+  disk — profiles heal on their own once the fixed server runs.
+- **The journal names the shooter and stopped repeating BSG's leftover labels.**
+  Every hit line now opens with who fired and from what. Item names come from the
+  templates' internal `_name` instead of the display field cloned items inherit
+  from their donors — 108 of 199 vanilla cartridges carried someone else's name
+  there (every 12x70 slug read "buckshot", the whole 5.7x28 line read "M855",
+  every .50 AE read "9x19 PSO"), which had made more than one field report
+  unsolvable. Wounds the engine throws away (back-face hits) are called out with
+  a `!` marker instead of vanishing silently.
+- **Deaths are counted once.** The game calls the kill routine twice per death;
+  the journal used to print two DEAD lines and the wounds-versus-blood-loss
+  statistics counted both. Deduplicated.
+- **F12 descriptions say what the knob does** — derivations, calibration stories
+  and vanilla internals moved out to MODEL.md where they belong.
 
 - **The hardness term now decides what happened to the core, not just who is
   harder.** One clamped curve used to price every core-versus-plate meeting, and
