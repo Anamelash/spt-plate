@@ -375,37 +375,19 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
     }
 
     /// <summary>
-    /// The version the mod ships. Raise it when an existing figure is corrected.
-    /// 2: armour read at the density of its form rather than of its fibre, and over
-    ///    rated areas rather than outer rectangles. Moved most of the armour.
-    /// 3: the class-reference ladder became a bracket. With a ballistic limit, "class C
-    ///    stops C and the rung below does not" closes on a thickness from both ends, and
-    ///    most rungs were outside theirs. Materials gained a hardness.
-    /// 4: the ceramic brackets were fitted to a ladder invented for the purpose, and then
-    ///    said every real ceramic plate in the book was a third too thin for its own
-    ///    class. Refitted onto the plates instead.
-    /// 5: a bullet with no penetrator drives the limit with its whole mass at its own
-    ///    calibre, not with the fraction of it that survives the plate. The ceramic
-    ///    brackets moved with it.
-    /// 8: the 5.45 PS is the modernised cartridge, not the 1974 original. The index
-    ///    never changed with the core, so one name covers a mild core and a hardened
-    ///    one, and the round in service is the hardened one: 410 HV spread over the
-    ///    whole bullet becomes 697 HV concentrated on the core's own 4.0 mm.
-    /// 9: the MAI AP is a sabot round carrying a tungsten carbide penetrator, per the
-    ///    only description of it that exists. It was being read as lead, and as the whole
-    ///    projectile at a velocity only the penetrator reaches.
-    /// 13: the Soviet vests' package is 7.6 mm, borrowed from a certified IIIA package
-    ///    that publishes a thickness, instead of an unsourced flat 8.
-    /// 12: the Бр4 titanium rung re-solved from 11.2 to 11.5 mm - the corrected 7.62x39
-    ///    PS binds it now, where the 7N10 used to.
-    /// 11: Russian steel panels carry their own alloy (44S at 2050 MPa yield) instead of
-    ///    the AR500 datasheet the one game material had to serve for every steel.
-    /// 10: the 7.62x39 PS is the modernised cartridge, on the same evidence and by the
-    ///    same argument as the 5.45 PS in version 8 — one index over two cores, and the
-    ///    one in service is hardened. The MAI penetrator gained a width, and with it a
-    ///    mass that its own volume allows rather than one read off the calibre's energy.
+    /// The version the mod ships, read out of the book itself: raising it means editing
+    /// the "Version" line at the end of <see cref="DefaultReferenceJsonc"/>, next to the
+    /// note saying what was corrected, and nothing else. It used to be a second number
+    /// here, and the two drifted — this said 13 while the text still said 7, so every
+    /// start found the file it had just written outdated, renamed it aside and rewrote
+    /// it, taking whatever the user had edited into it. A book that will not parse
+    /// reports version 0, which makes every file current: refusing to refresh is a
+    /// missed correction, refreshing on a number nobody wrote is a deleted file.
+    ///
+    /// What each version corrected is written where the number is — in the book, which
+    /// is also where the user reads it.
     /// </summary>
-    private const int ShippedVersion = 13;
+    private static readonly int ShippedVersion = Parse(DefaultReferenceJsonc)?.Version ?? 0;
 
     private AmmoReference _cached;
 
@@ -1667,13 +1649,39 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // they merge in on their own — but a correction has to be able to overwrite,
           // and on a bump this file is rewritten with the old one kept as a .bak
           //
+          // 2: armour read at the density of its form rather than of its fibre, and over
+          //    rated areas rather than outer rectangles. Moved most of the armour
+          // 3: the class-reference ladder became a bracket. With a ballistic limit,
+          //    "class C stops C and the rung below does not" closes on a thickness from
+          //    both ends, and most rungs were outside theirs. Materials gained a hardness
+          // 4: the ceramic brackets were fitted to a ladder invented for the purpose, and
+          //    then said every real ceramic plate in the book was a third too thin for
+          //    its own class. Refitted onto the plates instead
+          // 5: a bullet with no penetrator drives the limit with its whole mass at its
+          //    own calibre, not with the fraction of it that survives the plate. The
+          //    ceramic brackets moved with it
           // 6: the SLAAP entries gained "Plate", which lifts the shell ceiling off them.
           //    A new field on an existing entry is a correction — the per-entry merge
           //    would never reach it, and the applique would be re-rated 5 -> 3
           // 7: the two computed steel pistol rungs re-solved at the re-derived hardness
           //    clamp (1.3 -> 1.8 and 1.7 -> 2.4 mm). They are solved AT the clamp, so a
           //    clamp that moves moves them
-          "Version": 7
+          // 8: the 5.45 PS is the modernised cartridge, not the 1974 original. One index
+          //    covers a mild core and a hardened one, and the round in service is the
+          //    hardened one: 410 HV over the whole bullet becomes 697 HV on the core
+          // 9: the MAI AP is a sabot round carrying a tungsten carbide penetrator, per
+          //    the only description of it that exists. It was read as lead, and as the
+          //    whole projectile at a velocity only the penetrator reaches
+          // 10: the 7.62x39 PS is the modernised cartridge too, on the same evidence as
+          //    the 5.45 in version 8. The MAI penetrator gained a width, and with it a
+          //    mass its own volume allows rather than one read off the calibre's energy
+          // 11: Russian steel panels carry their own alloy (44S at 2050 MPa yield)
+          //    instead of the AR500 datasheet one game material had to serve for
+          // 12: the Br4 titanium rung re-solved from 11.2 to 11.5 mm — the corrected
+          //    7.62x39 PS binds it now, where the 7N10 used to
+          // 13: the Soviet vests' package is 7.6 mm, borrowed from a certified IIIA
+          //    package that publishes a thickness, instead of an unsourced flat 8
+          "Version": 13
         }
         """;
 }

@@ -47,6 +47,32 @@ public class ReferenceBookTests
         Assert.NotEmpty(r.Weapons);
     }
 
+    /// <summary>
+    /// The book the mod writes out has to be a book the mod then considers current. When
+    /// it is not, every single start finds the file outdated, copies it to a .bak and
+    /// rewrites it — so a figure the user corrected by hand survives exactly until the
+    /// next start, and the backup holding it is overwritten by the one after that.
+    /// </summary>
+    [Fact]
+    public void A_freshly_written_reference_book_is_not_stale_on_the_next_start()
+    {
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "plate-tests", "reference-book-version");
+        if (Directory.Exists(dir))
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+
+        Directory.CreateDirectory(dir);
+
+        new ReferenceBook(new TestLogger<ReferenceBook>()).Load(dir); // writes the shipped book
+
+        var second = new TestLogger<ReferenceBook>();
+        new ReferenceBook(second).Load(dir); // the next server start reads it back
+
+        Assert.Empty(Directory.GetFiles(dir, "*.bak"));
+        Assert.DoesNotContain(second.Lines, line => line.Contains("Rewritten"));
+    }
+
     [Fact]
     public void Every_bullet_is_a_fraction_of_itself()
     {
