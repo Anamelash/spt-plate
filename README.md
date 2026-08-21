@@ -13,9 +13,9 @@ armor material and the actual path through the body all matter. If the rest of
 your SPT mod setup handles AI, spawns, progression, quests, loot or graphics,
 P.L.A.T.E. handles what happens when the shooting starts.
 
-**Current release:** P.L.A.T.E. 1.3.0
+**Current release:** P.L.A.T.E. 1.3.1
 
-**Supported game:** SPT 4.1.x (including the current 4.1.2) / EFT 0.16.9.40087
+**Supported game:** SPT 4.1.x (including the current 4.1.3) / EFT 0.16.9.40087
 
 [Download the latest release](https://github.com/Anamelash/spt-plate/releases/latest) ·
 [Discord — questions, feedback and ideas](https://discord.gg/w2DpURxtrf) ·
@@ -37,7 +37,7 @@ P.L.A.T.E. handles what happens when the shooting starts.
 Prebuilt packages are published under
 **[GitHub Releases](https://github.com/Anamelash/spt-plate/releases)**. Use the
 [latest release](https://github.com/Anamelash/spt-plate/releases/latest) for
-SPT 4.1.x, including the current 4.1.2. For SPT 4.0.13, use a P.L.A.T.E.
+SPT 4.1.x, including the current 4.1.3. For SPT 4.0.13, use a P.L.A.T.E.
 release older than 1.0.0; 0.10.0 is the newest build on that branch.
 
 Do not mix releases. The client plugin and server mod work as a pair and are
@@ -198,8 +198,8 @@ For the complete player-facing comparison, see
 
 | Component | Required version |
 |---|---|
-| P.L.A.T.E. | 1.3.0 |
-| SPT | 4.1.x, including the current 4.1.2 |
+| P.L.A.T.E. | 1.3.1 |
+| SPT | 4.1.x, including the current 4.1.3 |
 | EFT client | 0.16.9.40087 |
 | .NET SDK | 10, only when building from source |
 
@@ -213,7 +213,11 @@ P.L.A.T.E. releases follow the SPT compatibility split below:
 | P.L.A.T.E. version | Compatible SPT version |
 |---|---|
 | Older than 1.0.0 | SPT 4.0.13 |
-| 1.0.0 and newer | SPT 4.1.x (`~4.1.0`), including the current 4.1.2 |
+| 1.0.0 to 1.3.0 | SPT 4.1.0 to 4.1.2 |
+| 1.3.1 and newer | SPT 4.1.x (`~4.1.0`), including the current 4.1.3 |
+
+SPT 4.1.3 refuses to start a server that registers items as late as P.L.A.T.E.
+1.3.0 did, so on 4.1.3 the mod has to be 1.3.1 or newer.
 
 For SPT 4.0.13, P.L.A.T.E. 0.10.0 is the newest compatible release. Mods that
 overhaul the same ballistics, armor or medical systems are incompatible.

@@ -427,6 +427,33 @@ broken — results in combination with PLATE. Mods that overhaul the same system
 
 ## Release history
 
+### 1.3.1
+
+Compatibility release for SPT 4.1.3. Nothing in the physical model changed —
+no formula, constant or calibration anchor moved.
+
+- **The server starts again on SPT 4.1.3.** 4.1.3 photographs the item database
+  just before it loads profiles and refuses to start if anything was added
+  afterwards: an item registered that late is an item the profiles already read
+  cannot resolve. PLATE built its nine grenade-fragment templates at the very end
+  of loading, so every 4.1.3 server carrying the mod died on startup with
+  `DatabaseModifiedAfterCutoffException`. The fragments are now registered before
+  the cutoff, in the same early pass that registers the blood bag, while the pass
+  that gives them their prototype numbers still runs last and still has the final
+  word over other mods. Nothing about the fragments themselves changed. If a
+  grenade is added by another mod after that point it keeps its vanilla shrapnel
+  and says so in the log, rather than taking the server down; and should a future
+  SPT move the cutoff again, PLATE loses its own items with an explanation instead
+  of killing the process.
+- **Your edits to `ammo-reference.jsonc` survive a restart.** The version the mod
+  ships was written down twice — once in code, once in the book itself — and the
+  two had drifted apart, so every single server start decided the file was out of
+  date, copied it to a `.bak` and rewrote it. Hand-corrected figures lasted until
+  the next launch, and the backup holding them was overwritten by the launch after
+  that. There is one number now, the one in the book. Existing installs get one
+  final rewrite to bring the file's label up to date; the contents are already the
+  shipped ones, since that is what the bug had been doing all along.
+
 ### 1.3.0
 
 - **The wound now survives the vanilla armour call.** The game zeroes the body
