@@ -48,7 +48,10 @@ public class PlateServerMod(
 
         if (config.Modules.GrenadePhysics)
         {
-            grenadePhysics.Apply(config, modPath); // fragments/blast from prototype specs
+            // fragments/blast from prototype specs; the fragment templates themselves were
+            // registered by PlateItemRegistration — nothing may be added to the item
+            // database this late (see Services/ItemRegistrationWindow.cs)
+            grenadePhysics.Apply(config, modPath, canAddItems: false);
         }
 
         if (config.Modules.BloodGlobals)
@@ -59,7 +62,7 @@ public class PlateServerMod(
             {
                 // registered by PlateItemRegistration before profile validation;
                 // this pass only reports it into the summary below
-                transfusionItem.Apply(config, modPath);
+                transfusionItem.Apply(config, modPath, canAddItems: false);
             }
         }
 

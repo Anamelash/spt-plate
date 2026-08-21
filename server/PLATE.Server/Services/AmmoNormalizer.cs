@@ -103,6 +103,18 @@ public class AmmoNormalizer(
                 continue;
             }
 
+            if (GrenadePhysics.IsFragmentTemplate(item.Id))
+            {
+                // PLATE's own grenade fragments. They carry a bullet's fields — the
+                // vanilla shrapnel template they are cloned from is filed under 9x18 —
+                // but they are not ammunition, and GrenadePhysics gives them their
+                // numbers from the prototype spec. Since 4.1.3 they have to be registered
+                // before profiles load, so they are in the database by the time the
+                // normalizer runs and would otherwise be normalised as 9x18 rounds and
+                // weigh on that caliber's cohort.
+                continue;
+            }
+
             recs.Add(new Rec
             {
                 Item = item,

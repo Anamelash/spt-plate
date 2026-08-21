@@ -60,7 +60,14 @@ public class TransfusionItem(
     // UsePrefab/sound are inherited from the ration wholesale.
     private const string WaterRationTpl = "60098b1705871270cd5352a1";
 
-    public void Apply(PlateServerConfig cfg, string modPath)
+    /// <param name="canAddItems">
+    /// True only for the early pass in <see cref="PlateItemRegistration"/>, which runs
+    /// while the item database still accepts new templates (see
+    /// <see cref="ItemRegistrationWindow"/>). The late pass runs with false and only owes
+    /// the startup summary its line; asking CustomItemService to create the item there
+    /// throws on 4.1.3 and takes the server with it.
+    /// </param>
+    public void Apply(PlateServerConfig cfg, string modPath, bool canAddItems)
     {
         var items = templateTable.Items;
         if (items == null)
@@ -80,6 +87,16 @@ public class TransfusionItem(
             // before the server validates profiles against the item DB. This pass
             // only owes the startup summary its line.
             Summary ??= $"transfusion item ({(hasCustomModel ? "custom model" : "vanilla model")})";
+            return;
+        }
+
+        if (!canAddItems)
+        {
+            // The early pass did not get to register it (see PlateItemRegistration), and
+            // the database is closed by now. Without the item the blood system still
+            // works, it just has nothing to transfuse.
+            logger.Error("[PLATE] TransfusionItem: the blood bag was not registered before the " +
+                         "item database closed, no transfusion item this run");
             return;
         }
 

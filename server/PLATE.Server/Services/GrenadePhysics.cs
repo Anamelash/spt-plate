@@ -28,10 +28,40 @@ public class GrenadePhysics(
     /// <summary>Fragment steel density, g/cm³ (for the equivalent sphere diameter).</summary>
     private const double SteelDensity = 7.85;
 
+    /// <summary>
+    /// Id space reserved for PLATE's fragment templates: b100d0000000000000001NNN, one
+    /// per grenade in the reference book. Public because the ammo normalizer has to be
+    /// able to tell them apart from ammunition (see <see cref="IsFragmentTemplate"/>).
+    /// </summary>
+    public const string FragmentIdPrefix = "b100d0000000000000001";
+
+    /// <summary>
+    /// Marker in the template <c>_name</c> of a fragment clone. The id alone says the
+    /// slot is taken, not by whom: if another mod ever occupies one of ours, repointing
+    /// a grenade at its item would be worse than leaving the grenade vanilla.
+    /// </summary>
+    private const string CloneNameMarker = "_plate_";
+
     /// <summary>One-line result for the startup summary; null if the module did not run.</summary>
     public string? Summary { get; private set; }
 
-    public void Apply(PlateServerConfig cfg, string modPath)
+    /// <summary>Template id of the fragment of the <paramref name="index"/>-th grenade (1-based).</summary>
+    public static string FragmentTemplateId(int index) => $"{FragmentIdPrefix}{index:000}";
+
+    /// <summary>True if the template is one of PLATE's grenade fragments.</summary>
+    public static bool IsFragmentTemplate(MongoId id) =>
+        id.ToString().StartsWith(FragmentIdPrefix, StringComparison.Ordinal);
+
+    /// <param name="canAddItems">
+    /// True only for the early pass in <see cref="PlateItemRegistration"/>, which runs
+    /// before the server closes the item database (see <see cref="ItemRegistrationWindow"/>).
+    /// The late pass runs with false and cannot add anything: since 4.1.3 an item that
+    /// appears after the cutoff kills the server, so "create it if it is missing" is not
+    /// a recoverable path there. Everything else the method does is idempotent and runs
+    /// in both passes — the late one is what keeps PLATE's numbers on the fragments after
+    /// every other mod has had its turn at the database.
+    /// </param>
+    public void Apply(PlateServerConfig cfg, string modPath, bool canAddItems)
     {
         var items = templateTable.Items;
         if (items == null)
@@ -46,7 +76,6 @@ public class GrenadePhysics(
             return;
         }
 
-        var a = cfg.AmmoNormalizer;
         var byName = items.Values
             .Where(i => i.Name != null)
             .GroupBy(i => i.Name!)
@@ -72,11 +101,20 @@ public class GrenadePhysics(
                 continue;
             }
 
-            // stable clone id: b100d0000000000000001NNN (hex-compatible)
-            var cloneId = $"b100d0000000000000001{idx:000}";
-            if (!items.ContainsKey(new MongoId(cloneId)))
+            var cloneId = FragmentTemplateId(idx);
+            if (!items.TryGetValue(new MongoId(cloneId), out var clone))
             {
-                var clone = jsonUtil.Deserialize<SPTarkov.Server.Core.Models.Eft.Common.Tables.TemplateItem>(
+                if (!canAddItems)
+                {
+                    // The grenade exists but its fragment does not: it was added to the
+                    // database after our registration pass, and the database is closed by
+                    // now. Vanilla shrapnel for it, and a line saying why.
+                    logger.Warning($"[PLATE] GrenadePhysics: '{name}' appeared after PLATE registered " +
+                                   "its fragments; it keeps the vanilla ones");
+                    continue;
+                }
+
+                clone = jsonUtil.Deserialize<SPTarkov.Server.Core.Models.Eft.Common.Tables.TemplateItem>(
                     jsonUtil.Serialize(srcTpl));
                 if (clone?.Properties == null)
                 {
@@ -85,41 +123,19 @@ public class GrenadePhysics(
                 }
 
                 clone.Id = new MongoId(cloneId);
-                clone.Name = $"{srcTpl.Name}_plate_{gr.Prototype}";
-
-                var p = clone.Properties;
-                var massG = Math.Max(gr.FragMassG, 0.05);
-                var v0 = Math.Max(gr.FragV0, 50);
-                var e = 0.5 * (massG / 1000.0) * v0 * v0;
-                // diameter of the equivalent steel sphere, mm
-                var diaMm = Math.Pow(6.0 * (massG / SteelDensity) / Math.PI, 1.0 / 3.0) * 10.0;
-                var area = Math.PI * diaMm * diaMm / 4.0;
-
-                p.BulletMassGram = massG;
-                p.InitialSpeed = v0;
-                p.BulletDiameterMilimeters = Math.Round(diaMm, 2);
-                // damage — wound channel model (PC+TC), same as for bullets/buckshot;
-                // a fragment lodges in the body and deposits everything
-                // a grenade fragment IS its core: solid steel, nothing to break off
-                var wound = WoundModel.Compute(massG, diaMm, v0, cfg.Grenades.FragmentX, 1, a);
-                p.Damage = Math.Clamp(Math.Round(
-                    a.WoundChannelModel ? wound.Damage : e / a.EnergyPerHp),
-                    a.MinPelletDamage, a.DamageCap);
-                // a fragment is a lump of casing: no core to concentrate anything, and
-                // steel that ragged does not flatten out either
-                p.PenetrationPower = (int)Math.Clamp(
-                    Math.Round(a.PenPerEnergyDensity * (e / AmmoNormalizer.ImpactArea(
-                        area, 1, cfg.Grenades.FragmentX, cfg.Armor.ExpansionOnArmor))),
-                    1, 60);
-                // ragged fragment wounds bleed almost always (on penetration the
-                // client additionally guarantees a light bleed)
-                p.LightBleedingDelta = cfg.Grenades.FragLightDelta;
-                p.HeavyBleedingDelta = cfg.Grenades.FragHeavyDelta;
+                clone.Name = $"{srcTpl.Name}{CloneNameMarker}{gr.Prototype}";
 
                 items[clone.Id] = clone;
                 AddLocales(cloneId, gr.Prototype);
             }
+            else if (clone.Properties == null || clone.Name?.Contains(CloneNameMarker) != true)
+            {
+                logger.Error($"[PLATE] GrenadePhysics: item id {cloneId} is taken by '{clone.Name}', " +
+                             $"'{name}' keeps its vanilla fragments");
+                continue;
+            }
 
+            ConfigureFragment(clone, gr, cfg);
             grenade.Properties.FragmentType = cloneId;
 
             var fragCount = Math.Max(grenade.Properties.FragmentsCount ?? 1, 1);
@@ -147,8 +163,52 @@ public class GrenadePhysics(
 
         Summary = $"{done}/{reference.Grenades.Count} grenades";
         logger.Debug($"[PLATE] GrenadePhysics: {done}/{reference.Grenades.Count} grenades brought to prototype specs " +
-                     $"(fragments: mass/velocity/damage from energy; blast: " +
+                     $"({(canAddItems ? "registration pass; " : "")}" +
+                     $"fragments: mass/velocity/damage from energy; blast: " +
                      $"{(cfg.Grenades.BlastFromTnt ? "from explosive mass" : "vanilla")})");
+    }
+
+    /// <summary>
+    /// Writes the prototype's fragment onto the clone: mass, velocity, the diameter of
+    /// the equivalent steel sphere, and damage/penetration derived from those. Called in
+    /// both passes and depends on nothing but the reference book and the config, so the
+    /// late one simply restores the numbers if another mod has been at the template in
+    /// between.
+    /// </summary>
+    private static void ConfigureFragment(
+        SPTarkov.Server.Core.Models.Eft.Common.Tables.TemplateItem clone,
+        ReferenceBook.GrenadeRef gr,
+        PlateServerConfig cfg)
+    {
+        var a = cfg.AmmoNormalizer;
+        var p = clone.Properties!;
+        var massG = Math.Max(gr.FragMassG, 0.05);
+        var v0 = Math.Max(gr.FragV0, 50);
+        var e = 0.5 * (massG / 1000.0) * v0 * v0;
+        // diameter of the equivalent steel sphere, mm
+        var diaMm = Math.Pow(6.0 * (massG / SteelDensity) / Math.PI, 1.0 / 3.0) * 10.0;
+        var area = Math.PI * diaMm * diaMm / 4.0;
+
+        p.BulletMassGram = massG;
+        p.InitialSpeed = v0;
+        p.BulletDiameterMilimeters = Math.Round(diaMm, 2);
+        // damage — wound channel model (PC+TC), same as for bullets/buckshot;
+        // a fragment lodges in the body and deposits everything
+        // a grenade fragment IS its core: solid steel, nothing to break off
+        var wound = WoundModel.Compute(massG, diaMm, v0, cfg.Grenades.FragmentX, 1, a);
+        p.Damage = Math.Clamp(Math.Round(
+            a.WoundChannelModel ? wound.Damage : e / a.EnergyPerHp),
+            a.MinPelletDamage, a.DamageCap);
+        // a fragment is a lump of casing: no core to concentrate anything, and
+        // steel that ragged does not flatten out either
+        p.PenetrationPower = (int)Math.Clamp(
+            Math.Round(a.PenPerEnergyDensity * (e / AmmoNormalizer.ImpactArea(
+                area, 1, cfg.Grenades.FragmentX, cfg.Armor.ExpansionOnArmor))),
+            1, 60);
+        // ragged fragment wounds bleed almost always (on penetration the
+        // client additionally guarantees a light bleed)
+        p.LightBleedingDelta = cfg.Grenades.FragLightDelta;
+        p.HeavyBleedingDelta = cfg.Grenades.FragHeavyDelta;
     }
 
     /// <summary>
