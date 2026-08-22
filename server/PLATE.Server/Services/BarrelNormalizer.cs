@@ -132,8 +132,25 @@ public class BarrelNormalizer(
                         continue;
                     }
 
-                    Normalize(p, name, caliber, ParseLength(text), reference, b, changed, skipped,
-                        $"barrel {parts.BarrelEvidence(item)}");
+                    var barrelLength = ParseLength(text);
+                    var barrelEvidence = $"barrel {parts.BarrelEvidence(item)}";
+
+                    if (barrelLength <= 0)
+                    {
+                        // a barrel sold as a weapon's rather than as a length — "MK-12
+                        // Mod 0 Barrel" — is that weapon's barrel, and the book knows how
+                        // long that is. Its name only, for the same reason a weapon's
+                        // description is not read: this one's says which rifles it fits
+                        barrelLength = LengthFromPrototype(parts.NameTextOf(item).ToList(),
+                            reference, out var namedAfter);
+                        if (barrelLength > 0)
+                        {
+                            barrelEvidence = $"barrel, prototype {namedAfter}";
+                        }
+                    }
+
+                    Normalize(p, name, caliber, barrelLength, reference, b, changed, skipped,
+                        barrelEvidence);
                     continue;
                 }
 

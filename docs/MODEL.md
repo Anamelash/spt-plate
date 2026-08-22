@@ -1085,7 +1085,9 @@ weapons and to nothing else. Length and caliber are then read off the item's nam
 and locale text, in millimetres or inches, and a caliber is matched either by its
 dimensions or by the trade names in the reference book (".300 Blackout",
 ".338 Lapua"); a name claiming two calibers decides nothing and the slot graph
-votes instead.
+votes instead. A barrel sold under a rifle's name rather than a length — "MK-12
+Mod 0 Barrel" — takes that rifle's barrel, by the same prototype match the
+weapons use.
 
 **A weapon whose barrel does not come off** has no barrel item to read, and its
 length exists only in the prototype it is modelled on: the reference book carries

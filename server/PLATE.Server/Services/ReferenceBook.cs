@@ -1043,6 +1043,15 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                                "Source": "Molot VPO-185 production specification, 305 mm (12 in) chrome-lined, threaded 14x1L (thefirearmblog, 2021). The 2019 exhibition gun was 273 mm" },
             "weapon_stenzel_sak21_762x39":    { "Prototype": "SAK-21", "LengthMm": 317.5,
                                                "Source": "Stenzel Industries SAK-21, launch configuration: 12.5 in = 317.5 mm. The pack agrees with itself - its own handguard for the gun is described as 12.5 inch (317 mm)" },
+            // --- weapons a pack ships only the barrel of. The entry answers the barrel
+            // item, which is named after the rifle instead of after a length ---
+            "weapon_ar15_mk12_mod0_556x45":   { "Prototype": "MK-12 Mod 0", "LengthMm": 457,
+                                               "Source": "Mk 12 Mod 0 SPR: an 18 in (457 mm) Douglas match barrel, the length the programme settled on as the compromise between portability and reach" },
+            "weapon_fn_m240_762x51":          { "Prototype": "M240", "LengthMm": 551,
+                                               "Source": "FN America's own product page for the M240B: 21.7 in = 551 mm. Wikipedia's 24.8 in belongs to an earlier or different barrel and the maker's figure is the one taken" },
+            "weapon_glock_glock_19x_9x19":    { "Prototype": "Glock 19X", "LengthMm": 102,
+                                               "Source": "Glock 19X: 4.02 in = 102 mm. A drop-in match barrel is cut to the same length; a threaded one protrudes a few millimetres more, which nobody publishes and which is worth a fraction of a percent" },
+
             "weapon_izhmash_as1_545x39":      { "Prototype": "AS-1", "LengthMm": 415,
                                                "Source": "Zlobin's 2013 bullpup prototype for the Ratnik trials, built around the AK-74M - a bullpup moves the action back into the stock and leaves the barrel where it was, so it is the AK-74M's 415 mm. Never entered service and never published a specification of its own; the pack's own card tells that history" },
             "weapon_izhmash_as2_762x39":      { "Prototype": "AS-2", "LengthMm": 415,

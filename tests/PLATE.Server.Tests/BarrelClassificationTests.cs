@@ -152,6 +152,20 @@ public class BarrelClassificationTests
     }
 
     [Fact]
+    public void A_barrel_sold_as_a_rifles_rather_than_as_a_length_is_that_rifles_barrel()
+    {
+        var world = new World();
+
+        world.Run();
+
+        // "MK-12 Mod 0 Barrel" carries no number at all; what it carries is the name of
+        // the rifle whose barrel it is, and the book has that at 18 inches. Against the
+        // 508 mm 5.56 reference with C=134: (457/591)/(508/642) - 1 = -2.28%
+        Assert.Equal(-2.28, world.VelocityOf(World.NamedBarrel), 2);
+        Assert.Contains("prototype MK-12 Mod 0", world.Report());
+    }
+
+    [Fact]
     public void A_weapon_is_not_measured_by_the_rifles_its_card_talks_about()
     {
         var world = new World();
@@ -281,6 +295,7 @@ public class BarrelClassificationTests
         public static readonly MongoId MagazineCarrier = new("aa000000000000000000000e");
         public static readonly MongoId RebrandedMp5 = new("aa000000000000000000000f");
         public static readonly MongoId TalkativeCarbine = new("aa0000000000000000000010");
+        public static readonly MongoId NamedBarrel = new("aa0000000000000000000011");
 
         private const string Mp5Model = "assets/content/weapons/mp5/weapon_hk_mp5_container.bundle";
 
@@ -326,8 +341,11 @@ public class BarrelClassificationTests
                 [Ar15] = Weapon(Ar15, "weapon_colt_m4a1_556x45", "Caliber556x45NATO", 0, "",
                     Slot("mod_reciever", Ar15Receiver)),
                 [Ar15Receiver] = Part(Ar15Receiver, "reciever_ar15_colt_m4a1_std", ReceiverClass, 0,
-                    Slot("mod_barrel", PackBarrel), Slot("mod_handguard", Handguard)),
+                    Slot("mod_barrel", PackBarrel, NamedBarrel), Slot("mod_handguard", Handguard)),
                 [PackBarrel] = Barrel(PackBarrel, "[EpicsAIO]_(AR-15 .300 blackout 8.5 inch barrel)", -21.5),
+
+                // a barrel named after the rifle it belongs to, with no length anywhere
+                [NamedBarrel] = Barrel(NamedBarrel, "[Eco]_(MK-12 Mod 0 Barrel)", -6.5),
 
                 // --- the odds and ends ---
                 [Handguard] = Part(Handguard, "handguard_ar15_pack", default, 15),

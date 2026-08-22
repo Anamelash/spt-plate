@@ -312,7 +312,9 @@ limits used in armor certification.
   reference book carries the weapons the popular
   packs add — AK-15, AK-12K, AK-308, PPK-20, VPO-185, the Draco, the SAK-21, the
   Beretta Storms, the Thompson and others — each with the published figure it
-  comes from. A weapon nobody has entered keeps whatever modifier it shipped with
+  comes from. A barrel sold under a rifle's name rather than a length takes that
+  rifle's, so an "MK-12 Mod 0 Barrel" is the SPR's 18 inches without having to
+  say so. A weapon nobody has entered keeps whatever modifier it shipped with
   rather than borrowing from a similar name: an AK-12K is not an AK-12, and it has
   its own 290 mm entry rather than the AK-12's 415.
 - **A weapon whose barrel is built into another part is handled as such.** The
