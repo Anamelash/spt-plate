@@ -37,8 +37,9 @@ P.L.A.T.E. handles what happens when the shooting starts.
 Prebuilt packages are published under
 **[GitHub Releases](https://github.com/Anamelash/spt-plate/releases)**. Use the
 [latest release](https://github.com/Anamelash/spt-plate/releases/latest) for
-SPT 4.1.x, including the current 4.1.3. For SPT 4.0.13, use a P.L.A.T.E.
-release older than 1.0.0; 0.10.0 is the newest build on that branch.
+SPT 4.1.x, including the current 4.1.3. For SPT 4.0.13, take the newest 0.x
+release: [0.11.0](https://github.com/Anamelash/spt-plate/releases/tag/v0.11.0)
+carries everything 1.3.2 does.
 
 Do not mix releases. The client plugin and server mod work as a pair and are
 tied to the SPT and EFT APIs they were built against. Two matching halves or no
@@ -212,15 +213,18 @@ P.L.A.T.E. releases follow the SPT compatibility split below:
 
 | P.L.A.T.E. version | Compatible SPT version |
 |---|---|
-| Older than 1.0.0 | SPT 4.0.13 |
+| 0.x, the backport line | SPT 4.0.13 (`~4.0.0`) |
 | 1.0.0 to 1.3.0 | SPT 4.1.0 to 4.1.2 |
 | 1.3.1 and newer | SPT 4.1.x (`~4.1.0`), including the current 4.1.3 |
 
 SPT 4.1.3 refuses to start a server that registers items as late as P.L.A.T.E.
 1.3.0 did, so on 4.1.3 the mod has to be 1.3.1 or newer.
 
-For SPT 4.0.13, P.L.A.T.E. 0.10.0 is the newest compatible release. Mods that
-overhaul the same ballistics, armor or medical systems are incompatible.
+The number is the server API, not the amount of mod behind it: 0.11.0 and 1.3.2
+model the same physics and ship the same features, and 0.11.0 is the newest
+release for SPT 4.0.13. Neither line loads on the other's server.
+
+Mods that overhaul the same ballistics, armor or medical systems are incompatible.
 Modded weapons, ammunition and armor are supported when they provide sensible
 physical properties.
 
