@@ -152,6 +152,19 @@ public class BarrelClassificationTests
     }
 
     [Fact]
+    public void A_weapon_is_not_measured_by_the_rifles_its_card_talks_about()
+    {
+        var world = new World();
+
+        world.Run();
+
+        // the card recounts the trials the AK-12 won, and the AK-12's 415 mm is nothing
+        // to do with this carbine. Its own name carries no prototype, so it keeps what
+        // it shipped with — a description is prose, and prose names other guns
+        Assert.Equal(-30, world.VelocityOf(World.TalkativeCarbine), 2);
+    }
+
+    [Fact]
     public void An_unclassified_part_keeps_its_modifier_and_is_reported()
     {
         var world = new World();
@@ -204,8 +217,10 @@ public class BarrelClassificationTests
     [InlineData("[EpicsAIO]_(Modified Century Arms Draco 7.62x39 Assault Rifle)", 206.5)]
     // nor may a two-letter prototype find itself inside a caliber: "PM" is in "9x18PM"
     [InlineData("[Pack]_(Some 9x18PM machine pistol)", 0)]
+    // a bullpup leaves the barrel where it was: the AS-1 is an AK-74M's 415 mm
+    [InlineData("[Eco]_(Kalashnikov AS-1 5.45x39 assault rifle)", 415)]
     // a weapon the book has never heard of stays unknown rather than being guessed at
-    [InlineData("[Eco]_(Kalashnikov AS-1 5.45x39 assault rifle)", 0)]
+    [InlineData("[Pack]_(Grozny PP-77 9x19 submachine gun)", 0)]
     public void A_renamed_clone_is_measured_by_the_prototype_it_is_named_after(string name, double expected)
     {
         var book = new ReferenceBook(new TestLogger<ReferenceBook>()).Load(World.ModPath());
@@ -265,6 +280,7 @@ public class BarrelClassificationTests
         public static readonly MongoId IntegralSuppressor = new("aa000000000000000000000d");
         public static readonly MongoId MagazineCarrier = new("aa000000000000000000000e");
         public static readonly MongoId RebrandedMp5 = new("aa000000000000000000000f");
+        public static readonly MongoId TalkativeCarbine = new("aa0000000000000000000010");
 
         private const string Mp5Model = "assets/content/weapons/mp5/weapon_hk_mp5_container.bundle";
 
@@ -278,6 +294,8 @@ public class BarrelClassificationTests
             _locale = new Dictionary<string, string>
             {
                 [$"{IntegralSuppressor} Name"] = "VSS 9x39 integral barrel-suppressor",
+                [$"{TalkativeCarbine} Description"] =
+                    "A prototype that never made the Ratnik trials the AK-12 went on to win.",
             };
 
             Items = new Dictionary<MongoId, TemplateItem>
@@ -285,6 +303,10 @@ public class BarrelClassificationTests
                 // --- MP5: the barrel lives inside the upper receiver ---
                 [Mp5] = Weapon(Mp5, "weapon_hk_mp5_navy3_9x19", "Caliber9x19PARA", 13, Mp5Model,
                     Slot("mod_reciever", SdReceiver), Slot("mod_magazine")),
+
+                // a card that talks about another rifle; nothing may be read from it
+                [TalkativeCarbine] = Weapon(TalkativeCarbine, "[Pack]_(Some prototype carbine 9x19)",
+                    "Caliber9x19PARA", -30, "Mods/Pack/its_own_model.bundle"),
 
                 // a pack rebrand: no model of its own, so it is the MP5 it is drawn as
                 [RebrandedMp5] = Weapon(RebrandedMp5, "[Pack]_(Grozny PP-77 9x19 submachine gun)",

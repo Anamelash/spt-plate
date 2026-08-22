@@ -194,7 +194,14 @@ public class BarrelNormalizer(
 
         var name = item.Name ?? "";
         var old = p.Velocity!.Value;
-        var text = parts.TextOf(item).ToList();
+
+        // what a weapon is called, and deliberately not what is written about it: a
+        // description is prose, and prose names other guns. The AS-1 is a bullpup on an
+        // AK-74M whose card recounts the trials the AK-12 won, and reading that as "this
+        // is an AK-12" was luck rather than reasoning - it would have handed the rifle
+        // an AKS-74U's barrel just as readily. A barrel's description is about that
+        // barrel and is still read; a weapon's is a history lesson
+        var text = parts.NameTextOf(item).ToList();
 
         // a fixed barrel's length exists nowhere in the data — only in the prototype the
         // weapon is modelled on

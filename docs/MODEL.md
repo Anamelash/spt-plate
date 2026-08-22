@@ -1102,9 +1102,14 @@ witnesses are asked, in this order:
   Century Arms Draco wears the vanilla AKS-74U and is 206.5 mm, where the real
   Draco — a Romanian PM md. 90 derivative sharing nothing with it but a name —
   is 311 mm.
-- **The prototype's own name**, matched against the item text. Whole names only,
-  longest first: an AK-12K is not an AK-12 and its barrel is shorter, so a prefix
-  does not count.
+- **The prototype's own name**, matched against what the item is *called* and
+  never against what is written about it. Whole names only, longest first: an
+  AK-12K is not an AK-12 and its barrel is shorter, so a prefix does not count.
+  The description is excluded because it is prose and prose names other guns —
+  the AS-1 is a bullpup built on an AK-74M whose card recounts the trials the
+  AK-12 went on to win, and reading that as "this is an AK-12" would be luck
+  rather than reasoning. A barrel's description describes that barrel and is
+  still read for a length; a weapon's is a history lesson.
 
 A weapon that is neither drawn as something known nor named after anything known
 keeps whatever modifier it shipped with rather than borrowing a neighbour's.
