@@ -1087,6 +1087,16 @@ dimensions or by the trade names in the reference book (".300 Blackout",
 ".338 Lapua"); a name claiming two calibers decides nothing and the slot graph
 votes instead.
 
+**A weapon whose barrel does not come off** has no barrel item to read, and its
+length exists only in the prototype it is modelled on: the reference book carries
+one per such weapon, keyed by the template's name. A pack that rechambers a
+vanilla weapon rewrites that key — an AKS-74U reappears as
+`[Pack]_(Kalashnikov AKS-74U .300 Blackout Assault Rifle)` — so where the key
+misses, the prototype's own name is matched against the item text instead. Whole
+names only, longest first: an AK-12K is not an AK-12 and its barrel is shorter,
+so a prefix does not count, and a weapon the book has never heard of keeps
+whatever modifier it shipped with rather than borrowing a neighbour's.
+
 **A part with the barrel built into it** — an MP5SD upper receiver, whose ported
 146 mm barrel exists as no item — has no length to read and no model to apply: its
 gas ports, not its length, are what put the round below the speed of sound. Such a

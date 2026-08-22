@@ -302,7 +302,11 @@ limits used in armor certification.
   install, 89 pack barrels were being treated as muzzle brakes and clamped to −2%,
   which quietly gave an 8.5-inch .300 Blackout the ballistics of a 16-inch one.
   Lengths and calibers are read in whichever units and trade names the pack wrote
-  them in (millimetres, inches, ".300 Blackout", ".338 Lapua").
+  them in (millimetres, inches, ".300 Blackout", ".338 Lapua"). A weapon with a
+  fixed barrel is measured by the prototype it is named after, so a pack's
+  rechambered AKS-74U is still an AKS-74U with a 206 mm barrel even though its
+  internal name says otherwise — while an AK-12K, which is not an AK-12, is left
+  alone rather than handed the longer weapon's figure.
 - **A weapon whose barrel is built into another part is handled as such.** The
   MP5SD's ported 146 mm barrel exists as no item — it is part of the upper receiver
   — and it was being clamped like a muzzle device, which handed the SD supersonic

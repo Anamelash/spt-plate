@@ -192,17 +192,33 @@ public class BarrelNormalizer(
 
         var name = item.Name ?? "";
         var old = p.Velocity!.Value;
+        var text = parts.TextOf(item).ToList();
 
         // a fixed barrel's length exists nowhere in the data — only in the prototype the
         // weapon is modelled on
         var length = reference.Weapons.TryGetValue(name, out var w) ? w.LengthMm : 0;
+        var evidence = "fixed barrel";
+
+        if (length <= 0)
+        {
+            // the key is the template's _name, and a pack that rechambers a vanilla
+            // weapon rewrites it: the AKS-74U reappears as "[Pack]_(Kalashnikov AKS-74U
+            // .300 Blackout Assault Rifle)" and the book stops recognizing a weapon whose
+            // barrel it knows. What survives the rename is the prototype's human name,
+            // sitting in plain sight in the very entry that carries the length
+            length = LengthFromPrototype(text, reference, out var prototype);
+            if (length > 0)
+            {
+                evidence = $"fixed barrel, prototype {prototype}";
+            }
+        }
 
         // the declared caliber is not always the truth either: one pack ships the NSV, a
         // 12.7x108 heavy machine gun, declaring 5.45x39, and normalizing a 1100 mm barrel
         // against an AK's reference hands it a fat velocity bonus. Where the name says
         // otherwise, the name wins
-        var declared = CaliberFromText(parts.TextOf(item), reference) ?? p.AmmoCaliber!;
-        var row = Normalize(p, name, declared, length, reference, b, changed, skipped, "fixed barrel");
+        var declared = CaliberFromText(text, reference) ?? p.AmmoCaliber!;
+        var row = Normalize(p, name, declared, length, reference, b, changed, skipped, evidence);
 
         // a fixed-barrel weapon sitting at 0% and unknown to the reference book is simply
         // neutral; saying so every time would bury the entries worth acting on
@@ -382,6 +398,84 @@ public class BarrelNormalizer(
 
         return hit;
     }
+
+    /// <summary>
+    /// Shortest prototype name allowed to identify a weapon. "PM" would otherwise find
+    /// itself inside every 9x18PM there is; three characters is where a name starts
+    /// being a name.
+    /// </summary>
+    private const int MinPrototypeChars = 3;
+
+    /// <summary>
+    /// Barrel length of the prototype the item is named after, or 0.
+    ///
+    /// The reference book is keyed by the template's _name, which a weapon pack rewrites
+    /// when it clones a weapon; the prototype's human name it writes instead is the same
+    /// one the book already carries next to the length. Matching is on whole names — an
+    /// AK-12K is not an AK-12 and its barrel is shorter, so a prefix must not count — and
+    /// the longest name wins, which is what separates an AKS-74UB from an AKS-74U and a
+    /// Uzi Pro from a Uzi. Two prototypes of the same length disagreeing about the barrel
+    /// resolve to nothing, as everywhere else.
+    /// </summary>
+    public static double LengthFromPrototype(IEnumerable<string> texts,
+        ReferenceBook.AmmoReference reference, out string prototype)
+    {
+        var pool = texts.ToList();
+        var best = "";
+        var length = 0.0;
+        var tied = false;
+
+        foreach (var spec in reference.Weapons.Values)
+        {
+            var name = spec.Prototype;
+            if (name.Length < MinPrototypeChars || name.Length < best.Length || spec.LengthMm <= 0
+                || !pool.Any(t => ContainsWholeName(t, name)))
+            {
+                continue;
+            }
+
+            if (name.Length > best.Length)
+            {
+                best = name;
+                length = spec.LengthMm;
+                tied = false;
+            }
+            else if (Math.Abs(spec.LengthMm - length) > 0.01)
+            {
+                tied = true;
+            }
+        }
+
+        prototype = tied ? "" : best;
+        return tied ? 0 : length;
+    }
+
+    /// <summary>
+    /// Whether the text carries the name as a whole token. Digits and hyphens count as
+    /// part of a name, so "AK-12" is not found inside "AK-12K" and "PM" is not found
+    /// inside "9x18PM".
+    /// </summary>
+    private static bool ContainsWholeName(string text, string name)
+    {
+        var at = text.IndexOf(name, StringComparison.OrdinalIgnoreCase);
+
+        while (at >= 0)
+        {
+            var before = at == 0 || !IsNamePart(text[at - 1]);
+            var end = at + name.Length;
+            var after = end == text.Length || !IsNamePart(text[end]);
+            if (before && after)
+            {
+                return true;
+            }
+
+            at = text.IndexOf(name, at + 1, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
+
+    private static bool IsNamePart(char c) => char.IsLetterOrDigit(c) || c == '_' || c == '-';
 
     /// <summary>Whether a caliber's dimensions or one of its trade names is in the text.</summary>
     private static bool Claims(string id, ReferenceBook.BarrelRef spec, List<string> pool)

@@ -169,6 +169,38 @@ public class BarrelClassificationTests
         Assert.Equal(expected, BarrelNormalizer.ParseLength([name]), 1);
 
     [Theory]
+    // a pack that rechambers a vanilla weapon rewrites the key the book is indexed by,
+    // and leaves the prototype's name in plain sight
+    [InlineData("[EpicsAIO]_(Kalashnikov AKS-74U .300 Blackout Assault Rifle)", 206.5)]
+    [InlineData("[EpicsAIO]_(Kalashnikov AKS-74UN .300 Blackout Assault Rifle)", 206.5)]
+    [InlineData("[EpicsAIO]_(Kalashnikov AK-102 .300 Blackout assault rifle)", 314)]
+    [InlineData("[Eco]_(Kalashnikov AK-105 5.45x39 Kochevnik Bullpup Rifle)", 314)]
+    [InlineData("[WTT]_(Saiga-12K 12ga automatic shotgun (Redline))", 430)]
+    // an AK-12K is not an AK-12 and its barrel is shorter, so a prefix must not count
+    [InlineData("[Eco]_(Kalashnikov AK-12K 5.45x39 assault rifle)", 0)]
+    // nor may a two-letter prototype find itself inside a caliber: "PM" is in "9x18PM"
+    [InlineData("[Pack]_(Some 9x18PM machine pistol)", 0)]
+    // a weapon the book has never heard of stays unknown rather than being guessed at
+    [InlineData("[Eco]_(M1921 Thompson 7.62x25 submachine gun)", 0)]
+    public void A_renamed_clone_is_measured_by_the_prototype_it_is_named_after(string name, double expected)
+    {
+        var book = new ReferenceBook(new TestLogger<ReferenceBook>()).Load(World.ModPath());
+
+        Assert.Equal(expected, BarrelNormalizer.LengthFromPrototype([name], book, out _), 1);
+    }
+
+    [Fact]
+    public void The_longest_prototype_name_wins()
+    {
+        var book = new ReferenceBook(new TestLogger<ReferenceBook>()).Load(World.ModPath());
+
+        // "Uzi Pro Pistol" contains "Uzi", and the two are 114 mm and 260 mm apart
+        BarrelNormalizer.LengthFromPrototype(["[Pack]_(IWI Uzi Pro Pistol 9x19)"], book, out var prototype);
+
+        Assert.Equal("Uzi Pro Pistol", prototype);
+    }
+
+    [Theory]
     // the dimensions, with the dots a pack writes and the base game does not
     [InlineData("barrel_ar15_260mm_556x45", "Caliber556x45NATO")]
     [InlineData("[Pack]_(AC-TX 7.62x51 22 inch stainless steel threaded barrel)", "Caliber762x51")]
