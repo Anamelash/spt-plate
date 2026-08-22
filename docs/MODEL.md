@@ -1074,6 +1074,17 @@ percent = 100 · [ (L / (L + C)) / (L_ref / (L_ref + C)) − 1 ]
 from case capacity otherwise (`1.67·V_case / A_bore`, worth about ±35%). Both,
 along with `L_ref`, are per-caliber entries in the reference book.
 
+Two things about those entries are worth stating because both have been wrong in
+practice. `L_ref` has to be a barrel something chambered for the cartridge
+actually has: the .50 AE was entered against 400 mm, a length no Desert Eagle —
+the only gun that fires it — comes near, and every Desert Eagle in the game paid
+13% of its muzzle velocity for that one number. And the case rule is a rule of
+thumb that a small bottlenecked case at high pressure breaks: it derived 94 for
+the 5.7x28, which puts the Five-seveN 24% below the P90 where FN publishes 9%,
+so that caliber carries a measured 24 fitted to the maker's own pair instead.
+Where a case-derived constant produces a modifier that measurement contradicts,
+the constant is what is wrong.
+
 **Which part the length model applies to** is decided from the item database, not
 from what the item is called. Vanilla names every barrel `barrel_*`, but weapon
 packs register clones through WTT's item service, which names them

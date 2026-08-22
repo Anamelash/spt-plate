@@ -900,14 +900,24 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             // PMM is the hot 9x18 load in the same case, so the same geometry
             "Caliber9x18PMM":    { "Prototype": "PMM, 93 mm",         "RefMm": 93,  "C": 0, "CaseMm3": 840,  "BoreMm": 9.27 },
             "Caliber9x21":       { "Prototype": "SR-1, 120 mm",       "RefMm": 120, "C": 0, "CaseMm3": 1100, "BoreMm": 9.00 },
-            "Caliber57x28":      { "Prototype": "P90, 263 mm",        "RefMm": 263, "C": 0, "CaseMm3": 1430, "BoreMm": 5.70 },
+            // C measured, not derived: FN publishes SS190 at 716 m/s from the P90 and
+            // 650 m/s from the Five-seveN's 122 mm, and solving Le Duc for that pair
+            // gives 24. The case rule gave 94 and cost the pistol 24% where the maker
+            // says 9 - a small bottlenecked case at 3.5 kbar does not follow the volume
+            // rule, and this is four times outside the +-35% that rule is worth
+            "Caliber57x28":      { "Prototype": "P90, 263 mm",        "RefMm": 263, "C": 24, "CaseMm3": 1430, "BoreMm": 5.70 },
             "Caliber46x30":      { "Prototype": "MP7, 180 mm",        "RefMm": 180, "C": 0, "CaseMm3": 970,  "BoreMm": 4.65 },
             "Caliber68x51":      { "Prototype": "XM7, 330 mm",        "RefMm": 330, "C": 0, "CaseMm3": 3890, "BoreMm": 7.00,
                                    "Aliases": ["277 Fury", "277 SIG"] },
             "Caliber86x70":      { "Prototype": ".338 LM, 690 mm",    "RefMm": 690, "C": 0, "CaseMm3": 7390, "BoreMm": 8.60,
                                    "Aliases": ["338 LM", "338 Lapua"] },
             "Caliber127x55":     { "Prototype": "ASh-12, 420 mm",     "RefMm": 420, "C": 0, "CaseMm3": 2590, "BoreMm": 12.70 },
-            "Caliber127x33":     { "Prototype": "SR-2 class, 400 mm", "RefMm": 400, "C": 0, "CaseMm3": 3050, "BoreMm": 12.70,
+            // 12.7x33 is the .50 AE, and the only thing chambered for it is a Desert
+            // Eagle: 5 and 6 inch barrels, no rifle anywhere. The game quotes the round
+            // at 440-465 m/s, which is the 6 inch figure, so that is the barrel its
+            // velocity belongs to. This used to say 400 mm - a barrel that does not
+            // exist - and took 13% off every Desert Eagle in the game for it
+            "Caliber127x33":     { "Prototype": "Desert Eagle, 152 mm", "RefMm": 152, "C": 0, "CaseMm3": 3050, "BoreMm": 12.70,
                                    "Aliases": ["50 AE"] },
             "Caliber12g":        { "Prototype": "shotgun, 660 mm",    "RefMm": 660, "C": 0, "CaseMm3": 4500, "BoreMm": 18.50,
                                    "Aliases": ["12 gauge"] },
@@ -1815,7 +1825,12 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           //    is named after: the item has no model of its own and wears the vanilla
           //    AKS-74U, so it is that carbine rebarreled. What a pack builds a weapon
           //    as outranks what it puts on the box
-          "Version": 15
+          // 16: two reference barrels were wrong about their own cartridge. The .50 AE
+          //    was quoted against 400 mm, a barrel nothing chambered for it has, and
+          //    every Desert Eagle paid 13% for it; it is a 152 mm pistol round. And the
+          //    5.7x28 constant came from the case rule, which put the Five-seveN 24%
+          //    below the P90 where FN publishes 9%
+          "Version": 16
         }
         """;
 }

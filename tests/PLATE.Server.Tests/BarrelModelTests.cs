@@ -58,6 +58,15 @@ public class BarrelModelTests
             (177.8, 468.2), (152.4, 452.6), (127.0, 427.3), (101.6, 406.0), (76.2, 342.0),
             (50.8, 278.6),
         ]),
+        // two points rather than a ladder, and the maker's own: FN quotes SS190 at
+        // 716 m/s from the P90 and 650 m/s from the Five-seveN. They are here because
+        // the case rule was four times out on this cartridge — it derived 94 and put
+        // the pistol 24% below the P90 where FN puts it 9% below — and a constant that
+        // wrong is worth pinning down even on two points
+        new("5.7x28 SS190", 24, 0.02,
+        [
+            (263.0, 716.0), (122.0, 650.0),
+        ]),
     ];
 
     public static TheoryData<string> LadderNames()
@@ -110,7 +119,7 @@ public class BarrelModelTests
         }
 
         Assert.Equal(4, Measured.Count(l => l.Tolerance <= 0.01));
-        Assert.Equal(58, Measured.Sum(l => l.Points.Length));
+        Assert.Equal(60, Measured.Sum(l => l.Points.Length));
     }
 
     [Fact]
