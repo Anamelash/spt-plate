@@ -1091,11 +1091,23 @@ votes instead.
 length exists only in the prototype it is modelled on: the reference book carries
 one per such weapon, keyed by the template's name. A pack that rechambers a
 vanilla weapon rewrites that key — an AKS-74U reappears as
-`[Pack]_(Kalashnikov AKS-74U .300 Blackout Assault Rifle)` — so where the key
-misses, the prototype's own name is matched against the item text instead. Whole
-names only, longest first: an AK-12K is not an AK-12 and its barrel is shorter,
-so a prefix does not count, and a weapon the book has never heard of keeps
-whatever modifier it shipped with rather than borrowing a neighbour's.
+`[Pack]_(Kalashnikov AKS-74U .300 Blackout Assault Rifle)` — so two further
+witnesses are asked, in this order:
+
+- **The model it is drawn with.** A rebrand that ships no model of its own is
+  the weapon it is drawn as: same geometry, same barrel, and a rechambering does
+  not move the muzzle. Where a pack item and a weapon the book knows share a
+  prefab, they share a length. This outranks the name, because what a weapon is
+  built as is a fact and what a pack writes on it is a claim: the item called a
+  Century Arms Draco wears the vanilla AKS-74U and is 206.5 mm, where the real
+  Draco — a Romanian PM md. 90 derivative sharing nothing with it but a name —
+  is 311 mm.
+- **The prototype's own name**, matched against the item text. Whole names only,
+  longest first: an AK-12K is not an AK-12 and its barrel is shorter, so a prefix
+  does not count.
+
+A weapon that is neither drawn as something known nor named after anything known
+keeps whatever modifier it shipped with rather than borrowing a neighbour's.
 
 **A part with the barrel built into it** — an MP5SD upper receiver, whose ported
 146 mm barrel exists as no item — has no length to read and no model to apply: its

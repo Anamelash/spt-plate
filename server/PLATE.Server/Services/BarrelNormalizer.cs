@@ -86,6 +86,7 @@ public class BarrelNormalizer(
         }
 
         var parts = new PartClassifier(items, ReadLocale(localeTable));
+        var byModel = MapModelsToLengths(items, reference);
         var barrelCaliber = MapBarrelsToCalibers(items, parts, out var hasRemovableBarrel);
         var familyCaliber = MapFamiliesToCalibers(items, parts, barrelCaliber, reference);
         var changed = new List<Change>();
@@ -106,7 +107,7 @@ public class BarrelNormalizer(
             switch (parts.RoleOf(item))
             {
                 case PartRole.Weapon:
-                    NormalizeWeapon(item, p, parts, reference, b, hasRemovableBarrel, changed, skipped);
+                    NormalizeWeapon(item, p, parts, reference, b, hasRemovableBarrel, byModel, changed, skipped);
                     continue;
 
                 case PartRole.Barrel:
@@ -183,7 +184,8 @@ public class BarrelNormalizer(
     /// </summary>
     private void NormalizeWeapon(TemplateItem item, TemplateItemProperties p, PartClassifier parts,
         ReferenceBook.AmmoReference reference, PlateServerConfig.BarrelSection b,
-        HashSet<MongoId> hasRemovableBarrel, List<Change> changed, List<Change> skipped)
+        HashSet<MongoId> hasRemovableBarrel, Dictionary<string, double> byModel,
+        List<Change> changed, List<Change> skipped)
     {
         if (hasRemovableBarrel.Contains(item.Id))
         {
@@ -198,6 +200,16 @@ public class BarrelNormalizer(
         // weapon is modelled on
         var length = reference.Weapons.TryGetValue(name, out var w) ? w.LengthMm : 0;
         var evidence = "fixed barrel";
+
+        if (length <= 0 && byModel.TryGetValue(ModelOf(item), out var sameModel))
+        {
+            // a pack that renames a vanilla weapon without giving it a model of its own
+            // has not built a different gun: the Century Arms Draco wears the AKS-74U and
+            // is that carbine rebarreled, whatever the 12.25 inch original measures. What
+            // the item is built as outranks what the pack wrote on it
+            length = sameModel;
+            evidence = "fixed barrel, same model as a known weapon";
+        }
 
         if (length <= 0)
         {
@@ -405,6 +417,52 @@ public class BarrelNormalizer(
     /// being a name.
     /// </summary>
     private const int MinPrototypeChars = 3;
+
+    /// <summary>The model an item is drawn with, or "" when it has none.</summary>
+    private static string ModelOf(TemplateItem item) => item.Properties?.Prefab?.Path ?? "";
+
+    /// <summary>
+    /// Barrel length per weapon model, for the weapons the book knows.
+    ///
+    /// A pack that rebrands a vanilla weapon without drawing a new one has not built a
+    /// different gun: it ships the same model, the same handling and the same barrel
+    /// under another name, and a rechambering does not move the muzzle. So where such an
+    /// item and a known weapon are the same object on screen, they are the same length.
+    ///
+    /// Only models that belong to a single known weapon count. Two weapons sharing a
+    /// model and disagreeing about the barrel teach nothing, and a model no weapon in
+    /// the book uses answers nothing.
+    /// </summary>
+    private static Dictionary<string, double> MapModelsToLengths(
+        Dictionary<MongoId, TemplateItem> items, ReferenceBook.AmmoReference reference)
+    {
+        var found = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        var ambiguous = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var item in items.Values)
+        {
+            var model = ModelOf(item);
+            if (model.Length == 0 || string.IsNullOrEmpty(item.Properties?.AmmoCaliber)
+                || !reference.Weapons.TryGetValue(item.Name ?? "", out var spec) || spec.LengthMm <= 0)
+            {
+                continue;
+            }
+
+            if (found.TryGetValue(model, out var seen) && Math.Abs(seen - spec.LengthMm) > 0.01)
+            {
+                ambiguous.Add(model);
+            }
+
+            found[model] = spec.LengthMm;
+        }
+
+        foreach (var model in ambiguous)
+        {
+            found.Remove(model);
+        }
+
+        return found;
+    }
 
     /// <summary>
     /// Barrel length of the prototype the item is named after, or 0.

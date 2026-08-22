@@ -303,9 +303,13 @@ limits used in armor certification.
   which quietly gave an 8.5-inch .300 Blackout the ballistics of a 16-inch one.
   Lengths and calibers are read in whichever units and trade names the pack wrote
   them in (millimetres, inches, ".300 Blackout", ".338 Lapua"). A weapon with a
-  fixed barrel is measured by the prototype it is named after, so a pack's
-  rechambered AKS-74U is still an AKS-74U with a 206 mm barrel even though its
-  internal name says otherwise. The reference book carries the weapons the popular
+  fixed barrel is measured by what it is built as before what it is called: a
+  rebrand that ships no model of its own is the weapon it is drawn as, so the
+  pack rifle sold as a Century Arms Draco is the vanilla AKS-74U it wears —
+  206 mm — rather than the 311 mm of the Romanian rifle it borrowed the name
+  from. Failing that, the prototype in the item's name is used, so a rechambered
+  AKS-74U is still an AKS-74U even though its internal name says otherwise. The
+  reference book carries the weapons the popular
   packs add — AK-15, AK-12K, AK-308, PPK-20, VPO-185, the Draco, the SAK-21, the
   Beretta Storms, the Thompson and others — each with the published figure it
   comes from. A weapon nobody has entered keeps whatever modifier it shipped with

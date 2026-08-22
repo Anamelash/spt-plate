@@ -138,6 +138,20 @@ public class BarrelClassificationTests
     }
 
     [Fact]
+    public void A_rebranded_weapon_with_no_model_of_its_own_is_the_weapon_it_is_drawn_as()
+    {
+        var world = new World();
+
+        world.Run();
+
+        // the item is called nothing the book knows and its name carries no prototype;
+        // what it does carry is the MP5's model, which makes it an MP5 with 225 mm, worth
+        // +8.43% against the 120 mm pistol reference. It shipped at -30%
+        Assert.Equal(8.43, world.VelocityOf(World.RebrandedMp5), 2);
+        Assert.Contains("same model as a known weapon", world.Report());
+    }
+
+    [Fact]
     public void An_unclassified_part_keeps_its_modifier_and_is_reported()
     {
         var world = new World();
@@ -250,6 +264,9 @@ public class BarrelClassificationTests
         public static readonly MongoId OrphanBarrel = new("aa000000000000000000000c");
         public static readonly MongoId IntegralSuppressor = new("aa000000000000000000000d");
         public static readonly MongoId MagazineCarrier = new("aa000000000000000000000e");
+        public static readonly MongoId RebrandedMp5 = new("aa000000000000000000000f");
+
+        private const string Mp5Model = "assets/content/weapons/mp5/weapon_hk_mp5_container.bundle";
 
         public Dictionary<MongoId, TemplateItem> Items { get; }
 
@@ -266,21 +283,25 @@ public class BarrelClassificationTests
             Items = new Dictionary<MongoId, TemplateItem>
             {
                 // --- MP5: the barrel lives inside the upper receiver ---
-                [Mp5] = Weapon(Mp5, "weapon_hk_mp5_navy3_9x19", "Caliber9x19PARA", 13,
+                [Mp5] = Weapon(Mp5, "weapon_hk_mp5_navy3_9x19", "Caliber9x19PARA", 13, Mp5Model,
                     Slot("mod_reciever", SdReceiver), Slot("mod_magazine")),
+
+                // a pack rebrand: no model of its own, so it is the MP5 it is drawn as
+                [RebrandedMp5] = Weapon(RebrandedMp5, "[Pack]_(Grozny PP-77 9x19 submachine gun)",
+                    "Caliber9x19PARA", -30, Mp5Model),
                 [SdReceiver] = Part(SdReceiver, "reciever_mp5_hk_sd", ReceiverClass, -33,
                     Slot("mod_muzzle", Brake)),
                 [Brake] = Part(Brake, "muzzle_mp5_brake", FlashHiderClass, -12),
 
                 // --- Glock: the slide owns the muzzle, but the barrel is an item ---
-                [Glock] = Weapon(Glock, "weapon_glock_glock_17_gen3_9x19", "Caliber9x19PARA", 0,
+                [Glock] = Weapon(Glock, "weapon_glock_glock_17_gen3_9x19", "Caliber9x19PARA", 0, "",
                     Slot("mod_barrel", GlockBarrel), Slot("mod_reciever", GlockSlide)),
                 [GlockSlide] = Part(GlockSlide, "reciever_glock_glock_17_std", ReceiverClass, 0,
                     Slot("mod_muzzle", Brake)),
                 [GlockBarrel] = Barrel(GlockBarrel, "barrel_glock_114mm_9x19_std", -2),
 
                 // --- AR-15 wearing a pack's barrel, named as the pack names it ---
-                [Ar15] = Weapon(Ar15, "weapon_colt_m4a1_556x45", "Caliber556x45NATO", 0,
+                [Ar15] = Weapon(Ar15, "weapon_colt_m4a1_556x45", "Caliber556x45NATO", 0, "",
                     Slot("mod_reciever", Ar15Receiver)),
                 [Ar15Receiver] = Part(Ar15Receiver, "reciever_ar15_colt_m4a1_std", ReceiverClass, 0,
                     Slot("mod_barrel", PackBarrel), Slot("mod_handguard", Handguard)),
@@ -350,7 +371,7 @@ public class BarrelClassificationTests
         }
 
         private static TemplateItem Weapon(MongoId id, string name, string caliber, double velocity,
-            params Slot[] slots) =>
+            string model = "", params Slot[] slots) =>
             new()
             {
                 Id = id,
@@ -358,6 +379,7 @@ public class BarrelClassificationTests
                 Properties = new TemplateItemProperties
                 {
                     AmmoCaliber = caliber, Velocity = velocity, Slots = slots,
+                    Prefab = model.Length > 0 ? new Prefab { Path = model } : null,
                 },
             };
 
