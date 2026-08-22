@@ -142,10 +142,19 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
 
     public class WeaponBarrelRef
     {
+        /// <summary>
+        /// The weapon's own name. Doubles as the way a modded clone is recognized: a
+        /// pack rewrites the template name this table is keyed by but keeps writing the
+        /// prototype's name on the item, so this is matched against the item text when
+        /// the key misses.
+        /// </summary>
         public string Prototype { get; set; } = "";
 
         /// <summary>Barrel length of the real weapon, mm.</summary>
         public double LengthMm { get; set; }
+
+        /// <summary>Where the length comes from. Vanilla weapons predate the field.</summary>
+        public string Source { get; set; } = "";
     }
 
     /// <summary>
@@ -1004,7 +1013,38 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "weapon_izhmash_saiga12k_10_12g": { "Prototype": "Saiga-12K", "LengthMm": 430 },
             "weapon_kiba_saiga12k_fa_12g":    { "Prototype": "Saiga-12K FA", "LengthMm": 430 },
             "weapon_toz_toz-106_20g":         { "Prototype": "TOZ-106", "LengthMm": 200 },
-            "weapon_aklys_defense_velociraptor_762x35": { "Prototype": "Velociraptor 9\"", "LengthMm": 229 }
+            "weapon_aklys_defense_velociraptor_762x35": { "Prototype": "Velociraptor 9\"", "LengthMm": 229 },
+
+            // --- weapons only mods add. The key is the name the game would give them,
+            // which nothing may ever carry: what finds these is the Prototype, matched
+            // against whatever a pack chose to call its clone. Rechambering does not
+            // move a barrel, so a pack's .300 Blackout AKS-74U is still 206.5 mm ---
+            "weapon_izhmash_ak15_762x39":     { "Prototype": "AK-15", "LengthMm": 415,
+                                               "Source": "the AK-15 is the 7.62x39 member of the AK-12 family and keeps its 415 mm barrel (Kalashnikov Group; militaryfactory.com/smallarms detail 1303)" },
+            "weapon_izhmash_ak12k_545x39":    { "Prototype": "AK-12K", "LengthMm": 290,
+                                               "Source": "Kalashnikov Group catalogue, AK-12K: 290 mm, the shortened AK-12 built on Ukraine-war feedback. Not an AK-12 with a different name - 125 mm shorter" },
+            "weapon_izhmash_ak308_762x51":    { "Prototype": "AK-308", "LengthMm": 415,
+                                               "Source": "Kalashnikov Group published specs for the AK-308: 415 mm, 7.62x51, 4.3 kg" },
+            "weapon_izhmash_ppk20_9x19":      { "Prototype": "PPK-20", "LengthMm": 233,
+                                               "Source": "topwar.ru specification table for the PPK-20: 233 mm, in line with the 237.5 mm Vityaz-SN it is developed from. Kalashnikov's own media lists 182-183.5 mm elsewhere, which fits the later SMO-revised gun rather than the one modelled here - the lower figure would make this a +6% weapon instead of +9%" },
+            "weapon_century_arms_draco_762x39": { "Prototype": "Century Arms Draco", "LengthMm": 311,
+                                               "Source": "Century Arms Draco (HG1916-N): 12.25 in = 311 mm. Named in full deliberately - the Mini Draco is 7.75 in and the Draco Tactical 7.5 in, and neither would be found by this entry" },
+            "weapon_arsenal_sgl31_545x39":    { "Prototype": "SGL31", "LengthMm": 415,
+                                               "Source": "Arsenal SGL31-62/-68, a Saiga in 5.45x39: 16.3 in = 414 mm, the AK-74 barrel" },
+            "weapon_izhmash_saiga_mk_030_545x39": { "Prototype": "Saiga MK Ver. 030", "LengthMm": 415,
+                                               "Source": "Kalashnikov Group catalogue, Saiga-MK 5.45x39 ver. 30: 415 mm. Version 33 is the 341 mm one and is a different entry if a pack ever ships it" },
+            "weapon_auto_ordnance_thompson_m1921_1143x23": { "Prototype": "M1921 Thompson", "LengthMm": 267,
+                                               "Source": "M1921 Thompson finned barrel, 10.5 in = 267 mm (International Military Antiques, original part). The pack rechambers it to 7.62x25, which does not change the barrel" },
+            "weapon_beretta_cx4_storm_9x19":  { "Prototype": "Cx4 Storm", "LengthMm": 422,
+                                               "Source": "Beretta Cx4 Storm, the civilian carbine: 422.5 mm (16.6 in)" },
+            "weapon_beretta_mx4_storm_9x19":  { "Prototype": "Mx4 Storm", "LengthMm": 312,
+                                               "Source": "Beretta Mx4 Storm, the select-fire military version of the Cx4: 312 mm" },
+            "weapon_molot_vpo185_9x19":       { "Prototype": "VPO-185", "LengthMm": 305,
+                                               "Source": "Molot VPO-185 production specification, 305 mm (12 in) chrome-lined, threaded 14x1L (thefirearmblog, 2021). The 2019 exhibition gun was 273 mm" },
+            "weapon_stenzel_sak21_762x39":    { "Prototype": "SAK-21", "LengthMm": 317.5,
+                                               "Source": "Stenzel Industries SAK-21, launch configuration: 12.5 in = 317.5 mm. The pack agrees with itself - its own handguard for the gun is described as 12.5 inch (317 mm)" },
+            "weapon_salco_ak300_762x35":      { "Prototype": "AK-300", "LengthMm": 415,
+                                               "Source": "no such rifle exists; the pack's own description calls it a prototype based on the AK-12 and AK-308, and both of those are 415 mm" }
           },
 
           // Parts that are not barrel items but have a barrel inside them, so no length

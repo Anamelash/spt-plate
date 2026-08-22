@@ -176,12 +176,18 @@ public class BarrelClassificationTests
     [InlineData("[EpicsAIO]_(Kalashnikov AK-102 .300 Blackout assault rifle)", 314)]
     [InlineData("[Eco]_(Kalashnikov AK-105 5.45x39 Kochevnik Bullpup Rifle)", 314)]
     [InlineData("[WTT]_(Saiga-12K 12ga automatic shotgun (Redline))", 430)]
-    // an AK-12K is not an AK-12 and its barrel is shorter, so a prefix must not count
-    [InlineData("[Eco]_(Kalashnikov AK-12K 5.45x39 assault rifle)", 0)]
+    // an AK-12K is not an AK-12: a prefix must not count, and the book's own 290 mm
+    // entry has to win over the 415 mm one it is spelled inside of
+    [InlineData("[Eco]_(Kalashnikov AK-12K 5.45x39 assault rifle)", 290)]
+    // a pack that backports content writes the internal name, hyphens and all missing
+    [InlineData("[WTT-ContentBackport]_(weapon_izhmash_ak308_762x51)", 415)]
+    // rechambering does not move a barrel: a .45 Thompson relined for 7.62x25 is still
+    // a Thompson
+    [InlineData("[Eco]_(M1921 Thompson 7.62x25 submachine gun)", 267)]
     // nor may a two-letter prototype find itself inside a caliber: "PM" is in "9x18PM"
     [InlineData("[Pack]_(Some 9x18PM machine pistol)", 0)]
     // a weapon the book has never heard of stays unknown rather than being guessed at
-    [InlineData("[Eco]_(M1921 Thompson 7.62x25 submachine gun)", 0)]
+    [InlineData("[Eco]_(Kalashnikov AS-1 5.45x39 assault rifle)", 0)]
     public void A_renamed_clone_is_measured_by_the_prototype_it_is_named_after(string name, double expected)
     {
         var book = new ReferenceBook(new TestLogger<ReferenceBook>()).Load(World.ModPath());

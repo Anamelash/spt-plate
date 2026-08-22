@@ -420,7 +420,9 @@ public class BarrelNormalizer(
     public static double LengthFromPrototype(IEnumerable<string> texts,
         ReferenceBook.AmmoReference reference, out string prototype)
     {
-        var pool = texts.ToList();
+        // hyphens go because a pack writes the internal name of what it backported —
+        // "weapon_izhmash_ak308_762x51" — where the book says AK-308
+        var pool = texts.SelectMany(t => new[] { t, t.Replace("-", "") }).Distinct().ToList();
         var best = "";
         var length = 0.0;
         var tied = false;
@@ -429,7 +431,7 @@ public class BarrelNormalizer(
         {
             var name = spec.Prototype;
             if (name.Length < MinPrototypeChars || name.Length < best.Length || spec.LengthMm <= 0
-                || !pool.Any(t => ContainsWholeName(t, name)))
+                || !pool.Any(t => ContainsWholeName(t, name) || ContainsWholeName(t, name.Replace("-", ""))))
             {
                 continue;
             }
@@ -451,9 +453,10 @@ public class BarrelNormalizer(
     }
 
     /// <summary>
-    /// Whether the text carries the name as a whole token. Digits and hyphens count as
-    /// part of a name, so "AK-12" is not found inside "AK-12K" and "PM" is not found
-    /// inside "9x18PM".
+    /// Whether the text carries the name as a whole token. Letters, digits and hyphens
+    /// count as part of a name, so "AK-12" is not found inside "AK-12K" and "PM" is not
+    /// found inside "9x18PM". The underscore is a separator rather than a letter,
+    /// because that is what it is in every name the game itself writes.
     /// </summary>
     private static bool ContainsWholeName(string text, string name)
     {
@@ -475,7 +478,7 @@ public class BarrelNormalizer(
         return false;
     }
 
-    private static bool IsNamePart(char c) => char.IsLetterOrDigit(c) || c == '_' || c == '-';
+    private static bool IsNamePart(char c) => char.IsLetterOrDigit(c) || c == '-';
 
     /// <summary>Whether a caliber's dimensions or one of its trade names is in the text.</summary>
     private static bool Claims(string id, ReferenceBook.BarrelRef spec, List<string> pool)
