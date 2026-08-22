@@ -97,7 +97,7 @@ namespace PLATE.Client.Patches
         /// </summary>
         private static bool GetUpPrefix(BotLay __instance)
         {
-            var owner = __instance?._owner;
+            var owner = __instance?.BotOwner_0;
             if (!CrippleSystem.IsGrounded(owner))
             {
                 return true;
@@ -124,7 +124,7 @@ namespace PLATE.Client.Patches
         private static void ThrowPrefix(BotGrenadeController __instance, out BotOwner __state)
         {
             __state = _mayStandFor;
-            _mayStandFor = __instance?._owner;
+            _mayStandFor = __instance?.BotOwner_0;
         }
 
         // a finalizer, not a postfix: the permission has to close even if the throw throws

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using EFT;
-using EFT.Ballistics;
 using EFT.HealthSystem;
 using HarmonyLib;
 using PLATE.Client.Blood;
@@ -264,7 +263,7 @@ namespace PLATE.Client.Patches
         // --- 2. Guaranteed light bleeding on a penetrating wound ---
 
         private static void GuaranteedBleedPostfix(ActiveHealthController __instance,
-            EBodyPart bodyPart, float damage, DamageInfo damageInfo, float __result)
+            EBodyPart bodyPart, float damage, DamageInfoStruct damageInfo, float __result)
         {
             PatchStats.Hit(nameof(GuaranteedBleedPostfix));
             if (Off || damageInfo.BlockedBy.HasValue)
@@ -461,7 +460,7 @@ namespace PLATE.Client.Patches
         /// The vanilla bullet fracture roll is zeroed on the server (BloodGlobals).
         /// </summary>
         private static void TryBoneFracture(ActiveHealthController ahc, EBodyPart bodyPart,
-            DamageInfo damageInfo, float applied)
+            DamageInfoStruct damageInfo, float applied)
         {
             var collider = ResolveWoundSegment(bodyPart, damageInfo);
             var bone = BoneChance(collider);
@@ -603,7 +602,7 @@ namespace PLATE.Client.Patches
         /// limb's proximal segment, the larger of the two and so the likelier to be hit.
         /// </summary>
         private static EBodyPartColliderType ResolveWoundSegment(EBodyPart bodyPart,
-            DamageInfo damageInfo)
+            DamageInfoStruct damageInfo)
         {
             if (BallisticsPatches.TryGetHitCollider(out var struck) && BoneChance(struck) > 0f)
             {
@@ -800,7 +799,7 @@ namespace PLATE.Client.Patches
                     // the fracture class itself is not referenceable from here — it is a
                     // protected nested type, which is why PatchTargets resolves it by
                     // name; the base effect is, and that is what carries ForceRemove
-                    if (effect is ActiveHealthController.Effect e &&
+                    if (effect is ActiveHealthController.GClass3008 e &&
                         PatchTargets.FractureEffect.IsInstanceOfType(e) &&
                         e.BodyPart == bodyPart)
                     {
@@ -875,8 +874,8 @@ namespace PLATE.Client.Patches
         /// bag is empty.
         /// </summary>
         // __instance is typed as object: the method is declared on the generic base
-        // BaseHealthController and shared between controllers (ActiveHealthController in raid,
-        // OfflineHealthController in the stash) — a hard type would throw
+        // GClass3009 and shared between controllers (ActiveHealthController in raid,
+        // HealthControllerClass in the stash) — a hard type would throw
         // InvalidCastException out of raid.
         private static void TransfusionCanApplyPostfix(object __instance,
             EFT.InventoryLogic.Item item, ref bool __result)

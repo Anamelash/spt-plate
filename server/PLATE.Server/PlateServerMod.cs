@@ -1,20 +1,19 @@
 using System.Reflection;
 using PLATE.Server.Config;
-using SPTarkov.Common.Models.Logging;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.DI;
-using SPTarkov.Server.Core.Helpers.Server;
+using SPTarkov.Server.Core.Helpers;
+using SPTarkov.Server.Core.Models.Utils;
 
 namespace PLATE.Server;
 
 /// <summary>
-/// PLATE.Server entry point. PostLoad is the last stage the server runs and a higher
-/// priority runs later, so PostLoad + 9000 puts us after content mods have finished
-/// adding items to the DB — the normalizer must see everything. The one thing that
-/// cannot wait this long — registering our own item templates before the profiles
-/// are loaded and validated — lives in <see cref="PlateItemRegistration"/>.
+/// PLATE.Server entry point. Components run in ascending priority order, so
+/// PostDBModLoader + 9000 puts us after content mods have finished adding items to the
+/// DB — the normalizer must see everything. Registering our own item templates is a
+/// separate, earlier pass in <see cref="PlateItemRegistration"/>.
 /// </summary>
-[Injectable(TypePriority = OnLoadOrder.PostLoad + 9000)]
+[Injectable(TypePriority = OnLoadOrder.PostDBModLoader + 9000)]
 public class PlateServerMod(
     ModHelper modHelper,
     PlateConfigLoader configLoader,
@@ -26,10 +25,10 @@ public class PlateServerMod(
     Services.TransfusionItem transfusionItem,
     ISptLogger<PlateServerMod> logger) : IOnLoad
 {
-    public async Task OnLoadAsync(CancellationToken cancellationToken)
+    public Task OnLoad()
     {
         var modPath = modHelper.GetAbsolutePathToModFolder(Assembly.GetExecutingAssembly());
-        var config = await configLoader.LoadAsync(modPath, cancellationToken);
+        var config = configLoader.Load(modPath);
 
         if (config.Modules.AmmoNormalizer)
         {
@@ -49,8 +48,8 @@ public class PlateServerMod(
         if (config.Modules.GrenadePhysics)
         {
             // fragments/blast from prototype specs; the fragment templates themselves were
-            // registered by PlateItemRegistration — nothing may be added to the item
-            // database this late (see Services/ItemRegistrationWindow.cs)
+            // registered by PlateItemRegistration — this pass only rewrites numbers, over
+            // the top of whatever other mods did to them (see Services/ItemRegistrationWindow.cs)
             grenadePhysics.Apply(config, modPath, canAddItems: false);
         }
 
@@ -60,8 +59,8 @@ public class PlateServerMod(
 
             if (config.Blood.TransfusionItem)
             {
-                // registered by PlateItemRegistration before profile validation;
-                // this pass only reports it into the summary below
+                // registered by PlateItemRegistration in the earlier pass;
+                // this one only reports it into the summary below
                 transfusionItem.Apply(config, modPath, canAddItems: false);
             }
         }
@@ -84,5 +83,7 @@ public class PlateServerMod(
         logger.Success(applied.Count > 0
             ? $"[PLATE] {version} loaded: {string.Join(", ", applied)}"
             : $"[PLATE] {version} loaded: all modules disabled in config.jsonc");
+
+        return Task.CompletedTask;
     }
 }

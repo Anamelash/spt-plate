@@ -3,7 +3,9 @@ using PLATE.Server.Config;
 using PLATE.Server.Services;
 using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
-using SPTarkov.Server.Core.Models.Spt.Tables;
+using SPTarkov.Server.Core.Models.Spt.Server;
+using SPTarkov.Server.Core.Models.Spt.Templates;
+using SPTarkov.Server.Core.Servers;
 using SPTarkov.Server.Core.Utils;
 using SPTarkov.Server.Core.Utils.Json;
 using Xunit;
@@ -136,20 +138,31 @@ public class GrenadePhysicsTests
             },
         };
 
-        var templateTable = (TemplateTable)RuntimeHelpers.GetUninitializedObject(typeof(TemplateTable));
-        typeof(TemplateTable).GetProperty(nameof(TemplateTable.Items))!.SetValue(templateTable, items);
-
-        // Global is left null; GrenadePhysics checks for that and skips the locale entries
-        var localeTable = (LocaleTable)RuntimeHelpers.GetUninitializedObject(typeof(LocaleTable));
+        // Nearly every property of these records is required and none of them matter
+        // here: the pass only ever reaches Templates.Items. Locales is left null, which
+        // GrenadePhysics checks for before it writes the fragment's locale entries.
+        var templates = (Templates)RuntimeHelpers.GetUninitializedObject(typeof(Templates));
+        typeof(Templates).GetProperty(nameof(Templates.Items))!.SetValue(templates, items);
+        var tables = (DatabaseTables)RuntimeHelpers.GetUninitializedObject(typeof(DatabaseTables));
+        typeof(DatabaseTables).GetProperty(nameof(DatabaseTables.Templates))!.SetValue(tables, templates);
 
         var physics = new GrenadePhysics(
-            templateTable,
-            localeTable,
+            new TestDatabaseServer(tables),
             new ReferenceBook(new TestLogger<ReferenceBook>()),
             new JsonUtil([]),
             new TestLogger<GrenadePhysics>());
 
         return (physics, items, new PlateServerConfig());
+    }
+
+    /// <summary>
+    /// The services reach the database through <see cref="DatabaseServer"/>, which the
+    /// server fills in during startup. GetTables is virtual, so a test says what is in
+    /// the database by answering the question rather than by staging a server.
+    /// </summary>
+    private sealed class TestDatabaseServer(DatabaseTables tables) : DatabaseServer
+    {
+        public override DatabaseTables GetTables() => tables;
     }
 
     /// <summary>Somewhere for the shipped reference book to be written to and read back.</summary>

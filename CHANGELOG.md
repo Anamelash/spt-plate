@@ -427,6 +427,37 @@ broken — results in combination with PLATE. Mods that overhaul the same system
 
 ## Release history
 
+### 0.11.0
+
+The SPT 4.0.13 line catches up. Everything the 1.x releases added since 0.10.0 is
+here, addressed through 4.0's server API and the client names that version ships.
+Nothing in the physical model was ported differently: the wound channel, the
+ballistic limit, the blood system and every calibration anchor are the ones 1.3.1
+runs on. A number that comes out different in a raid is a bug in this build, not a
+balance decision.
+
+- **SPT 4.0.13 only.** The server half is built against `SPTarkov.Server.Core`
+  4.0.13 and the client against the 4.0 game assemblies; neither will load on 4.1,
+  and the 1.x releases will not load here. The server mod goes to
+  `<SPT>\SPT\user\mods\PLATE\`, where it always did on this branch. Building from
+  source needs the .NET 9 SDK.
+- **Everything from 1.0.0 through 1.3.1 comes with it.** The entries below spell
+  those releases out in full and every one of them applies to this build: the F12
+  section *7. Player Survivability* and the survivability switches in it, the blood
+  panel and section *8. HUD*, winded breathing with optional bot disorientation,
+  the fracture roll that finally reaches the bone, plate wear charged by what the
+  hit did to the plate, the core's fate on impact, six versions of new reference
+  data, the wound surviving the vanilla armour call, and the reference book that
+  stopped rewriting itself on every start. The only things left behind are the two
+  fixes for problems 4.0.13 does not have — SPT 4.1.2 marking a profile invalid
+  over a blood bag in the stash, and 4.1.3 killing the server over a late item
+  registration. PLATE registers its blood bag and grenade fragments in an early
+  pass here too, one step ahead of the pass that gives them their numbers, so both
+  lines run the same code.
+- **Your F12 settings carry across.** The config migrations that moved keys into
+  sections 7 and 8 are the same ones the 1.x releases ran: a value you tuned is
+  moved, not reset.
+
 ### 1.3.1
 
 Compatibility release for SPT 4.1.3. Nothing in the physical model changed —

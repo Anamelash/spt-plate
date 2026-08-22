@@ -1,27 +1,28 @@
 using System.Reflection;
 using PLATE.Server.Config;
-using SPTarkov.Common.Models.Logging;
+using SPTarkov.Server.Core.Models.Utils;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.DI;
-using SPTarkov.Server.Core.Helpers.Server;
-using SPTarkov.Server.Core.Services.Modding.Custom;
+using SPTarkov.Server.Core.Helpers;
+using SPTarkov.Server.Core.Services.Mod;
 
 namespace PLATE.Server;
 
 /// <summary>
-/// The early half of the entry point: registers PLATE's own item templates — the blood
-/// bag and one fragment per grenade — while the server still accepts them. Everything
-/// else stays in <see cref="PlateServerMod"/> at PostLoad + 9000, where the normalizers
-/// can see the content of every other mod.
+/// The registering half of the entry point: PLATE's own item templates — the blood bag
+/// and one fragment per grenade — are created here, one step ahead of the numbers pass
+/// in <see cref="PlateServerMod"/>. Both run late enough (PostDBModLoader + 8990 and
+/// + 9000) to see the content of every other mod.
 ///
-/// The database closes at SaveCallbacks (see <see cref="Services.ItemRegistrationWindow"/>):
-/// profiles are validated against the item table, so since 4.1.2 an item registered
-/// afterwards marks every profile that carries one invalid, and since 4.1.3 the server
-/// refuses to start at all. SaveCallbacks - 1000 is the last position before that line,
-/// which is what makes the grenade pass here rather than at Preload: content mods add
-/// their grenades all over the earlier priorities, and this way it sees all of them.
+/// The split exists because later SPT releases close the item database partway through
+/// loading: from 4.1.2 an item registered after the profiles are validated marks every
+/// profile carrying it invalid, and 4.1.3 refuses to start at all. 4.0.13 has no such
+/// cutoff — nothing here is load-bearing on this server — but the two halves are kept
+/// in step with the 4.1 line so the code stays one shape,
+/// and <see cref="Services.ItemRegistrationWindow"/> keeps asking the server whether
+/// the door is still open rather than assuming it.
 /// </summary>
-[Injectable(TypePriority = OnLoadOrder.SaveCallbacks - 1000)]
+[Injectable(TypePriority = OnLoadOrder.PostDBModLoader + 8990)]
 public class PlateItemRegistration(
     ModHelper modHelper,
     PlateConfigLoader configLoader,
@@ -30,15 +31,15 @@ public class PlateItemRegistration(
     Services.GrenadePhysics grenadePhysics,
     ISptLogger<PlateItemRegistration> logger) : IOnLoad
 {
-    public async Task OnLoadAsync(CancellationToken cancellationToken)
+    public Task OnLoad()
     {
         var modPath = modHelper.GetAbsolutePathToModFolder(Assembly.GetExecutingAssembly());
-        var config = await configLoader.LoadAsync(modPath, cancellationToken);
+        var config = configLoader.Load(modPath);
 
         var wantsBloodBag = config.Modules.BloodGlobals && config.Blood.TransfusionItem;
         if (!wantsBloodBag && !config.Modules.GrenadePhysics)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         if (!Services.ItemRegistrationWindow.IsOpen(customItemService))
@@ -49,7 +50,7 @@ public class PlateItemRegistration(
             logger.Error("[PLATE] the server closed the item database before PLATE could register " +
                          "its items: the blood bag and the grenade fragments are missing this run. " +
                          "The mod needs an update for this server version");
-            return;
+            return Task.CompletedTask;
         }
 
         if (wantsBloodBag)
@@ -61,5 +62,7 @@ public class PlateItemRegistration(
         {
             grenadePhysics.Apply(config, modPath, canAddItems: true);
         }
+
+        return Task.CompletedTask;
     }
 }

@@ -1,6 +1,5 @@
 using Comfort.Common;
 using EFT;
-using EFT.CameraControl;
 using UnityEngine;
 
 namespace PLATE.Client.Overlay
@@ -136,7 +135,7 @@ namespace PLATE.Client.Overlay
             // use EFT's main world camera, Camera.main only as a fallback.
             try
             {
-                var eftCam = CameraManager.Instance?.Camera;
+                var eftCam = CameraClass.Instance?.Camera;
                 if (eftCam != null)
                 {
                     return eftCam;
@@ -144,7 +143,7 @@ namespace PLATE.Client.Overlay
             }
             catch
             {
-                // CameraManager not initialized yet
+                // CameraClass not initialized yet
             }
 
             return Camera.main;

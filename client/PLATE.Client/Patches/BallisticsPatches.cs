@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using EFT;
-using EFT.Ballistics;
 using EFT.HealthSystem;
 using EFT.InventoryLogic;
 using HarmonyLib;
@@ -186,7 +185,7 @@ namespace PLATE.Client.Patches
         private const float MinFragMassG = 0.3f;
 
         /// <summary>Share of damage the bullet keeps when passing through a body part.</summary>
-        private static float Retention(Shot shot)
+        private static float Retention(EftBulletClass shot)
         {
             var x = (float)AmmoDataCache.GetX(shot.Ammo?.TemplateId);
             return Mathf.Lerp(PlateClientConfig.FleshRetentionAp.Value,
@@ -203,8 +202,8 @@ namespace PLATE.Client.Patches
         /// the legacy branches on top of the baked-in Damage.
         /// </summary>
         [HarmonyPriority(Priority.Last)]
-        private static void DamageInfoCtorPostfix(ref DamageInfo __instance,
-            EDamageType damageType, Shot shot)
+        private static void DamageInfoCtorPostfix(ref DamageInfoStruct __instance,
+            EDamageType damageType, EftBulletClass shot)
         {
             PatchStats.Hit(nameof(DamageInfoCtorPostfix));
             var isFragment = damageType == EDamageType.GrenadeFragment ||
@@ -222,7 +221,7 @@ namespace PLATE.Client.Patches
                 }
 
                 // context for BABT in ArmorComponent.ApplyDamage (same call stack)
-                var v = shot._currentVelocity.magnitude;
+                var v = shot.Vector3_1.magnitude;
                 _shotCtx = new ShotContext
                 {
                     EnergyJ = 0.5f * (shot.BulletMassGram / 1000f) * v * v,
@@ -248,9 +247,9 @@ namespace PLATE.Client.Patches
                     return; // fragments only need the context (BABT/fractures) — bullet branches don't apply
                 }
 
-                var overpen = shot.BulletState == Shot.EBulletState.DeviationHit &&
+                var overpen = shot.BulletState == EftBulletClass.EBulletState.DeviationHit &&
                               shot.IsForwardHit;
-                var fragmented = shot.BulletState == Shot.EBulletState.FragmentationHit;
+                var fragmented = shot.BulletState == EftBulletClass.EBulletState.FragmentationHit;
 
                 if (overpen)
                 {
@@ -281,8 +280,8 @@ namespace PLATE.Client.Patches
         /// Also runs for armor-blocked hits: W becomes the "incoming" pre-armor damage
         /// (then either BABT or the penetration mitigation from the __state snapshot).
         /// </summary>
-        private static void ApplyAbsoluteWound(ref DamageInfo __instance,
-            Shot shot, BodyPartCollider bpc, float v,
+        private static void ApplyAbsoluteWound(ref DamageInfoStruct __instance,
+            EftBulletClass shot, BodyPartCollider bpc, float v,
             AmmoDataCache.WoundParams wound)
         {
             var mass = shot.BulletMassGram;
@@ -373,7 +372,7 @@ namespace PLATE.Client.Patches
         /// a blocked hit is paid in BABT, a corpse and an already-blacked part take
         /// nothing by design, and a sliver below 1 HP is not worth a line.
         /// </summary>
-        private static void WarnIfEngineDiscards(ref DamageInfo info, BodyPartCollider bpc)
+        private static void WarnIfEngineDiscards(ref DamageInfoStruct info, BodyPartCollider bpc)
         {
             if (info.IsForwardHit || info.Damage < 1f || info.BlockedBy.HasValue)
             {
@@ -399,7 +398,7 @@ namespace PLATE.Client.Patches
         /// a projectile does not carry a bleeding rate around with it, it cuts whatever
         /// was in front of it.
         /// </summary>
-        private static void ApplyWoundBleeding(ref DamageInfo info, Shot shot,
+        private static void ApplyWoundBleeding(ref DamageInfoStruct info, EftBulletClass shot,
             BodyPartCollider bpc, ClientWoundModel.Deposit d, float pathMm,
             AmmoDataCache.WoundParams wound)
         {
@@ -468,7 +467,7 @@ namespace PLATE.Client.Patches
         /// that stopped the shot ends it here: behind-armour trauma is a separate
         /// mechanism and nothing reached an organ.
         /// </summary>
-        private static void ApplyOrganZones(ref DamageInfo info, Shot shot,
+        private static void ApplyOrganZones(ref DamageInfoStruct info, EftBulletClass shot,
             BodyPartCollider bpc, float channelMm, float dEdxJPerMm, float velocity,
             ShotSpread spread)
         {
@@ -643,7 +642,7 @@ namespace PLATE.Client.Patches
         /// the kill is attributed to the shot, other mods hooking damage still see the
         /// event, and our own hooks fire without a private path around them.
         /// </summary>
-        private static void FloorDamageToLethal(ref DamageInfo info, BodyPartCollider bpc,
+        private static void FloorDamageToLethal(ref DamageInfoStruct info, BodyPartCollider bpc,
             Player victim, OrganZones.Result hit)
         {
             var ahc = victim?.ActiveHealthController;
@@ -707,7 +706,7 @@ namespace PLATE.Client.Patches
         /// frame, and guarded against re-entering itself.
         /// </summary>
         private static void CentralWoundPostfix(ActiveHealthController __instance,
-            EBodyPart bodyPart, DamageInfo damageInfo)
+            EBodyPart bodyPart, DamageInfoStruct damageInfo)
         {
             PatchStats.Hit(nameof(CentralWoundPostfix));
             if (Off || _applyingCentral || _central.Frame != Time.frameCount ||
@@ -781,7 +780,7 @@ namespace PLATE.Client.Patches
         /// load ("762x51_M80"); the "patron_" prefix every one of them shares is
         /// dropped. Reading a hit without knowing the round tells you very little.
         /// </summary>
-        private static string AmmoLabel(Shot shot)
+        private static string AmmoLabel(EftBulletClass shot)
         {
             var name = RawTemplateName(shot?.Ammo?.Template);
             if (string.IsNullOrEmpty(name))
@@ -814,7 +813,7 @@ namespace PLATE.Client.Patches
         /// local player reads YOU here exactly as they do as a victim. A shot with no
         /// owner (environmental, some mod paths) degrades to the old victim-only line.
         /// </summary>
-        private static string ShotOrigin(Shot shot)
+        private static string ShotOrigin(EftBulletClass shot)
         {
             try
             {
@@ -870,7 +869,7 @@ namespace PLATE.Client.Patches
         /// multipliers do not accumulate along the chain. A slingshot-speed bullet
         /// penetrates nothing.
         /// </summary>
-        private static void AbsolutePenPostfix(Shot __instance)
+        private static void AbsolutePenPostfix(EftBulletClass __instance)
         {
             PatchStats.Hit(nameof(AbsolutePenPostfix));
             if (Off || !PlateClientConfig.PhysDamageModel.Value)
@@ -907,7 +906,7 @@ namespace PLATE.Client.Patches
                     return; // malformed template — keep vanilla degradation
                 }
 
-                var v = __instance._currentVelocity.magnitude;
+                var v = __instance.Vector3_1.magnitude;
                 // energy density ∝ m·v²/d² (shared constants cancel in the ratio)
                 var ratio = (m * v * v / (d * d)) / (m0 * v0 * v0 / (d0 * d0));
                 __instance.PenetrationPower = pen0 * Mathf.Clamp(ratio, 0f, 1.2f);
@@ -1097,7 +1096,7 @@ namespace PLATE.Client.Patches
         /// stopped by bone. Armor block (BlockedBy) is kept as in vanilla.
         /// </summary>
         private static bool IsPenetratedPrefix(BodyPartCollider __instance,
-            Shot shot, Vector3 hitPoint, ref bool __result)
+            EftBulletClass shot, Vector3 hitPoint, ref bool __result)
         {
             PatchStats.Hit(nameof(IsPenetratedPrefix));
             if (Off || !PlateClientConfig.PhysDamageModel.Value)
@@ -1126,14 +1125,14 @@ namespace PLATE.Client.Patches
                     return true; // malformed template — vanilla rule
                 }
 
-                var v = shot._currentVelocity.magnitude;
+                var v = shot.Vector3_1.magnitude;
                 var x = EffectiveX(shot);
 
                 // the same tissue this shot's damage will be computed against: the exit
                 // decision and the wound have to be told the same story about the body
                 var spread = ShotSpread.For(shot, dia, p);
                 var l = ClientWoundModel.ChannelMm(mass, dia, v, x, p, spread.TissueScale);
-                var chord = ChordMm(__instance, hitPoint, shot._currentVelocity, dia);
+                var chord = ChordMm(__instance, hitPoint, shot.Vector3_1, dia);
 
                 // bone: probability per collider (shared with fractures), stashed for BloodPatches
                 _boneFrame = Time.frameCount;
@@ -1156,11 +1155,11 @@ namespace PLATE.Client.Patches
         // X_out after armor-induced deformation: frame+projectile context (same hit
         // stack as ShotContext) — downstream wound/penetration code reads it via EffectiveX
         private static int _xOvrFrame = -1;
-        private static Shot _xOvrShot;
+        private static EftBulletClass _xOvrShot;
         private static float _xOvrValue;
 
         /// <summary>Projectile X accounting for armor-induced deformation in this same hit.</summary>
-        internal static float EffectiveX(Shot shot)
+        internal static float EffectiveX(EftBulletClass shot)
         {
             if (_xOvrFrame == Time.frameCount && ReferenceEquals(_xOvrShot, shot))
             {
@@ -1279,7 +1278,7 @@ namespace PLATE.Client.Patches
         /// U decision and projectile mutation (vanilla is always skipped); otherwise —
         /// the GOST fragment gate + vanilla.
         /// </summary>
-        private static bool ArmorPenetrationPrefix(ArmorComponent __instance, Shot shot)
+        private static bool ArmorPenetrationPrefix(ArmorComponent __instance, EftBulletClass shot)
         {
             PatchStats.Hit(nameof(ArmorPenetrationPrefix));
             if (Off)
@@ -1312,7 +1311,7 @@ namespace PLATE.Client.Patches
         /// the barrier (K_frag) and blunted by it (K_def).
         /// A weakened projectile enters the body — the wound model takes it from there.
         /// </summary>
-        private static bool PhysicalArmorDecision(ArmorComponent armor, Shot shot,
+        private static bool PhysicalArmorDecision(ArmorComponent armor, EftBulletClass shot,
             AmmoDataCache.ArmorParams cfg)
         {
             if (armor.Repairable.Durability <= 0f)
@@ -1327,7 +1326,7 @@ namespace PLATE.Client.Patches
                 return true; // malformed template — vanilla roll
             }
 
-            var v = shot._currentVelocity.magnitude;
+            var v = shot.Vector3_1.magnitude;
             var e = 0.5f * (mass / 1000f) * v * v;
             var x = EffectiveX(shot);
 
@@ -1364,8 +1363,8 @@ namespace PLATE.Client.Patches
                 ? Mathf.Clamp01(armor.Repairable.Durability /
                                 armor.Repairable.TemplateDurability)
                 : 1f;
-            var dir = shot._currentVelocity.sqrMagnitude > 1e-6f
-                ? shot._currentVelocity.normalized
+            var dir = shot.Vector3_1.sqrMagnitude > 1e-6f
+                ? shot.Vector3_1.normalized
                 : Vector3.forward;
 
             // the raw one is kept for the log. Angle moves a limit harder than any
@@ -1394,8 +1393,8 @@ namespace PLATE.Client.Patches
             if (bpc != null)
             {
                 localPos = bpc.ColliderTransformCached != null
-                    ? bpc.ColliderTransformCached.InverseTransformPoint(shot._hit.point)
-                    : shot._hit.point;
+                    ? bpc.ColliderTransformCached.InverseTransformPoint(shot.RaycastHit_0.point)
+                    : shot.RaycastHit_0.point;
                 hitsNearby = HitsNearby(armor, bpc, localPos, prof);
             }
 
@@ -1536,7 +1535,7 @@ namespace PLATE.Client.Patches
 
             shot.BulletMassGram = mOut;
             shot.BulletDiameterMilimeters = dOut;
-            shot._currentVelocity = dir * vOut;
+            shot.Vector3_1 = dir * vOut;
             _xOvrFrame = Time.frameCount;
             _xOvrShot = shot;
             _xOvrValue = xOut;
@@ -1592,7 +1591,7 @@ namespace PLATE.Client.Patches
         /// The shrapnel BC of 0.013 bleeds the energy below the threshold by ~5 m —
         /// matching the GOST tests.
         /// </summary>
-        private static bool FragmentArmorBlockPrefix(ArmorComponent __instance, Shot shot)
+        private static bool FragmentArmorBlockPrefix(ArmorComponent __instance, EftBulletClass shot)
         {
             if (Off || !PlateClientConfig.FragmentsStoppedByArmor.Value)
             {
@@ -1613,7 +1612,7 @@ namespace PLATE.Client.Patches
                 }
 
                 // impact energy: template mass, current speed (BC has already eaten the distance)
-                var energyJ = 0.5f * (shot.BulletMassGram / 1000f) * shot._currentVelocity.sqrMagnitude;
+                var energyJ = 0.5f * (shot.BulletMassGram / 1000f) * shot.Vector3_1.sqrMagnitude;
 
                 // uneven fragmentation: one base/fuze per FragmentsCount grenade
                 // fragments (LargeShare from the server, 1/N) — only a large piece with
@@ -1656,7 +1655,7 @@ namespace PLATE.Client.Patches
         }
 
         private static void ArmorMitigationPrefix(ArmorComponent __instance,
-            ref DamageInfo damageInfo, out ArmorCallState __state)
+            ref DamageInfoStruct damageInfo, out ArmorCallState __state)
         {
             __state = new ArmorCallState
             {
@@ -1666,7 +1665,7 @@ namespace PLATE.Client.Patches
         }
 
         private static void ArmorMitigationPostfix(ArmorComponent __instance,
-            ref DamageInfo damageInfo, ArmorCallState __state)
+            ref DamageInfoStruct damageInfo, ArmorCallState __state)
         {
             PatchStats.Hit(nameof(ArmorMitigationPostfix));
             var dt = damageInfo.DamageType;
@@ -1783,7 +1782,7 @@ namespace PLATE.Client.Patches
 
         // --- Behind-armor blunt trauma (Sturdivan's Blunt Criterion) ---
 
-        private static void ApplyBabt(ArmorComponent armor, ref DamageInfo damageInfo)
+        private static void ApplyBabt(ArmorComponent armor, ref DamageInfoStruct damageInfo)
         {
             if (!PlateClientConfig.BabtEnabled.Value)
             {
@@ -1931,7 +1930,7 @@ namespace PLATE.Client.Patches
 
         // --- Fragment energy budget (instead of the vanilla 0.5/MaxFragments) ---
 
-        private static void FragmentBudgetPostfix(Shot __instance)
+        private static void FragmentBudgetPostfix(EftBulletClass __instance)
         {
             PatchStats.Hit(nameof(FragmentBudgetPostfix));
             if (Off || !PlateClientConfig.FragRescale.Value)
@@ -1966,10 +1965,10 @@ namespace PLATE.Client.Patches
                     var massShare = Mathf.Max(share / n, 1e-3f);
                     var parentMass = __instance.BulletMassGram;
                     var parentDia = __instance.BulletDiameterMilimeters;
-                    var v = __instance._currentVelocity.magnitude;
+                    var v = __instance.Vector3_1.magnitude;
                     var x = EffectiveX(__instance);
-                    var halfChord = 0.5f * ChordMm(bpc, __instance._hit.point,
-                        __instance._currentVelocity, parentDia);
+                    var halfChord = 0.5f * ChordMm(bpc, __instance.RaycastHit_0.point,
+                        __instance.Vector3_1, parentDia);
                     var spread = ShotSpread.For(__instance, parentDia, wound);
 
                     foreach (var frag in __instance.Fragments)
@@ -1989,10 +1988,10 @@ namespace PLATE.Client.Patches
                             vOut = ExitSpeed(v, li, halfChord, (float)wound.GelStopVelocity);
                         }
 
-                        var dir = frag._currentVelocity.sqrMagnitude > 1e-6f
-                            ? frag._currentVelocity.normalized
-                            : __instance._currentVelocity.normalized;
-                        frag._currentVelocity = dir * Mathf.Max(vOut, 0.1f);
+                        var dir = frag.Vector3_1.sqrMagnitude > 1e-6f
+                            ? frag.Vector3_1.normalized
+                            : __instance.Vector3_1.normalized;
+                        frag.Vector3_1 = dir * Mathf.Max(vOut, 0.1f);
 
                         // one body, one shot: the fragments carry the parent's draw on
                         ShotSpread.Inherit(__instance, frag, halfChord);
@@ -2032,7 +2031,7 @@ namespace PLATE.Client.Patches
             return v * Mathf.Exp(-tMm / lambda);
         }
 
-        private static void OverpenChildPostfix(Shot __instance)
+        private static void OverpenChildPostfix(EftBulletClass __instance)
         {
             PatchStats.Hit(nameof(OverpenChildPostfix));
             if (Off)
@@ -2068,19 +2067,19 @@ namespace PLATE.Client.Patches
                         return;
                     }
 
-                    var v = __instance._currentVelocity.magnitude;
+                    var v = __instance.Vector3_1.magnitude;
                     var x = EffectiveX(__instance);
                     var spread = ShotSpread.For(__instance, dia, wound);
                     var l = ClientWoundModel.ChannelMm(mass, dia, v, x, wound,
                         spread.TissueScale);
-                    var t = ChordMm(bpc, __instance._hit.point,
-                        __instance._currentVelocity, dia);
+                    var t = ChordMm(bpc, __instance.RaycastHit_0.point,
+                        __instance.Vector3_1, dia);
                     var vOut = ExitSpeed(v, l, t, (float)wound.GelStopVelocity);
 
-                    var dir = child._currentVelocity.sqrMagnitude > 1e-6f
-                        ? child._currentVelocity.normalized
-                        : __instance._currentVelocity.normalized;
-                    child._currentVelocity = dir * Mathf.Max(vOut, 0.1f);
+                    var dir = child.Vector3_1.sqrMagnitude > 1e-6f
+                        ? child.Vector3_1.normalized
+                        : __instance.Vector3_1.normalized;
+                    child.Vector3_1 = dir * Mathf.Max(vOut, 0.1f);
 
                     // same shot, same body, and a projectile does not un-turn: what it
                     // has already crossed comes off its neck

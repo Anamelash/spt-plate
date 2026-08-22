@@ -1,7 +1,6 @@
 using System;
 using System.Reflection;
 using EFT;
-using EFT.Ballistics;
 using EFT.HealthSystem;
 using EFT.InventoryLogic;
 using HarmonyLib;
@@ -186,12 +185,12 @@ namespace PLATE.Client.Patches
 
         private static bool Off => !PlateClientConfig.OverlayEnabled.Value;
 
-        private static string ChainOf(Shot shot)
+        private static string ChainOf(EftBulletClass shot)
         {
             return $"b{shot.RandomSeed & 0xfff:x3}/{shot.FragmentIndex}";
         }
 
-        private static string FlagsOf(Shot shot)
+        private static string FlagsOf(EftBulletClass shot)
         {
             var f = "";
             if (shot.AvoidAdditionalDamage)
@@ -210,7 +209,7 @@ namespace PLATE.Client.Patches
         // --- Final body-part damage (player and bots) ---
 
         private static void HealthApplyDamagePostfix(ActiveHealthController __instance,
-            EBodyPart bodyPart, float damage, DamageInfo damageInfo, float __result)
+            EBodyPart bodyPart, float damage, DamageInfoStruct damageInfo, float __result)
         {
             PatchStats.Hit($"overlay:{nameof(HealthApplyDamagePostfix)}");
             if (Off)
@@ -287,13 +286,13 @@ namespace PLATE.Client.Patches
 
         // --- Armor: how much it shaved off, penetrated or not ---
 
-        private static void ArmorApplyDamagePrefix(ref DamageInfo damageInfo, out float __state)
+        private static void ArmorApplyDamagePrefix(ref DamageInfoStruct damageInfo, out float __state)
         {
             __state = damageInfo.Damage;
         }
 
         private static void ArmorApplyDamagePostfix(ArmorComponent __instance,
-            ref DamageInfo damageInfo, float __state, float __result)
+            ref DamageInfoStruct damageInfo, float __state, float __result)
         {
             PatchStats.Hit($"overlay:{nameof(ArmorApplyDamagePostfix)}");
             if (Off)
@@ -323,7 +322,7 @@ namespace PLATE.Client.Patches
 
         // --- Bullet level: energy at impact, overpenetration, fragmentation ---
 
-        private static void BulletDegradePostfix(Shot __instance)
+        private static void BulletDegradePostfix(EftBulletClass __instance)
         {
             PatchStats.Hit($"overlay:{nameof(BulletDegradePostfix)}");
             if (Off)
@@ -341,7 +340,7 @@ namespace PLATE.Client.Patches
                     return;
                 }
 
-                var v = __instance._currentVelocity.magnitude;
+                var v = __instance.Vector3_1.magnitude;
                 var e = 0.5f * (__instance.BulletMassGram / 1000f) * v * v;
                 HitFeed.RememberImpact(victimId, new HitFeed.BulletImpact
                 {
@@ -359,7 +358,7 @@ namespace PLATE.Client.Patches
             }
         }
 
-        private static void BulletOverpenPostfix(Shot __instance)
+        private static void BulletOverpenPostfix(EftBulletClass __instance)
         {
             PatchStats.Hit($"overlay:{nameof(BulletOverpenPostfix)}");
             if (Off)
@@ -395,7 +394,7 @@ namespace PLATE.Client.Patches
             }
         }
 
-        private static void BulletFragmentPostfix(Shot __instance)
+        private static void BulletFragmentPostfix(EftBulletClass __instance)
         {
             PatchStats.Hit($"overlay:{nameof(BulletFragmentPostfix)}");
             if (Off)

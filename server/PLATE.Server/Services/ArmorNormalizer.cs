@@ -3,8 +3,8 @@ using System.Text.RegularExpressions;
 using PLATE.Server.Config;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
-using SPTarkov.Common.Models.Logging;
-using SPTarkov.Server.Core.Models.Spt.Tables;
+using SPTarkov.Server.Core.Models.Utils;
+using SPTarkov.Server.Core.Servers;
 
 namespace PLATE.Server.Services;
 
@@ -23,7 +23,7 @@ namespace PLATE.Server.Services;
 /// </summary>
 [Injectable]
 public class ArmorNormalizer(
-    TemplateTable templateTable,
+    DatabaseServer databaseServer,
     ReferenceBook referenceBook,
     ISptLogger<ArmorNormalizer> logger)
 {
@@ -139,7 +139,7 @@ public class ArmorNormalizer(
 
     public void Run(PlateServerConfig cfg, string modPath)
     {
-        var items = templateTable.Items;
+        var items = databaseServer.GetTables().Templates?.Items;
         if (items == null)
         {
             logger.Error("[PLATE] ArmorNormalizer: item DB unavailable");

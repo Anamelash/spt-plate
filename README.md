@@ -13,9 +13,9 @@ armor material and the actual path through the body all matter. If the rest of
 your SPT mod setup handles AI, spawns, progression, quests, loot or graphics,
 P.L.A.T.E. handles what happens when the shooting starts.
 
-**Current release:** P.L.A.T.E. 1.3.1
+**Current release:** P.L.A.T.E. 0.11.0
 
-**Supported game:** SPT 4.1.x (including the current 4.1.3) / EFT 0.16.9.40087
+**Supported game:** SPT 4.0.13 / EFT 0.16.9.40087
 
 [Download the latest release](https://github.com/Anamelash/spt-plate/releases/latest) ·
 [Discord — questions, feedback and ideas](https://discord.gg/w2DpURxtrf) ·
@@ -35,10 +35,10 @@ P.L.A.T.E. handles what happens when the shooting starts.
 ## Download P.L.A.T.E. for SPT
 
 Prebuilt packages are published under
-**[GitHub Releases](https://github.com/Anamelash/spt-plate/releases)**. Use the
-[latest release](https://github.com/Anamelash/spt-plate/releases/latest) for
-SPT 4.1.x, including the current 4.1.3. For SPT 4.0.13, use a P.L.A.T.E.
-release older than 1.0.0; 0.10.0 is the newest build on that branch.
+**[GitHub Releases](https://github.com/Anamelash/spt-plate/releases)**. This is
+the SPT 4.0.13 line: 0.11.0 is the newest build on it, and it carries everything
+the 1.x releases carry. On SPT 4.1.x take a 1.x release instead — the two lines
+are the same mod against two server APIs, not an old version and a new one.
 
 Do not mix releases. The client plugin and server mod work as a pair and are
 tied to the SPT and EFT APIs they were built against. Two matching halves or no
@@ -198,10 +198,10 @@ For the complete player-facing comparison, see
 
 | Component | Required version |
 |---|---|
-| P.L.A.T.E. | 1.3.1 |
-| SPT | 4.1.x, including the current 4.1.3 |
+| P.L.A.T.E. | 0.11.0 |
+| SPT | 4.0.13 |
 | EFT client | 0.16.9.40087 |
-| .NET SDK | 10, only when building from source |
+| .NET SDK | 9, only when building from source |
 
 Both components are required:
 
@@ -212,15 +212,16 @@ P.L.A.T.E. releases follow the SPT compatibility split below:
 
 | P.L.A.T.E. version | Compatible SPT version |
 |---|---|
-| Older than 1.0.0 | SPT 4.0.13 |
+| 0.x, this line | SPT 4.0.13 (`~4.0.0`) |
 | 1.0.0 to 1.3.0 | SPT 4.1.0 to 4.1.2 |
 | 1.3.1 and newer | SPT 4.1.x (`~4.1.0`), including the current 4.1.3 |
 
-SPT 4.1.3 refuses to start a server that registers items as late as P.L.A.T.E.
-1.3.0 did, so on 4.1.3 the mod has to be 1.3.1 or newer.
+The number is the server API, not the amount of mod behind it: 0.11.0 and 1.3.1
+model the same physics and ship the same features. Neither line loads on the
+other's server — the server checks the API version it was built against, and the
+client plugin binds to names the other client does not have.
 
-For SPT 4.0.13, P.L.A.T.E. 0.10.0 is the newest compatible release. Mods that
-overhaul the same ballistics, armor or medical systems are incompatible.
+Mods that overhaul the same ballistics, armor or medical systems are incompatible.
 Modded weapons, ammunition and armor are supported when they provide sensible
 physical properties.
 
@@ -232,7 +233,7 @@ Install both halves:
 
 - `PLATE.Client.dll` → `<SPT>\BepInEx\plugins\PLATE\`
 - `PLATE.Server.dll` and `bundles/` →
-  `<SPT>\SPT_Runtime\user\mods\PLATE\`
+  `<SPT>\SPT\user\mods\PLATE\`
 
 On first start, the server generates `config.jsonc` and
 `ammo-reference.jsonc` next to its DLL. Client gameplay settings live in the
@@ -281,7 +282,7 @@ before installing anything.
 
 ## Building from Source
 
-The server targets net10, so building requires the .NET 10 SDK. Set your game
+The server targets net9, so building requires the .NET 9 SDK. Set your game
 path in `Directory.Build.props` (`SptGameDir`), then run:
 
 ```powershell

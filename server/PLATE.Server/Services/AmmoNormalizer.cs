@@ -4,8 +4,8 @@ using PLATE.Server.Config;
 using PLATE.Server.Routes;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
-using SPTarkov.Common.Models.Logging;
-using SPTarkov.Server.Core.Models.Spt.Tables;
+using SPTarkov.Server.Core.Models.Utils;
+using SPTarkov.Server.Core.Servers;
 
 namespace PLATE.Server.Services;
 
@@ -19,9 +19,8 @@ namespace PLATE.Server.Services;
 /// </summary>
 [Injectable]
 public class AmmoNormalizer(
-    TemplateTable templateTable,
+    DatabaseServer databaseServer,
     ReferenceBook referenceBook,
-    LocaleTable localeTable,
     ISptLogger<AmmoNormalizer> logger)
 {
     /// <summary>
@@ -76,7 +75,7 @@ public class AmmoNormalizer(
     public void Run(PlateServerConfig cfg, string modPath)
     {
         var a = cfg.AmmoNormalizer;
-        var items = templateTable.Items;
+        var items = databaseServer.GetTables().Templates?.Items;
         if (items == null)
         {
             logger.Error("[PLATE] AmmoNormalizer: item DB unavailable");
@@ -108,10 +107,9 @@ public class AmmoNormalizer(
                 // PLATE's own grenade fragments. They carry a bullet's fields — the
                 // vanilla shrapnel template they are cloned from is filed under 9x18 —
                 // but they are not ammunition, and GrenadePhysics gives them their
-                // numbers from the prototype spec. Since 4.1.3 they have to be registered
-                // before profiles load, so they are in the database by the time the
-                // normalizer runs and would otherwise be normalised as 9x18 rounds and
-                // weigh on that caliber's cohort.
+                // numbers from the prototype spec. The registration pass puts them in the
+                // database ahead of this one, so left alone they would be normalised as
+                // 9x18 rounds and weigh on that caliber's cohort.
                 continue;
             }
 
@@ -395,7 +393,7 @@ public class AmmoNormalizer(
     /// </summary>
     private void FixCardIndices(List<Rec> recs)
     {
-        var locales = localeTable.Global;
+        var locales = databaseServer.GetTables().Locales?.Global;
         if (locales == null)
         {
             return;

@@ -1,5 +1,5 @@
 using System.Text.Json;
-using SPTarkov.Common.Models.Logging;
+using SPTarkov.Server.Core.Models.Utils;
 using SPTarkov.DI.Annotations;
 
 namespace PLATE.Server.Config;
@@ -7,7 +7,7 @@ namespace PLATE.Server.Config;
 /// <summary>
 /// Loads (or creates) config.jsonc exactly once per server start, whichever entry
 /// point asks first. There are two of them — PlateItemRegistration early and
-/// PlateServerMod at PostLoad — and both need the same config, so the result is
+/// PlateServerMod at PostDBModLoader — and both need the same config, so the result is
 /// cached statically and published to <see cref="Routes.PlateConfigHolder"/> for the
 /// request handlers. OnLoad components run sequentially, so a flag is enough.
 /// </summary>
@@ -18,29 +18,29 @@ public class PlateConfigLoader(ISptLogger<PlateConfigLoader> logger)
 
     private static PlateServerConfig? _loaded;
 
-    public async Task<PlateServerConfig> LoadAsync(string modPath, CancellationToken ct)
+    public PlateServerConfig Load(string modPath)
     {
         if (_loaded != null)
         {
             return _loaded;
         }
 
-        _loaded = await LoadOrCreateConfig(modPath, ct);
+        _loaded = LoadOrCreateConfig(modPath);
         Routes.PlateConfigHolder.Config = _loaded; // for request handlers (blood-get/set)
         return _loaded;
     }
 
-    private async Task<PlateServerConfig> LoadOrCreateConfig(string modPath, CancellationToken ct)
+    private PlateServerConfig LoadOrCreateConfig(string modPath)
     {
         var path = Path.Combine(modPath, ConfigFileName);
         if (!File.Exists(path))
         {
-            await File.WriteAllTextAsync(path, DefaultConfigJsonc, ct);
+            File.WriteAllText(path, DefaultConfigJsonc);
             logger.Debug($"[PLATE] Config not found, default written to {path}");
         }
         else
         {
-            await MigrateConfigText(path, ct);
+            MigrateConfigText(path);
         }
 
         try
@@ -51,15 +51,8 @@ public class PlateConfigLoader(ISptLogger<PlateConfigLoader> logger)
                 AllowTrailingCommas = true,
                 PropertyNameCaseInsensitive = true,
             };
-            return JsonSerializer.Deserialize<PlateServerConfig>(
-                       await File.ReadAllTextAsync(path, ct), options)
+            return JsonSerializer.Deserialize<PlateServerConfig>(File.ReadAllText(path), options)
                    ?? new PlateServerConfig();
-        }
-        // Shutdown is not a broken config: let the cancellation through instead of
-        // reporting it as a parse failure and carrying on with defaults.
-        catch (OperationCanceledException)
-        {
-            throw;
         }
         catch (Exception ex)
         {
@@ -74,11 +67,11 @@ public class PlateConfigLoader(ISptLogger<PlateConfigLoader> logger)
     /// rather than a rewrite: the file is hand-edited jsonc and the comments in it are
     /// the documentation.
     /// </summary>
-    private async Task MigrateConfigText(string path, CancellationToken ct)
+    private void MigrateConfigText(string path)
     {
         try
         {
-            var text = await File.ReadAllTextAsync(path, ct);
+            var text = File.ReadAllText(path);
             var before = text;
 
             // the card's reference shot got a definition: a perpendicular hit into the
@@ -87,13 +80,9 @@ public class PlateConfigLoader(ISptLogger<PlateConfigLoader> logger)
 
             if (text != before)
             {
-                await File.WriteAllTextAsync(path, text, ct);
+                File.WriteAllText(path, text);
                 logger.Debug($"[PLATE] {ConfigFileName}: retired defaults updated");
             }
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
         }
         catch (Exception ex)
         {

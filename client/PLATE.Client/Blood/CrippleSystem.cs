@@ -380,7 +380,7 @@ namespace PLATE.Client.Blood
             }
 
             _buffFields = list.ToArray();
-            _buffValueField = typeof(SkillManager.FloatBuff).GetField("Value",
+            _buffValueField = typeof(SkillManager.SkillBuffClass).GetField("Value",
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             return _buffValueField != null;
         }

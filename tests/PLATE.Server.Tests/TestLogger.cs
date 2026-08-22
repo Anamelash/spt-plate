@@ -1,6 +1,6 @@
-using Microsoft.Extensions.Logging;
-using SPTarkov.Common.Models.Logging;
-using Spectre.Console;
+using SPTarkov.Server.Core.Models.Logging;
+using SPTarkov.Server.Core.Models.Spt.Logging;
+using SPTarkov.Server.Core.Models.Utils;
 
 namespace PLATE.Server.Tests;
 
@@ -13,8 +13,8 @@ public sealed class TestLogger<T> : ISptLogger<T>
 {
     public List<string> Lines { get; } = [];
 
-    public void LogWithColor(string data, Color? textColor = null, Color? backgroundColor = null, Exception? ex = null) =>
-        Lines.Add(data);
+    public void LogWithColor(string data, LogTextColor? textColor = null,
+        LogBackgroundColor? backgroundColor = null, Exception? ex = null) => Lines.Add(data);
 
     public void Success(string data, Exception? ex = null) => Lines.Add(data);
 
@@ -28,8 +28,12 @@ public sealed class TestLogger<T> : ISptLogger<T>
 
     public void Critical(string data, Exception? ex = null) => Lines.Add(data);
 
-    public void Log(LogLevel level, string data, Color? textColor = null, Color? backgroundColor = null,
-        Exception? ex = null) => Lines.Add(data);
+    public void Log(LogLevel level, string data, LogTextColor? textColor = null,
+        LogBackgroundColor? backgroundColor = null, Exception? ex = null) => Lines.Add(data);
 
     public bool IsLogEnabled(LogLevel level) => true;
+
+    public void DumpAndStop()
+    {
+    }
 }

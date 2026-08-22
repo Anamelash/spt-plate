@@ -75,7 +75,7 @@ namespace PLATE.Client.Patches
         // --- The one hook both options act through ---
 
         private static bool ChangeHealthPrefix(ActiveHealthController __instance,
-            EBodyPart bodyPart, ref float value, DamageInfo damageInfo)
+            EBodyPart bodyPart, ref float value, DamageInfoStruct damageInfo)
         {
             PatchStats.Hit(nameof(ChangeHealthPrefix));
             try

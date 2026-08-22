@@ -3,7 +3,6 @@ using PLATE.Server.Services;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.DI;
 using SPTarkov.Server.Core.Models.Eft.Common;
-using SPTarkov.Common.Models.Logging;
 using SPTarkov.Server.Core.Models.Utils;
 using SPTarkov.Server.Core.Utils;
 
@@ -53,34 +52,30 @@ public record ItemUseRequest : IRequestData
     public string Id { get; set; } = "";
 }
 
-// Routers respect priority since 4.1. Every /plate/* URL is our own — nothing of SPT's
-// answers them — so there is nobody to order against and we sit just above the built-ins.
-[Injectable(TypePriority = OnLoadOrder.Routers + 1)]
+[Injectable]
 public class PlateStaticRouter(JsonUtil jsonUtil, BloodPersistence bloodPersistence) : StaticRouter(jsonUtil,
 [
     new RouteAction<EmptyRequestData>(
         "/plate/ammo-data",
-        async (url, info, sessionId, output, cancellationToken) =>
-            await new ValueTask<string>(PlateAmmoData.Json)
+        async (url, info, sessionId, output) => await new ValueTask<string>(PlateAmmoData.Json)
     ),
     new RouteAction<EmptyRequestData>(
         "/plate/armor-data",
-        async (url, info, sessionId, output, cancellationToken) =>
-            await new ValueTask<string>(PlateArmorData.Json)
+        async (url, info, sessionId, output) => await new ValueTask<string>(PlateArmorData.Json)
     ),
     new RouteAction<EmptyRequestData>(
         "/plate/blood-get",
-        async (url, info, sessionId, output, cancellationToken) => await new ValueTask<string>(
+        async (url, info, sessionId, output) => await new ValueTask<string>(
             bloodPersistence.GetJson(sessionId, PlateConfigHolder.Config))
     ),
     new RouteAction<BloodSetRequest>(
         "/plate/blood-set",
-        async (url, info, sessionId, output, cancellationToken) => await new ValueTask<string>(
+        async (url, info, sessionId, output) => await new ValueTask<string>(
             bloodPersistence.SetFromClient(sessionId, info.Cur, info.Max, info.Died))
     ),
     new RouteAction<ItemUseRequest>(
         "/plate/item-use",
-        async (url, info, sessionId, output, cancellationToken) => await new ValueTask<string>(
+        async (url, info, sessionId, output) => await new ValueTask<string>(
             bloodPersistence.ConsumeItemUse(sessionId, info.Id,
                 PlateConfigHolder.Config.Blood.TransfusionUses))
     ),

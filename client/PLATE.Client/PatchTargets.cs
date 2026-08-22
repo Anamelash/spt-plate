@@ -7,36 +7,30 @@ using HarmonyLib;
 namespace PLATE.Client
 {
     /// <summary>
-    /// Single registry of all patch targets: the names the game ships change between SPT
+    /// Single registry of all patch targets: remapped names change between SPT
     /// versions, so they are fixed in one place. Every target resolves lazily and is
     /// logged by the startup self-test: name drift is visible right when the game
-    /// loads, not on the first shot.
-    ///
-    /// SPT 4.1 deobfuscated the client — the GClass/method_N names of 4.0 are gone and
-    /// every target below is a real one. That makes the names readable but no more
-    /// stable: they are still whatever SPT's prepatcher decided this release, which is
-    /// exactly why they live here and not inline at the patch sites.
+    /// loads, not on the first shot. Names come from reversing the 0.16.9 assemblies.
     /// </summary>
     public static class PatchTargets
     {
         // --- Ballistics ---
         public static Type BallisticsCalculator => FindType("EFT.Ballistics.BallisticsCalculator");
-        public static Type Shot => FindType("EFT.Ballistics.Shot");
+        public static Type EftBulletClass => FindType("EftBulletClass");
         public static Type BodyPartCollider => FindType("BodyPartCollider");
         public static Type ArmorComponent => FindType("EFT.InventoryLogic.ArmorComponent");
-        public static Type ArmorResistanceData => FindType("ArmorResistanceData");
-        public static Type DamageInfo => FindType("EFT.Ballistics.DamageInfo");
-        public static Type Ammo => FindType("EFT.InventoryLogic.Ammo");
+        public static Type ArmorResistanceStruct => FindType("ArmorResistanceStruct");
+        public static Type DamageInfoStruct => FindType("DamageInfoStruct");
+        public static Type AmmoItemClass => FindType("AmmoItemClass");
 
-        /// <summary>Body overpenetration: spawns a "child" bullet with damage × k
-        /// (a deviated fragment — the child carries EBulletState.DeviationHit).</summary>
-        public static MethodBase Bullet_Overpenetrate => Method(Shot, "CreateDeviatedFragment");
+        /// <summary>Body overpenetration: spawns a "child" bullet with damage × k.</summary>
+        public static MethodBase Bullet_Overpenetrate => Method(EftBulletClass, "method_24");
         /// <summary>Fragmentation inside the body.</summary>
-        public static MethodBase Bullet_Fragment => Method(Shot, "CreateBulletFragments");
+        public static MethodBase Bullet_Fragment => Method(EftBulletClass, "method_22");
         /// <summary>The "should it fragment" roll.</summary>
-        public static MethodBase Bullet_ShouldFragment => Method(Shot, "IsBulletFragmented");
+        public static MethodBase Bullet_ShouldFragment => Method(EftBulletClass, "method_10");
         /// <summary>Damage/PenPower degradation from speed loss on a hit.</summary>
-        public static MethodBase Bullet_DegradeOnHit => Method(Shot, "HandleCollision");
+        public static MethodBase Bullet_DegradeOnHit => Method(EftBulletClass, "method_4");
         /// <summary>Deterministic body overpenetration check.</summary>
         public static MethodBase BodyPart_IsPenetrated => Method(BodyPartCollider, "IsPenetrated");
         /// <summary>Armor penetration roll.</summary>
@@ -44,18 +38,18 @@ namespace PLATE.Client
         /// <summary>Armor damage cut + blunt (behind-armor trauma hook).</summary>
         public static MethodBase Armor_ApplyDamage => Method(ArmorComponent, "ApplyDamage");
         /// <summary>Penetration chance curve.</summary>
-        public static MethodBase Armor_GetPenetrationChance => Method(ArmorResistanceData, "GetPenetrationChance");
+        public static MethodBase Armor_GetPenetrationChance => Method(ArmorResistanceStruct, "GetPenetrationChance");
 
         /// <summary>DamageInfo constructor from a bullet — the energy-transfer hook for the body part.</summary>
         public static MethodBase DamageInfo_CtorFromShot =>
-            DamageInfo == null || Shot == null
+            DamageInfoStruct == null || EftBulletClass == null
                 ? null
-                : AccessTools.Constructor(DamageInfo,
-                    new[] { FindType("EFT.EDamageType"), Shot });
+                : AccessTools.Constructor(DamageInfoStruct,
+                    new[] { FindType("EFT.EDamageType"), EftBulletClass });
 
         // --- Grenades ---
         /// <summary>Static explosion helper: gathers targets with a sphere and creates fragments.</summary>
-        public static Type GrenadeExplosionHelper => FindType("EFT.ExplosionSharedMethods");
+        public static Type GrenadeExplosionHelper => FindType("GClass2085");
 
         /// <summary>Explosion: MaxExplosionDistance is a hard cap on fragment spread (transpiler).
         /// Blast/concussion are computed in a separate method with its own radius read — left alone.</summary>
@@ -63,7 +57,7 @@ namespace PLATE.Client
 
         // --- Health ---
         public static Type ActiveHealthController => FindType("EFT.HealthSystem.ActiveHealthController");
-        public static Type EffectBase => FindType("EFT.HealthSystem.ActiveHealthController+Effect");
+        public static Type EffectBase => FindType("EFT.HealthSystem.ActiveHealthController+GClass3008");
         public static Type BleedingBase => FindType("EFT.HealthSystem.ActiveHealthController+Bleeding");
         public static Type LightBleeding => FindType("EFT.HealthSystem.ActiveHealthController+LightBleeding");
         public static Type HeavyBleeding => FindType("EFT.HealthSystem.ActiveHealthController+HeavyBleeding");
@@ -74,7 +68,7 @@ namespace PLATE.Client
         public static Type PainEffect => FindType("EFT.HealthSystem.ActiveHealthController+Pain");
         public static Type FractureEffect => FindType("EFT.HealthSystem.ActiveHealthController+Fracture");
 
-        /// <summary>Finds an active effect by type and body part (generic, declared on the BaseHealthController base).
+        /// <summary>Finds an active effect by type and body part (generic, declared on the GClass3009 base).
         /// Cached — called from runtime polling (fractures, once per second per bot).</summary>
         public static MethodInfo Health_FindActiveEffect =>
             _healthFindActiveEffect ??= ActiveHealthController == null
@@ -100,13 +94,13 @@ namespace PLATE.Client
         /// <summary>Medicine application (the transfusion item hook).</summary>
         public static MethodBase Health_DoMedEffect => Method(ActiveHealthController, "DoMedEffect");
 
-        /// <summary>Med applicability gate (inherited from the BaseHealthController generic base).
+        /// <summary>Med applicability gate (inherited from the GClass3009 generic base).
         /// Patched so the blood bag (MedKit class) is applicable without lost HP.</summary>
         public static MethodBase Health_CanApplyItem => Method(ActiveHealthController, "CanApplyItem");
 
         /// <summary>Out-of-raid health controller (stash/character menu) — has ITS OWN
         /// ApplyItem override, a base-class patch does not catch it.</summary>
-        public static Type OutOfRaidHealthController => FindType("EFT.HealthSystem.OfflineHealthController");
+        public static Type OutOfRaidHealthController => FindType("HealthControllerClass");
 
         /// <summary>Item application by the LOCAL player (all UI paths: inventory,
         /// hotbar, dragging onto the health bar). DoMedEffect is called only by observed
@@ -197,12 +191,12 @@ namespace PLATE.Client
         private static readonly Dictionary<string, Func<object>> All = new Dictionary<string, Func<object>>
         {
             { nameof(BallisticsCalculator), () => BallisticsCalculator },
-            { nameof(Shot), () => Shot },
+            { nameof(EftBulletClass), () => EftBulletClass },
             { nameof(BodyPartCollider), () => BodyPartCollider },
             { nameof(ArmorComponent), () => ArmorComponent },
-            { nameof(ArmorResistanceData), () => ArmorResistanceData },
-            { nameof(DamageInfo), () => DamageInfo },
-            { nameof(Ammo), () => Ammo },
+            { nameof(ArmorResistanceStruct), () => ArmorResistanceStruct },
+            { nameof(DamageInfoStruct), () => DamageInfoStruct },
+            { nameof(AmmoItemClass), () => AmmoItemClass },
             { nameof(Bullet_Overpenetrate), () => Bullet_Overpenetrate },
             { nameof(Bullet_Fragment), () => Bullet_Fragment },
             { nameof(Bullet_ShouldFragment), () => Bullet_ShouldFragment },

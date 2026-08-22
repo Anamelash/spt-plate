@@ -142,7 +142,9 @@ namespace PLATE.Client.Blood
         /// DisableRestoration is the game's own downtime deadline — Process() refuses
         /// to restore until Time.time passes it, no patch required.
         /// </summary>
-        private static void Drain(Stamina pool, float factor, float lockSec)
+        // GClass774 is the game's stamina pool (Physical.Stamina/HandsStamina): 4.0 is
+        // obfuscated, so the type has no name of its own to compile against.
+        private static void Drain(GClass774 pool, float factor, float lockSec)
         {
             if (pool == null)
             {

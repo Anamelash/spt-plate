@@ -1,8 +1,8 @@
 using PLATE.Server.Config;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.Models.Common;
-using SPTarkov.Common.Models.Logging;
-using SPTarkov.Server.Core.Models.Spt.Tables;
+using SPTarkov.Server.Core.Models.Utils;
+using SPTarkov.Server.Core.Servers;
 using SPTarkov.Server.Core.Utils;
 
 namespace PLATE.Server.Services;
@@ -19,8 +19,7 @@ namespace PLATE.Server.Services;
 /// </summary>
 [Injectable]
 public class GrenadePhysics(
-    TemplateTable templateTable,
-    LocaleTable localeTable,
+    DatabaseServer databaseServer,
     ReferenceBook referenceBook,
     JsonUtil jsonUtil,
     ISptLogger<GrenadePhysics> logger)
@@ -53,17 +52,19 @@ public class GrenadePhysics(
         id.ToString().StartsWith(FragmentIdPrefix, StringComparison.Ordinal);
 
     /// <param name="canAddItems">
-    /// True only for the early pass in <see cref="PlateItemRegistration"/>, which runs
-    /// before the server closes the item database (see <see cref="ItemRegistrationWindow"/>).
-    /// The late pass runs with false and cannot add anything: since 4.1.3 an item that
-    /// appears after the cutoff kills the server, so "create it if it is missing" is not
-    /// a recoverable path there. Everything else the method does is idempotent and runs
+    /// True only for the registration pass in <see cref="PlateItemRegistration"/>, which
+    /// runs while the server still accepts new templates (see
+    /// <see cref="ItemRegistrationWindow"/>).
+    /// The late pass runs with false and adds nothing: on later SPT releases an item that
+    /// appears after their cutoff kills the server, and holding the same line here keeps
+    /// one shape of the code. Everything else the method does is idempotent and runs
     /// in both passes — the late one is what keeps PLATE's numbers on the fragments after
     /// every other mod has had its turn at the database.
     /// </param>
     public void Apply(PlateServerConfig cfg, string modPath, bool canAddItems)
     {
-        var items = templateTable.Items;
+        var tables = databaseServer.GetTables();
+        var items = tables.Templates?.Items;
         if (items == null)
         {
             return;
@@ -126,7 +127,7 @@ public class GrenadePhysics(
                 clone.Name = $"{srcTpl.Name}{CloneNameMarker}{gr.Prototype}";
 
                 items[clone.Id] = clone;
-                AddLocales(cloneId, gr.Prototype);
+                AddLocales(tables, cloneId, gr.Prototype);
             }
             else if (clone.Properties == null || clone.Name?.Contains(CloneNameMarker) != true)
             {
@@ -262,9 +263,10 @@ public class GrenadePhysics(
         };
 
     /// <summary>Locale entries for the shrapnel clone (kill feed/hit log).</summary>
-    private void AddLocales(string tpl, string prototype)
+    private static void AddLocales(
+        SPTarkov.Server.Core.Models.Spt.Server.DatabaseTables tables, string tpl, string prototype)
     {
-        var locales = localeTable.Global;
+        var locales = tables.Locales?.Global;
         if (locales == null)
         {
             return;
