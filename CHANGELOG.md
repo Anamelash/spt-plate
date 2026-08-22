@@ -464,33 +464,38 @@ broken — results in combination with PLATE. Mods that overhaul the same system
 
 ### 0.11.0
 
-The SPT 4.0.13 line catches up. Everything the 1.x releases added since 0.10.0 is
-here, addressed through 4.0's server API and the client names that version ships.
-Nothing in the physical model was ported differently: the wound channel, the
-ballistic limit, the blood system and every calibration anchor are the ones 1.3.2
-runs on. A number that comes out different in a raid is a bug in this build, not a
-balance decision.
+Four releases' worth of work arrives on SPT 4.0.13 at once. Everything the 1.x
+line grew since 0.10.0 is here, spoken through 4.0's server API and the names that
+version of the client ships. The physics was not ported differently — the wound
+channel, the ballistic limit, the blood model and every calibration anchor are the
+ones 1.3.2 runs on, and `docs/MODEL.md` is the same document. A number that comes
+out different in a raid is a bug in this build, not a balance decision.
 
+- **Everything from 1.0.0 through 1.3.2.** The entries below describe those
+  releases in full and all of them apply here. The short version: hard-plate
+  targets stopped being bullet sponges, the F12 section *7. Player Survivability*
+  arrived with the switches that let you override the model, blood became a panel
+  on screen instead of a line of text, a heavy hit to the chest knocks the breath
+  out of you, bone fractures finally roll, plates wear by what a hit did to them
+  rather than by what they ate, a bullet core now has a fate on impact, and the
+  barrels that weapon packs add are recognised by what the item database says they
+  are instead of by what they are called.
 - **SPT 4.0.13 only.** The server half is built against `SPTarkov.Server.Core`
-  4.0.13 and the client against the 4.0 game assemblies; neither will load on 4.1,
-  and the 1.x releases will not load here. The server mod goes to
-  `<SPT>\SPT\user\mods\PLATE\`, where it always did on this branch. Building from
-  source needs the .NET 9 SDK.
-- **Everything from 1.0.0 through 1.3.2 comes with it.** The entries below spell
-  those releases out in full and every one of them applies to this build: the F12
-  section *7. Player Survivability* and the survivability switches in it, the blood
-  panel and section *8. HUD*, winded breathing with optional bot disorientation,
-  the fracture roll that finally reaches the bone, plate wear charged by what the
-  hit did to the plate, the core's fate on impact, the barrels of weapon packs
-  recognised by what the item database says they are instead of by their name,
-  new reference data up to book version 16, the wound surviving the vanilla armour
-  call, and the reference book that
-  stopped rewriting itself on every start. The only things left behind are the two
-  fixes for problems 4.0.13 does not have — SPT 4.1.2 marking a profile invalid
-  over a blood bag in the stash, and 4.1.3 killing the server over a late item
-  registration. PLATE registers its blood bag and grenade fragments in an early
-  pass here too, one step ahead of the pass that gives them their numbers, so both
-  lines run the same code.
+  4.0.13 and the client against the 4.0 game assemblies. Neither will load on 4.1,
+  and no 1.x release will load here: the server checks the API version a mod was
+  built against, and each client binds to names the other one does not have. The
+  server mod still goes to `<SPT>\SPT\user\mods\PLATE\`. Building from source needs
+  the .NET 9 SDK.
+- **Two fixes are missing because the bugs are.** SPT 4.1.2 marking a profile
+  invalid over a blood bag in the stash and 4.1.3 refusing to start over a late
+  item registration are problems of those servers, not this one. PLATE still
+  registers its blood bag and grenade fragments in an early pass here, one step
+  ahead of the pass that gives them their numbers, so both lines run one shape of
+  the code.
+- **`ammo-reference.jsonc` moves to version 16** and is rewritten once on first
+  start, with your previous copy kept beside it as a `.bak`. Hand-corrected figures
+  in the old file do not survive that — the shipped book is the one the model is
+  calibrated against.
 - **Your F12 settings carry across.** The config migrations that moved keys into
   sections 7 and 8 are the same ones the 1.x releases ran: a value you tuned is
   moved, not reset.
