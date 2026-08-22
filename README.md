@@ -13,7 +13,7 @@ armor material and the actual path through the body all matter. If the rest of
 your SPT mod setup handles AI, spawns, progression, quests, loot or graphics,
 P.L.A.T.E. handles what happens when the shooting starts.
 
-**Current release:** P.L.A.T.E. 1.3.1
+**Current release:** P.L.A.T.E. 1.3.2
 
 **Supported game:** SPT 4.1.x (including the current 4.1.3) / EFT 0.16.9.40087
 
@@ -198,7 +198,7 @@ For the complete player-facing comparison, see
 
 | Component | Required version |
 |---|---|
-| P.L.A.T.E. | 1.3.1 |
+| P.L.A.T.E. | 1.3.2 |
 | SPT | 4.1.x, including the current 4.1.3 |
 | EFT client | 0.16.9.40087 |
 | .NET SDK | 10, only when building from source |

@@ -462,6 +462,60 @@ broken — results in combination with PLATE. Mods that overhaul the same system
 
 ## Release history
 
+### 1.3.2
+
+Barrel release. If you run weapon packs, most of their barrels have been firing
+with the ballistics of something else entirely, and two vanilla guns were paying
+for figures that were simply wrong. No wound, armour or blood formula moved.
+
+- **Weapon-pack barrels are barrels again.** PLATE recognised a barrel by its
+  internal name starting with `barrel_`, which is true of every vanilla item and
+  of nothing a weapon pack registers: packs clone through WTT's item service,
+  which renames the clone after whatever the locale calls it. So every modded
+  barrel in the game failed the test, fell into the muzzle-device branch and was
+  clamped to 2%, the value meant for a brake. One install had 89 of them like
+  that. An 8.5 inch .300 Blackout was firing with the numbers of a 16 inch one and
+  nothing on screen said so. A barrel is now identified from the item database
+  instead: its class, the slots that list it, and the two properties only barrels
+  carry. Lengths and calibres are read in whatever form the pack wrote them,
+  millimetres or inches, ".300 Blackout" or ".338 Lapua", including the Cyrillic
+  x one Russian pack puts in an otherwise Latin name.
+- **The MP5SD stops firing supersonic.** Its ported 146 mm barrel exists as no
+  item at all; it is part of the upper receiver, so the receiver was being treated
+  as a muzzle device and clamped from -33% to -2%. The SD was quietly handed back
+  the velocity its gas ports exist to remove. Parts with a barrel built into them
+  are now recognised by where they sit in the weapon and take a measured figure:
+  H&K quote 285 m/s, against roughly 370 for the same ball out of a pistol barrel.
+- **A gun is what it is built as, not what the pack calls it.** The item sold as a
+  Century Arms Draco has no model of its own and wears the vanilla AKS-74U, which
+  makes it that carbine rebarreled for 7.62x39 rather than the 12.25 inch Romanian
+  rifle it borrowed the name from. Where a pack does ship its own model, the gun
+  is the one it claims to be and gets that gun's published barrel. Thirteen
+  weapons the popular packs add are now in the reference book with the figure each
+  one comes from: AK-15, AK-12K, AK-308, PPK-20, VPO-185, the Draco, the SAK-21,
+  both Beretta Storms, the Thompson, the Saigas and the AS-1 and AS-2 bullpups.
+  An AK-12K is not an AK-12, so it carries its own 290 mm rather than the longer
+  rifle's 415.
+- **Every Desert Eagle gets 13% of its muzzle velocity back.** The .50 AE was
+  referenced against a 400 mm barrel. Nothing chambered for it has one. It is a
+  Desert Eagle round, 5 and 6 inch, and the game's own 440 to 465 m/s is the 6
+  inch figure, so the 6 inch guns sit at 0% where they belong and the 5 inch at
+  -4%, which is the real difference between the two.
+- **The Five-seveN is no longer punished for not being a P90.** Its velocity
+  constant was derived from case capacity, a rule of thumb that breaks on a small
+  bottlenecked case at high pressure: it put the pistol 24% below the P90 where FN
+  publish 9%. Refitted to FN's own pair, the pistol reads -9.1% and the 16 inch
+  barrel +3.0% instead of +10.2%.
+- **Nothing unrecognised is clamped any more.** The clamp now needs positive
+  evidence that a part is a muzzle device. Anything the database cannot place
+  keeps the modifier it shipped with and is listed in
+  `user/mods/PLATE/plate-barrel-report.md`, which also says how each barrel was
+  identified. A barrel mistaken for a brake is invisible in a raid; an
+  unrecognised handguard is one line in a file.
+- `ammo-reference.jsonc` moves to version 16 and is rewritten once, with your
+  previous copy kept beside it as `.v15.bak`. Two shipped figures were corrected
+  rather than added, and the per-entry merge cannot deliver a correction.
+
 ### 1.3.1
 
 Compatibility release for SPT 4.1.3. Nothing in the physical model changed —
