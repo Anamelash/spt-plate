@@ -1053,6 +1053,101 @@ almost everything, which under-loads small buckshot by a factor of two to four.
 Flechettes are steel and keep their shape, so they take a low `X`: deep, narrow,
 poor at wounding.
 
+### Muzzle velocity by barrel length
+
+A cartridge has one `InitialSpeed` in the database, and the barrel it is fired
+from moves it. Velocity against barrel length follows Le Duc,
+
+```
+v(L) = v∞ · L / (L + C)
+```
+
+so the modifier a barrel of length `L` carries is relative to the reference barrel
+`L_ref` of its caliber — the service weapon the cartridge's `InitialSpeed` is
+quoted for, so a barrel that length changes nothing:
+
+```
+percent = 100 · [ (L / (L + C)) / (L_ref / (L_ref + C)) − 1 ]
+```
+
+`C` is fitted to a published barrel-length ladder where one exists, and derived
+from case capacity otherwise (`1.67·V_case / A_bore`, worth about ±35%). Both,
+along with `L_ref`, are per-caliber entries in the reference book.
+
+Two things about those entries are worth stating because both have been wrong in
+practice. `L_ref` has to be a barrel something chambered for the cartridge
+actually has: the .50 AE was entered against 400 mm, a length no Desert Eagle —
+the only gun that fires it — comes near, and every Desert Eagle in the game paid
+13% of its muzzle velocity for that one number. And the case rule is a rule of
+thumb that a small bottlenecked case at high pressure breaks: it derived 94 for
+the 5.7x28, which puts the Five-seveN 24% below the P90 where FN publishes 9%,
+so that caliber carries a measured 24 fitted to the maker's own pair instead.
+Where a case-derived constant produces a modifier that measurement contradicts,
+the constant is what is wrong.
+
+**Which part the length model applies to** is decided from the item database, not
+from what the item is called. Vanilla names every barrel `barrel_*`, but weapon
+packs register clones through WTT's item service, which names them
+`[Pack]_(whatever the locale says)`, so a naming test misses every modded barrel
+in the game. A part is a barrel when its class is Barrel, or some weapon lists it
+in a `mod_barrel` slot, or it carries `CenterOfImpact` and `ShotgunDispersion` —
+the two properties that in the whole vanilla database belong to barrels and whole
+weapons and to nothing else. Length and caliber are then read off the item's name
+and locale text, in millimetres or inches, and a caliber is matched either by its
+dimensions or by the trade names in the reference book (".300 Blackout",
+".338 Lapua"); a name claiming two calibers decides nothing and the slot graph
+votes instead. A barrel sold under a rifle's name rather than a length — "MK-12
+Mod 0 Barrel" — takes that rifle's barrel, by the same prototype match the
+weapons use.
+
+**A weapon whose barrel does not come off** has no barrel item to read, and its
+length exists only in the prototype it is modelled on: the reference book carries
+one per such weapon, keyed by the template's name. A pack that rechambers a
+vanilla weapon rewrites that key — an AKS-74U reappears as
+`[Pack]_(Kalashnikov AKS-74U .300 Blackout Assault Rifle)` — so two further
+witnesses are asked, in this order:
+
+- **The model it is drawn with.** A rebrand that ships no model of its own is
+  the weapon it is drawn as: same geometry, same barrel, and a rechambering does
+  not move the muzzle. Where a pack item and a weapon the book knows share a
+  prefab, they share a length. This outranks the name, because what a weapon is
+  built as is a fact and what a pack writes on it is a claim: the item called a
+  Century Arms Draco wears the vanilla AKS-74U and is 206.5 mm, where the real
+  Draco — a Romanian PM md. 90 derivative sharing nothing with it but a name —
+  is 311 mm.
+- **The prototype's own name**, matched against what the item is *called* and
+  never against what is written about it. Whole names only, longest first: an
+  AK-12K is not an AK-12 and its barrel is shorter, so a prefix does not count.
+  The description is excluded because it is prose and prose names other guns —
+  the AS-1 is a bullpup built on an AK-74M whose card recounts the trials the
+  AK-12 went on to win, and reading that as "this is an AK-12" would be luck
+  rather than reasoning. A barrel's description describes that barrel and is
+  still read for a length; a weapon's is a history lesson.
+
+A weapon that is neither drawn as something known nor named after anything known
+keeps whatever modifier it shipped with rather than borrowing a neighbour's.
+
+**A part with the barrel built into it** — an MP5SD upper receiver, whose ported
+146 mm barrel exists as no item — has no length to read and no model to apply: its
+gas ports, not its length, are what put the round below the speed of sound. Such a
+part is recognized structurally: it owns the muzzle slot, and no weapon that can
+mount it has a barrel item anywhere in its tree. Its figure comes from the
+reference book as the total the weapon should end up at, and because the game adds
+the weapon's own modifier to the part's, the part is given the difference:
+
+```
+part = TotalPercent − percent(host weapon)
+```
+
+**Muzzle devices** — brakes, flash hiders, suppressors — are clamped to
+`DeviceClampPercent` (2%), which is about what a can or a brake is worth. The
+clamp requires positive evidence that the part is one: its class, or the muzzle
+slot it sits in. Anything the database does not identify keeps its modifier and is
+listed in the report instead, because the two mistakes do not cost the same. A
+barrel mistaken for a brake gives an 8.5 inch .300 BLK the ballistics of a
+16 inch one with nothing on screen to say so; a handguard mistaken for something
+unrecognized costs a line in a report.
+
 ### Grenades
 
 Fragment mass and initial velocity come from open-source prototype specifications;
@@ -1262,6 +1357,14 @@ third, separate knob.
   rather than wound constants quietly tuned until the numbers feel kind. Everything
   else in this document describes what happens with all four at their defaults.
 
+- **What gas ports do to a barrel.** A ported barrel bleeds propellant gas to
+  bring the round below the speed of sound, which is not a length effect and is
+  not derived here: the two such items in the game carry one measured figure each
+  from the reference book, and a ported barrel nobody has written an entry for
+  keeps whatever modifier it shipped with. The same goes for a part carrying a
+  velocity modifier that the item database does not identify as a barrel, a
+  device, or anything else — it is left alone and reported rather than clamped on
+  a guess.
 - **Organ shape.** The zones are thirds of BSG's boxes, not anatomy: no
   ellipsoids, no per-organ geometry, and the same organ comes out a different size
   depending on which of a body part's boxes the bullet went into. The one thing

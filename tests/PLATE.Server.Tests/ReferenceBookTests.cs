@@ -212,6 +212,7 @@ public class ReferenceBookTests
             ["Caliber762x35"] = 58,
             ["Caliber9x19PARA"] = 24,
             ["Caliber9x33R"] = 56,
+            ["Caliber57x28"] = 24,
         };
 
         foreach (var (caliber, c) in measured)
@@ -219,6 +220,29 @@ public class ReferenceBookTests
             Assert.True(barrels.ContainsKey(caliber), $"{caliber} is missing from the reference book");
             Assert.Equal(c, barrels[caliber].C);
         }
+    }
+
+    /// <summary>
+    /// A reference barrel is the one the cartridge's own muzzle velocity was measured
+    /// from, so it has to be a barrel something chambered for it actually has. The
+    /// .50 AE was entered against 400 mm, which no Desert Eagle — the only thing that
+    /// fires it — comes anywhere near, and the game's own 440-465 m/s for the round is
+    /// the 6 inch figure. Every Desert Eagle in the game was losing 13% to that one
+    /// number, so the pistol cartridges are held to the barrels they are fired from.
+    /// </summary>
+    [Theory]
+    [InlineData("Caliber127x33", 127, 152)]    // .50 AE: Desert Eagle, 5 and 6 inch
+    [InlineData("Caliber9x19PARA", 90, 130)]   // service pistol
+    [InlineData("Caliber9x18PM", 85, 110)]     // PM
+    [InlineData("Caliber1143x23ACP", 110, 140)] // M1911
+    [InlineData("Caliber762x25TT", 105, 130)]  // TT
+    [InlineData("Caliber9x21", 110, 130)]      // SR-1
+    public void A_pistol_cartridge_is_referenced_to_a_pistol_barrel(string caliber, double min, double max)
+    {
+        var barrels = Shipped().Barrels;
+
+        Assert.True(barrels.ContainsKey(caliber), $"{caliber} is missing from the reference book");
+        Assert.InRange(barrels[caliber].RefMm, min, max);
     }
 
     /// <summary>

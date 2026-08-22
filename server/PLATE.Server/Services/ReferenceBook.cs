@@ -128,14 +128,55 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
 
         /// <summary>Bore diameter, mm. Only used when C is 0.</summary>
         public double BoreMm { get; set; }
+
+        /// <summary>
+        /// Names the caliber goes by in item text, where the dimensions do not appear.
+        /// The key is matched against a name by its dimensions — 762x35 finds
+        /// "7.62x35" — and a weapon pack calling the same round ".300 Blackout" leaves
+        /// nothing to match. Only trade names belong here; anything ambiguous makes
+        /// every name carrying it undecidable, which is the correct outcome but a
+        /// wasteful way to reach it.
+        /// </summary>
+        public string[] Aliases { get; set; } = [];
     }
 
     public class WeaponBarrelRef
     {
+        /// <summary>
+        /// The weapon's own name. Doubles as the way a modded clone is recognized: a
+        /// pack rewrites the template name this table is keyed by but keeps writing the
+        /// prototype's name on the item, so this is matched against the item text when
+        /// the key misses.
+        /// </summary>
         public string Prototype { get; set; } = "";
 
         /// <summary>Barrel length of the real weapon, mm.</summary>
         public double LengthMm { get; set; }
+
+        /// <summary>Where the length comes from. Vanilla weapons predate the field.</summary>
+        public string Source { get; set; } = "";
+    }
+
+    /// <summary>
+    /// A part that is not a barrel but has one inside it, so no length can be read off
+    /// it and no model applies: an MP5SD upper receiver holds a ported 146 mm barrel
+    /// whose gas ports, not its length, are what put the bullet below the speed of
+    /// sound.
+    /// </summary>
+    public class IntegratedBarrelRef
+    {
+        public string Prototype { get; set; } = "";
+
+        /// <summary>
+        /// What the weapon carrying this part should end up at, relative to the
+        /// caliber's reference barrel — the same scale every other modifier is on. The
+        /// game adds the weapon's own modifier to the part's, so the part is given the
+        /// difference rather than this figure.
+        /// </summary>
+        public double TotalPercent { get; set; }
+
+        /// <summary>Where the figure comes from.</summary>
+        public string Source { get; set; } = "";
     }
 
     /// <summary>
@@ -363,6 +404,12 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         /// </summary>
         public Dictionary<string, WeaponBarrelRef> Weapons { get; set; } = new();
 
+        /// <summary>
+        /// Key — the template's _name of a part that has a barrel built into it. Only
+        /// for parts that are not barrel items, so no length and no model reach them.
+        /// </summary>
+        public Dictionary<string, IntegratedBarrelRef> IntegratedBarrels { get; set; } = new();
+
         public BlastAnchorRef BlastAnchor { get; set; } = new();
 
         /// <summary>
@@ -508,6 +555,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         Fill(nameof(loaded.Grenades), loaded.Grenades, s => s.Grenades);
         Fill(nameof(loaded.Barrels), loaded.Barrels, s => s.Barrels);
         Fill(nameof(loaded.Weapons), loaded.Weapons, s => s.Weapons);
+        Fill(nameof(loaded.IntegratedBarrels), loaded.IntegratedBarrels, s => s.IntegratedBarrels);
         Fill(nameof(loaded.ArmorMaterials), loaded.ArmorMaterials, s => s.ArmorMaterials);
         Fill(nameof(loaded.ArmorPlates), loaded.ArmorPlates, s => s.ArmorPlates);
         Fill(nameof(loaded.ArmorByClass), loaded.ArmorByClass, s => s.ArmorByClass);
@@ -822,50 +870,81 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // C comes from a published barrel-length ladder where one exists; C=0 means
           // "derive it from the case" (1.67*CaseMm3/bore area, good to about +-35%).
           // CaseMm3: 1 grain of water = 64.8 mm3.
+          // Aliases: what the caliber is called where the dimensions do not appear. A
+          // key is matched against item text by its dimensions, so ".300 Blackout" and
+          // ".338 Lapua" reach nothing without one. Two calibers claiming the same name
+          // make it undecidable and the slot graph decides instead.
           "Barrels": {
             // --- C measured against published ladders ---
-            "Caliber762x51":     { "Prototype": "M14, 559 mm",        "RefMm": 559, "C": 129, "CaseMm3": 3640, "BoreMm": 7.82 },
-            "Caliber556x45NATO": { "Prototype": "M16A2, 508 mm",      "RefMm": 508, "C": 134, "CaseMm3": 1850, "BoreMm": 5.70 },
+            "Caliber762x51":     { "Prototype": "M14, 559 mm",        "RefMm": 559, "C": 129, "CaseMm3": 3640, "BoreMm": 7.82,
+                                   "Aliases": ["308 Win", "308 Winchester", "7.62 NATO"] },
+            "Caliber556x45NATO": { "Prototype": "M16A2, 508 mm",      "RefMm": 508, "C": 134, "CaseMm3": 1850, "BoreMm": 5.70,
+                                   "Aliases": ["223 Rem", "223 Remington", "5.56 NATO"] },
             "Caliber762x39":     { "Prototype": "AKM, 415 mm",        "RefMm": 415, "C": 68,  "CaseMm3": 2310, "BoreMm": 7.92 },
-            "Caliber762x35":     { "Prototype": ".300 BLK, 406 mm",   "RefMm": 406, "C": 58,  "CaseMm3": 1670, "BoreMm": 7.82 },
-            "Caliber9x19PARA":   { "Prototype": "pistol, 120 mm",     "RefMm": 120, "C": 24,  "CaseMm3": 860,  "BoreMm": 9.01 },
-            "Caliber9x33R":      { "Prototype": "revolver, 152 mm",   "RefMm": 152, "C": 56,  "CaseMm3": 1620, "BoreMm": 9.07 },
+            "Caliber762x35":     { "Prototype": ".300 BLK, 406 mm",   "RefMm": 406, "C": 58,  "CaseMm3": 1670, "BoreMm": 7.82,
+                                   "Aliases": ["300 BLK", "300BLK", "Blackout"] },
+            "Caliber9x19PARA":   { "Prototype": "pistol, 120 mm",     "RefMm": 120, "C": 24,  "CaseMm3": 860,  "BoreMm": 9.01,
+                                   "Aliases": ["9mm Luger", "9mm Para"] },
+            "Caliber9x33R":      { "Prototype": "revolver, 152 mm",   "RefMm": 152, "C": 56,  "CaseMm3": 1620, "BoreMm": 9.07,
+                                   "Aliases": ["357 Magnum", "357 Mag"] },
 
             // --- C derived from the case: case volumes below are approximate ---
             "Caliber545x39":     { "Prototype": "AK-74, 415 mm",      "RefMm": 415, "C": 0, "CaseMm3": 1850, "BoreMm": 5.60 },
             "Caliber762x54R":    { "Prototype": "SVD, 620 mm",        "RefMm": 620, "C": 0, "CaseMm3": 4150, "BoreMm": 7.92 },
             "Caliber9x39":       { "Prototype": "AS Val, 200 mm",     "RefMm": 200, "C": 0, "CaseMm3": 1600, "BoreMm": 9.25 },
             "Caliber366TKM":     { "Prototype": "VPO-209, 415 mm",    "RefMm": 415, "C": 0, "CaseMm3": 2200, "BoreMm": 9.50 },
-            "Caliber1143x23ACP": { "Prototype": "M1911, 127 mm",      "RefMm": 127, "C": 0, "CaseMm3": 1620, "BoreMm": 11.50 },
+            "Caliber1143x23ACP": { "Prototype": "M1911, 127 mm",      "RefMm": 127, "C": 0, "CaseMm3": 1620, "BoreMm": 11.50,
+                                   "Aliases": ["45 ACP"] },
             "Caliber762x25TT":   { "Prototype": "TT, 116 mm",         "RefMm": 116, "C": 0, "CaseMm3": 1170, "BoreMm": 7.87 },
             "Caliber9x18PM":     { "Prototype": "PM, 93 mm",          "RefMm": 93,  "C": 0, "CaseMm3": 840,  "BoreMm": 9.27 },
             // PMM is the hot 9x18 load in the same case, so the same geometry
             "Caliber9x18PMM":    { "Prototype": "PMM, 93 mm",         "RefMm": 93,  "C": 0, "CaseMm3": 840,  "BoreMm": 9.27 },
             "Caliber9x21":       { "Prototype": "SR-1, 120 mm",       "RefMm": 120, "C": 0, "CaseMm3": 1100, "BoreMm": 9.00 },
-            "Caliber57x28":      { "Prototype": "P90, 263 mm",        "RefMm": 263, "C": 0, "CaseMm3": 1430, "BoreMm": 5.70 },
+            // C measured, not derived: FN publishes SS190 at 716 m/s from the P90 and
+            // 650 m/s from the Five-seveN's 122 mm, and solving Le Duc for that pair
+            // gives 24. The case rule gave 94 and cost the pistol 24% where the maker
+            // says 9 - a small bottlenecked case at 3.5 kbar does not follow the volume
+            // rule, and this is four times outside the +-35% that rule is worth
+            "Caliber57x28":      { "Prototype": "P90, 263 mm",        "RefMm": 263, "C": 24, "CaseMm3": 1430, "BoreMm": 5.70 },
             "Caliber46x30":      { "Prototype": "MP7, 180 mm",        "RefMm": 180, "C": 0, "CaseMm3": 970,  "BoreMm": 4.65 },
-            "Caliber68x51":      { "Prototype": "XM7, 330 mm",        "RefMm": 330, "C": 0, "CaseMm3": 3890, "BoreMm": 7.00 },
-            "Caliber86x70":      { "Prototype": ".338 LM, 690 mm",    "RefMm": 690, "C": 0, "CaseMm3": 7390, "BoreMm": 8.60 },
+            "Caliber68x51":      { "Prototype": "XM7, 330 mm",        "RefMm": 330, "C": 0, "CaseMm3": 3890, "BoreMm": 7.00,
+                                   "Aliases": ["277 Fury", "277 SIG"] },
+            "Caliber86x70":      { "Prototype": ".338 LM, 690 mm",    "RefMm": 690, "C": 0, "CaseMm3": 7390, "BoreMm": 8.60,
+                                   "Aliases": ["338 LM", "338 Lapua"] },
             "Caliber127x55":     { "Prototype": "ASh-12, 420 mm",     "RefMm": 420, "C": 0, "CaseMm3": 2590, "BoreMm": 12.70 },
-            "Caliber127x33":     { "Prototype": "SR-2 class, 400 mm", "RefMm": 400, "C": 0, "CaseMm3": 3050, "BoreMm": 12.70 },
-            "Caliber12g":        { "Prototype": "shotgun, 660 mm",    "RefMm": 660, "C": 0, "CaseMm3": 4500, "BoreMm": 18.50 },
-            "Caliber20g":        { "Prototype": "shotgun, 660 mm",    "RefMm": 660, "C": 0, "CaseMm3": 3600, "BoreMm": 15.60 },
+            // 12.7x33 is the .50 AE, and the only thing chambered for it is a Desert
+            // Eagle: 5 and 6 inch barrels, no rifle anywhere. The game quotes the round
+            // at 440-465 m/s, which is the 6 inch figure, so that is the barrel its
+            // velocity belongs to. This used to say 400 mm - a barrel that does not
+            // exist - and took 13% off every Desert Eagle in the game for it
+            "Caliber127x33":     { "Prototype": "Desert Eagle, 152 mm", "RefMm": 152, "C": 0, "CaseMm3": 3050, "BoreMm": 12.70,
+                                   "Aliases": ["50 AE"] },
+            "Caliber12g":        { "Prototype": "shotgun, 660 mm",    "RefMm": 660, "C": 0, "CaseMm3": 4500, "BoreMm": 18.50,
+                                   "Aliases": ["12 gauge"] },
+            "Caliber20g":        { "Prototype": "shotgun, 660 mm",    "RefMm": 660, "C": 0, "CaseMm3": 3600, "BoreMm": 15.60,
+                                   "Aliases": ["20 gauge"] },
             "Caliber23x75":      { "Prototype": "KS-23, 510 mm",      "RefMm": 510, "C": 0, "CaseMm3": 5000, "BoreMm": 23.00 },
 
             // --- calibers added by weapon packs; absent installs simply skip them ---
             "Caliber102x22":     { "Prototype": ".40 S&W, 102 mm",         "RefMm": 102, "C": 0, "CaseMm3": 1030,  "BoreMm": 10.16 },
-            "Caliber11x33R":     { "Prototype": ".44 Magnum, 152 mm",      "RefMm": 152, "C": 0, "CaseMm3": 1720,  "BoreMm": 10.90 },
+            "Caliber11x33R":     { "Prototype": ".44 Magnum, 152 mm",      "RefMm": 152, "C": 0, "CaseMm3": 1720,  "BoreMm": 10.90,
+                                   "Aliases": ["44 Magnum", "44 Mag"] },
             "Caliber792x33":     { "Prototype": "StG-44, 419 mm",          "RefMm": 419, "C": 0, "CaseMm3": 2200,  "BoreMm": 8.20 },
             "Caliber792x57":     { "Prototype": "Kar98k, 600 mm",          "RefMm": 600, "C": 0, "CaseMm3": 4340,  "BoreMm": 8.20 },
             "Caliber65x52":      { "Prototype": "Carcano M91, 780 mm",     "RefMm": 780, "C": 0, "CaseMm3": 3170,  "BoreMm": 6.70 },
-            "Caliber762x63":     { "Prototype": ".30-06, 610 mm",          "RefMm": 610, "C": 0, "CaseMm3": 4430,  "BoreMm": 7.82 },
-            "Caliber762x67B":    { "Prototype": ".300 Win Mag, 610 mm",    "RefMm": 610, "C": 0, "CaseMm3": 5570,  "BoreMm": 7.82 },
+            "Caliber762x63":     { "Prototype": ".30-06, 610 mm",          "RefMm": 610, "C": 0, "CaseMm3": 4430,  "BoreMm": 7.82,
+                                   "Aliases": ["30-06"] },
+            "Caliber762x67B":    { "Prototype": ".300 Win Mag, 610 mm",    "RefMm": 610, "C": 0, "CaseMm3": 5570,  "BoreMm": 7.82,
+                                   "Aliases": ["300 Win Mag", "300 Winchester Magnum"] },
             "Caliber6ARC":       { "Prototype": "6mm ARC, 460 mm",         "RefMm": 460, "C": 0, "CaseMm3": 2200,  "BoreMm": 6.17 },
             "Caliber784x49":     { "Prototype": ".308 Marlin Express, 610 mm", "RefMm": 610, "C": 0, "CaseMm3": 3200, "BoreMm": 7.82 },
-            "Caliber86x63":      { "Prototype": ".338 Norma, 660 mm",      "RefMm": 660, "C": 0, "CaseMm3": 6280,  "BoreMm": 8.60 },
+            "Caliber86x63":      { "Prototype": ".338 Norma, 660 mm",      "RefMm": 660, "C": 0, "CaseMm3": 6280,  "BoreMm": 8.60,
+                                   "Aliases": ["338 Norma"] },
             "Caliber93x64":      { "Prototype": "9.3x64 Brenneke, 600 mm", "RefMm": 600, "C": 0, "CaseMm3": 5570,  "BoreMm": 9.30 },
-            "Caliber1036x77":    { "Prototype": ".408 CheyTac, 740 mm",    "RefMm": 740, "C": 0, "CaseMm3": 7970,  "BoreMm": 10.36 },
-            "Caliber127x99":     { "Prototype": ".50 BMG, 737 mm",         "RefMm": 737, "C": 0, "CaseMm3": 19000, "BoreMm": 12.95 },
+            "Caliber1036x77":    { "Prototype": ".408 CheyTac, 740 mm",    "RefMm": 740, "C": 0, "CaseMm3": 7970,  "BoreMm": 10.36,
+                                   "Aliases": ["408 CheyTac"] },
+            "Caliber127x99":     { "Prototype": ".50 BMG, 737 mm",         "RefMm": 737, "C": 0, "CaseMm3": 19000, "BoreMm": 12.95,
+                                   "Aliases": ["50 BMG"] },
             "Caliber127x108":    { "Prototype": "12.7x108, 1000 mm",       "RefMm": 1000, "C": 0, "CaseMm3": 21000, "BoreMm": 12.98 },
             // note the multiplication sign in the key: that is how the pack spells it
             "Caliber17.8×89":    { "Prototype": ".700 Nitro Express, 610 mm", "RefMm": 610, "C": 0, "CaseMm3": 11000, "BoreMm": 17.80 }
@@ -944,7 +1023,64 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "weapon_izhmash_saiga12k_10_12g": { "Prototype": "Saiga-12K", "LengthMm": 430 },
             "weapon_kiba_saiga12k_fa_12g":    { "Prototype": "Saiga-12K FA", "LengthMm": 430 },
             "weapon_toz_toz-106_20g":         { "Prototype": "TOZ-106", "LengthMm": 200 },
-            "weapon_aklys_defense_velociraptor_762x35": { "Prototype": "Velociraptor 9\"", "LengthMm": 229 }
+            "weapon_aklys_defense_velociraptor_762x35": { "Prototype": "Velociraptor 9\"", "LengthMm": 229 },
+
+            // --- weapons only mods add. The key is the name the game would give them,
+            // which nothing may ever carry: what finds these is the Prototype, matched
+            // against whatever a pack chose to call its clone. Rechambering does not
+            // move a barrel, so a pack's .300 Blackout AKS-74U is still 206.5 mm ---
+            "weapon_izhmash_ak15_762x39":     { "Prototype": "AK-15", "LengthMm": 415,
+                                               "Source": "the AK-15 is the 7.62x39 member of the AK-12 family and keeps its 415 mm barrel (Kalashnikov Group; militaryfactory.com/smallarms detail 1303)" },
+            "weapon_izhmash_ak12k_545x39":    { "Prototype": "AK-12K", "LengthMm": 290,
+                                               "Source": "Kalashnikov Group catalogue, AK-12K: 290 mm, the shortened AK-12 built on Ukraine-war feedback. Not an AK-12 with a different name - 125 mm shorter" },
+            "weapon_izhmash_ak308_762x51":    { "Prototype": "AK-308", "LengthMm": 415,
+                                               "Source": "Kalashnikov Group published specs for the AK-308: 415 mm, 7.62x51, 4.3 kg" },
+            "weapon_izhmash_ppk20_9x19":      { "Prototype": "PPK-20", "LengthMm": 233,
+                                               "Source": "topwar.ru specification table for the PPK-20: 233 mm, in line with the 237.5 mm Vityaz-SN it is developed from. Kalashnikov's own media lists 182-183.5 mm elsewhere, which fits the later SMO-revised gun rather than the one modelled here - the lower figure would make this a +6% weapon instead of +9%" },
+            "weapon_century_arms_draco_762x39": { "Prototype": "Century Arms Draco", "LengthMm": 206.5,
+                                               "Source": "the length of what the pack actually ships, not of the gun on the box. The real Century Arms Draco is a Romanian PM md. 90 derivative with a 12.25 in (311 mm) barrel, but the item wears the vanilla AKS-74U model and nothing else - it is that carbine rebarreled for 7.62x39, so it is 206.5 mm. The Modified Draco wears the AKS-74UB, same barrel. Named in full deliberately: the Mini Draco and Draco Tactical are shorter still and would not be found by this entry" },
+            "weapon_arsenal_sgl31_545x39":    { "Prototype": "SGL31", "LengthMm": 415,
+                                               "Source": "Arsenal SGL31-62/-68, a Saiga in 5.45x39: 16.3 in = 414 mm, the AK-74 barrel" },
+            "weapon_izhmash_saiga_mk_030_545x39": { "Prototype": "Saiga MK Ver. 030", "LengthMm": 415,
+                                               "Source": "Kalashnikov Group catalogue, Saiga-MK 5.45x39 ver. 30: 415 mm. Version 33 is the 341 mm one and is a different entry if a pack ever ships it" },
+            "weapon_auto_ordnance_thompson_m1921_1143x23": { "Prototype": "M1921 Thompson", "LengthMm": 267,
+                                               "Source": "M1921 Thompson finned barrel, 10.5 in = 267 mm (International Military Antiques, original part). The pack rechambers it to 7.62x25, which does not change the barrel" },
+            "weapon_beretta_cx4_storm_9x19":  { "Prototype": "Cx4 Storm", "LengthMm": 422,
+                                               "Source": "Beretta Cx4 Storm, the civilian carbine: 422.5 mm (16.6 in)" },
+            "weapon_beretta_mx4_storm_9x19":  { "Prototype": "Mx4 Storm", "LengthMm": 312,
+                                               "Source": "Beretta Mx4 Storm, the select-fire military version of the Cx4: 312 mm" },
+            "weapon_molot_vpo185_9x19":       { "Prototype": "VPO-185", "LengthMm": 305,
+                                               "Source": "Molot VPO-185 production specification, 305 mm (12 in) chrome-lined, threaded 14x1L (thefirearmblog, 2021). The 2019 exhibition gun was 273 mm" },
+            "weapon_stenzel_sak21_762x39":    { "Prototype": "SAK-21", "LengthMm": 317.5,
+                                               "Source": "Stenzel Industries SAK-21, launch configuration: 12.5 in = 317.5 mm. The pack agrees with itself - its own handguard for the gun is described as 12.5 inch (317 mm)" },
+            // --- weapons a pack ships only the barrel of. The entry answers the barrel
+            // item, which is named after the rifle instead of after a length ---
+            "weapon_ar15_mk12_mod0_556x45":   { "Prototype": "MK-12 Mod 0", "LengthMm": 457,
+                                               "Source": "Mk 12 Mod 0 SPR: an 18 in (457 mm) Douglas match barrel, the length the programme settled on as the compromise between portability and reach" },
+            "weapon_fn_m240_762x51":          { "Prototype": "M240", "LengthMm": 551,
+                                               "Source": "FN America's own product page for the M240B: 21.7 in = 551 mm. Wikipedia's 24.8 in belongs to an earlier or different barrel and the maker's figure is the one taken" },
+            "weapon_glock_glock_19x_9x19":    { "Prototype": "Glock 19X", "LengthMm": 102,
+                                               "Source": "Glock 19X: 4.02 in = 102 mm. A drop-in match barrel is cut to the same length; a threaded one protrudes a few millimetres more, which nobody publishes and which is worth a fraction of a percent" },
+
+            "weapon_izhmash_as1_545x39":      { "Prototype": "AS-1", "LengthMm": 415,
+                                               "Source": "Zlobin's 2013 bullpup prototype for the Ratnik trials, built around the AK-74M - a bullpup moves the action back into the stock and leaves the barrel where it was, so it is the AK-74M's 415 mm. Never entered service and never published a specification of its own; the pack's own card tells that history" },
+            "weapon_izhmash_as2_762x39":      { "Prototype": "AS-2", "LengthMm": 415,
+                                               "Source": "the 7.62x39 AS-1, on the AK-103 the pack clones it from, and that is 415 mm as well" },
+            "weapon_salco_ak300_762x35":      { "Prototype": "AK-300", "LengthMm": 415,
+                                               "Source": "no such rifle exists; the pack's own description calls it a prototype based on the AK-12 and AK-308, both 415 mm, and the item is an AK-12 down to the model it wears" },
+            "weapon_salco_m85_revenant_762x35": { "Prototype": "M85 Revenant", "LengthMm": 314,
+                                               "Source": "named after the Zastava M85 but built as neither of the two guns that carry that designation: the item has no model of its own and wears the vanilla AK-102, so it is that rifle rebarreled, 314 mm. For the record, the AK-pattern Zastava M85 is 254 mm, the same barrel as the M92 it differs from only in calibre, and Zastava's other M85 is a bolt-action .223 hunting carbine with a 510 mm barrel and a Mauser action - a different weapon entirely" }
+          },
+
+          // Parts that are not barrel items but have a barrel inside them, so no length
+          // can be read off them and the length model does not apply. TotalPercent is
+          // where the weapon wearing the part should end up, on the same scale as every
+          // other modifier: relative to the caliber's reference barrel. The game adds
+          // the weapon's own modifier to the part's, so the part is handed the
+          // difference between this figure and whatever the weapon carries.
+          "IntegratedBarrels": {
+            "reciever_mp5_hk_sd": { "Prototype": "MP5SD, 146 mm ported barrel", "TotalPercent": -23,
+                                    "Source": "H&K quote 285 m/s for the MP5SD with standard 9x19 ball - the 30 gas ports bleed the round below the speed of sound, which is the point of the design and not a length effect. Standard ball leaves a 120 mm pistol barrel, the reference for this caliber, at about 370 m/s: 285/370 - 1 = -23%" }
           },
 
           // ===== Armour materials =====
@@ -1681,7 +1817,20 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           //    7.62x39 PS binds it now, where the 7N10 used to
           // 13: the Soviet vests' package is 7.6 mm, borrowed from a certified IIIA
           //    package that publishes a thickness, instead of an unsourced flat 8
-          "Version": 13
+          // 14: calibers carry the trade names weapon packs write on their barrels, and
+          //    parts with a barrel built into them have a table of their own. Both are
+          //    additions rather than corrections, but Aliases hangs off entries that
+          //    already exist, and the per-entry merge would never reach them
+          // 15: the Century Arms Draco is 206.5 mm rather than the 311 mm of the gun it
+          //    is named after: the item has no model of its own and wears the vanilla
+          //    AKS-74U, so it is that carbine rebarreled. What a pack builds a weapon
+          //    as outranks what it puts on the box
+          // 16: two reference barrels were wrong about their own cartridge. The .50 AE
+          //    was quoted against 400 mm, a barrel nothing chambered for it has, and
+          //    every Desert Eagle paid 13% for it; it is a 152 mm pistol round. And the
+          //    5.7x28 constant came from the case rule, which put the Five-seveN 24%
+          //    below the P90 where FN publishes 9%
+          "Version": 16
         }
         """;
 }

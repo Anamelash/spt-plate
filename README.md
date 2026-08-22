@@ -216,7 +216,7 @@ P.L.A.T.E. releases follow the SPT compatibility split below:
 | 1.0.0 to 1.3.0 | SPT 4.1.0 to 4.1.2 |
 | 1.3.1 and newer | SPT 4.1.x (`~4.1.0`), including the current 4.1.3 |
 
-The number is the server API, not the amount of mod behind it: 0.11.0 and 1.3.1
+The number is the server API, not the amount of mod behind it: 0.11.0 and 1.3.2
 model the same physics and ship the same features. Neither line loads on the
 other's server — the server checks the API version it was built against, and the
 client plugin binds to names the other client does not have.
