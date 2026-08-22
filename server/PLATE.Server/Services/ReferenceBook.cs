@@ -1027,8 +1027,8 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                                "Source": "Kalashnikov Group published specs for the AK-308: 415 mm, 7.62x51, 4.3 kg" },
             "weapon_izhmash_ppk20_9x19":      { "Prototype": "PPK-20", "LengthMm": 233,
                                                "Source": "topwar.ru specification table for the PPK-20: 233 mm, in line with the 237.5 mm Vityaz-SN it is developed from. Kalashnikov's own media lists 182-183.5 mm elsewhere, which fits the later SMO-revised gun rather than the one modelled here - the lower figure would make this a +6% weapon instead of +9%" },
-            "weapon_century_arms_draco_762x39": { "Prototype": "Century Arms Draco", "LengthMm": 311,
-                                               "Source": "Century Arms Draco (HG1916-N): 12.25 in = 311 mm. Named in full deliberately - the Mini Draco is 7.75 in and the Draco Tactical 7.5 in, and neither would be found by this entry" },
+            "weapon_century_arms_draco_762x39": { "Prototype": "Century Arms Draco", "LengthMm": 206.5,
+                                               "Source": "the length of what the pack actually ships, not of the gun on the box. The real Century Arms Draco is a Romanian PM md. 90 derivative with a 12.25 in (311 mm) barrel, but the item wears the vanilla AKS-74U model and nothing else - it is that carbine rebarreled for 7.62x39, so it is 206.5 mm. The Modified Draco wears the AKS-74UB, same barrel. Named in full deliberately: the Mini Draco and Draco Tactical are shorter still and would not be found by this entry" },
             "weapon_arsenal_sgl31_545x39":    { "Prototype": "SGL31", "LengthMm": 415,
                                                "Source": "Arsenal SGL31-62/-68, a Saiga in 5.45x39: 16.3 in = 414 mm, the AK-74 barrel" },
             "weapon_izhmash_saiga_mk_030_545x39": { "Prototype": "Saiga MK Ver. 030", "LengthMm": 415,
@@ -1044,7 +1044,9 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "weapon_stenzel_sak21_762x39":    { "Prototype": "SAK-21", "LengthMm": 317.5,
                                                "Source": "Stenzel Industries SAK-21, launch configuration: 12.5 in = 317.5 mm. The pack agrees with itself - its own handguard for the gun is described as 12.5 inch (317 mm)" },
             "weapon_salco_ak300_762x35":      { "Prototype": "AK-300", "LengthMm": 415,
-                                               "Source": "no such rifle exists; the pack's own description calls it a prototype based on the AK-12 and AK-308, and both of those are 415 mm" }
+                                               "Source": "no such rifle exists; the pack's own description calls it a prototype based on the AK-12 and AK-308, both 415 mm, and the item is an AK-12 down to the model it wears" },
+            "weapon_salco_m85_revenant_762x35": { "Prototype": "M85 Revenant", "LengthMm": 314,
+                                               "Source": "named after the Zastava M85 but built as neither of the two guns that carry that designation: the item has no model of its own and wears the vanilla AK-102, so it is that rifle rebarreled, 314 mm. For the record, the AK-pattern Zastava M85 is 254 mm, the same barrel as the M92 it differs from only in calibre, and Zastava's other M85 is a bolt-action .223 hunting carbine with a 510 mm barrel and a Mauser action - a different weapon entirely" }
           },
 
           // Parts that are not barrel items but have a barrel inside them, so no length
@@ -1796,7 +1798,11 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           //    parts with a barrel built into them have a table of their own. Both are
           //    additions rather than corrections, but Aliases hangs off entries that
           //    already exist, and the per-entry merge would never reach them
-          "Version": 14
+          // 15: the Century Arms Draco is 206.5 mm rather than the 311 mm of the gun it
+          //    is named after: the item has no model of its own and wears the vanilla
+          //    AKS-74U, so it is that carbine rebarreled. What a pack builds a weapon
+          //    as outranks what it puts on the box
+          "Version": 15
         }
         """;
 }

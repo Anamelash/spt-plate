@@ -184,6 +184,10 @@ public class BarrelClassificationTests
     // rechambering does not move a barrel: a .45 Thompson relined for 7.62x25 is still
     // a Thompson
     [InlineData("[Eco]_(M1921 Thompson 7.62x25 submachine gun)", 267)]
+    // and a gun is what it is built as, not what the pack calls it: this one wears the
+    // vanilla AKS-74U and is 206.5 mm, whatever the 12.25 inch original measures
+    [InlineData("[EpicsAIO]_(Century Arms Draco 7.62x39 carbine)", 206.5)]
+    [InlineData("[EpicsAIO]_(Modified Century Arms Draco 7.62x39 Assault Rifle)", 206.5)]
     // nor may a two-letter prototype find itself inside a caliber: "PM" is in "9x18PM"
     [InlineData("[Pack]_(Some 9x18PM machine pistol)", 0)]
     // a weapon the book has never heard of stays unknown rather than being guessed at
