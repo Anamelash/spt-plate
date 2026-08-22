@@ -291,6 +291,27 @@ limits used in armor certification.
   round in service: the PS meets armor on its core's own 4.0 mm instead of on the
   whole 5.6 mm bullet, which moves it from well under the PP to just under it. The
   index on the card is corrected to 7N6M to match.
+- **Barrels get their muzzle velocity from their length,** by the Le Duc curve
+  fitted to published barrel-length ladders, instead of the numbers a pack happened
+  to type: an 11-inch .308 shipping at −31% is worth about −16%, and .300 Blackout —
+  a round designed to burn its powder in a short barrel — barely cares about length
+  at all. Which items this applies to is now read from the item database — the
+  item's class, the slots it fits, the properties only barrels carry — rather than
+  from its name. Weapon packs register their content as clones named after their
+  own locale text, so a name test recognizes no modded barrel at all: in one
+  install, 89 pack barrels were being treated as muzzle brakes and clamped to −2%,
+  which quietly gave an 8.5-inch .300 Blackout the ballistics of a 16-inch one.
+  Lengths and calibers are read in whichever units and trade names the pack wrote
+  them in (millimetres, inches, ".300 Blackout", ".338 Lapua").
+- **A weapon whose barrel is built into another part is handled as such.** The
+  MP5SD's ported 146 mm barrel exists as no item — it is part of the upper receiver
+  — and it was being clamped like a muzzle device, which handed the SD supersonic
+  ammunition. It now carries a measured figure instead: 285 m/s, the velocity H&K
+  quote for it, against roughly 370 m/s for the same ball from a pistol barrel.
+  Parts that the database does not identify as a barrel, a device or anything else
+  keep whatever modifier they came with and are listed in the mod's report, because
+  a barrel mistaken for a brake is invisible in play while an unrecognized handguard
+  is one line in a file.
 - Every round in the database — including rounds added by other mods — is
   normalized from its physical data. Shotgun shells receive real pellet counts,
   pellet masses and velocities of their prototypes (vanilla systematically
