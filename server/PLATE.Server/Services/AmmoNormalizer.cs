@@ -70,6 +70,13 @@ public class AmmoNormalizer(
         /// </summary>
         public double CoreHardnessHv = 60;
 
+        /// <summary>
+        /// Measured bullet length, mm, where the book publishes one; 0 = infer it from
+        /// mass over calibre. Sent to the client verbatim so the display damage and the
+        /// raid damage are built on the same length.
+        /// </summary>
+        public double LengthMm;
+
         public readonly List<string> Notes = new();
     }
 
@@ -158,6 +165,16 @@ public class AmmoNormalizer(
                 if (bf.CoreHardnessHv > 0)
                 {
                     r.CoreHardnessHv = bf.CoreHardnessHv;
+                }
+
+                // A measured length beats the mass-over-calibre inference, which reads a
+                // steel-cored bullet short because it assumes lead. Nothing here is
+                // rewritten on the item — the game has no field for it — it travels to
+                // the client with the rest of the per-cartridge data.
+                if (bf.LengthMm > 0)
+                {
+                    r.LengthMm = bf.LengthMm;
+                    r.Notes.Add($"length {bf.LengthMm:0.#} mm (book)");
                 }
 
                 // before the cohort fill below reads it: what flies is not always what the
@@ -452,7 +469,7 @@ public class AmmoNormalizer(
         }
 
         var w = WoundModel.Compute(r.MassG, r.DiaMm, r.P.InitialSpeed!.Value, r.X,
-            r.CoreMass, a);
+            r.CoreMass, a, r.LengthMm);
         r.Notes.Add($"PC {w.Pc:0.#}+TC {w.Tc:0.#}" +
                     (w.Frag > 0 ? $", frag {w.Frag:0.00}" : "") +
                     (w.EnergyCapped ? $", cap E0/{a.EnergyCapPerHp:0.#}" : "") +
@@ -618,6 +635,10 @@ public class AmmoNormalizer(
                 Ca = Math.Round(r.CoreArea, 4),
                 Cm = Math.Round(r.CoreMass, 4),
                 Hv = Math.Round(r.CoreHardnessHv),
+
+                // measured bullet length, mm; 0 (or absent, for an older server) means
+                // the client infers it exactly as the server just did
+                L = Math.Round(r.LengthMm, 2),
             });
         data["__wound"] = new
         {

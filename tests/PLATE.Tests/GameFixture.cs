@@ -94,7 +94,9 @@ namespace PLATE.Tests
             // cannot prepare one outside the Unity runtime (its detour path reaches for
             // BCL members net471's mscorlib does not have). Everything else detours
             // fine here, which is what makes this test worth running at all.
+            ShotLifecyclePatches.Apply(harmony);
             BallisticsPatches.Apply(harmony);
+            ObstaclePatches.Apply(harmony);
             BloodPatches.Apply(harmony);
             HealthTabPatch.Apply(harmony);
             CripplePatches.Apply(harmony);

@@ -70,19 +70,39 @@ public static class YawModel
     }
 
     /// <summary>
-    /// Length of the projectile, mm, from the one thing that is always known about it:
-    /// how much mass sits behind its calibre. The equivalent cylinder is mass over
-    /// density over frontal area, and a real bullet fills roughly two thirds of its
-    /// bounding cylinder — the rest is ogive and boat tail. 7.62x51 M80 comes out at
-    /// 28.8 mm against a measured 28.9 and 5.56x45 M855 at 23.0 against a measured 23.0.
+    /// Length of the projectile, mm.
     ///
-    /// Known limit: one density for every bullet. A mild-steel core is lighter than lead
-    /// for the same volume, so 5.45x39 7N6 reads 20.4 mm against a measured 24.8 and is
-    /// that much narrower once it turns. Fixing it properly means a density per
-    /// construction, which is a reference-book question rather than a geometry one.
+    /// A measured length wins whenever there is one. <paramref name="publishedMm"/> is
+    /// the reference book's figure for this cartridge (0 = the book is silent), and it
+    /// outranks everything below it for the reason any measurement outranks any model:
+    /// the inference exists to answer the question when nobody has answered it already.
+    ///
+    /// Otherwise, from the one thing that is always known about a bullet: how much mass
+    /// sits behind its calibre. The equivalent cylinder is mass over density over frontal
+    /// area, and a real bullet fills roughly two thirds of its bounding cylinder — the
+    /// rest is ogive and boat tail. 7.62x51 M80 comes out at 28.8 mm against a measured
+    /// 28.9 and 5.56x45 M855 at 23.0 against a measured 23.0.
+    ///
+    /// Known limit of the inference, and why the override exists: one density for every
+    /// bullet. A mild-steel core is lighter than lead for the same volume, so 5.45x39
+    /// 7N6 reads 20.4 mm against a measured 24.8 and 9x19 7N31 reads 9.4 against a
+    /// measured 13 — barely longer than its own calibre, which is a model saying a
+    /// steel-cored pistol bullet is a ball. Length is no longer only the width of the
+    /// channel past the turn: it is the lever arm of the obstacle module's yaw, where
+    /// L/d − 1 is what a barrier has to work against. A published number per cartridge
+    /// is the honest repair; deriving a density from the core fractions would only be a
+    /// guess built on a guess, since for most cartridges those fractions are themselves
+    /// inferred.
     /// </summary>
-    public static double LengthMm(double massG, double diaMm, in Tuning t)
+    /// <param name="publishedMm">Measured length from the reference book; 0 = infer.</param>
+    public static double LengthMm(double massG, double diaMm, in Tuning t,
+        double publishedMm = 0)
     {
+        if (publishedMm > 0)
+        {
+            return publishedMm;
+        }
+
         var area = CalibreAreaMm2(diaMm);
         var densityGPerMm3 = t.DensityGPerCm3 / 1000.0;
         var denom = area * densityGPerMm3 * t.FormFactor;
@@ -95,9 +115,12 @@ public static class YawModel
     /// a round ball comes out the same area whichever way it faces — the geometry says
     /// so by itself, without a rule about shot.
     /// </summary>
-    public static double SideAreaMm2(double massG, double diaMm, double x, in Tuning t)
+    /// <param name="publishedLengthMm">Measured length from the book; 0 = infer it.</param>
+    public static double SideAreaMm2(double massG, double diaMm, double x, in Tuning t,
+        double publishedLengthMm = 0)
     {
-        var broadside = LengthMm(massG, diaMm, t) * diaMm * t.BroadsideFraction;
+        var broadside = LengthMm(massG, diaMm, t, publishedLengthMm) * diaMm *
+                        t.BroadsideFraction;
         return Math.Max(broadside, NoseAreaMm2(diaMm, x, t.ExpansionAreaFactor));
     }
 

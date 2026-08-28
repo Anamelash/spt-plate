@@ -2,8 +2,8 @@
 
 P.L.A.T.E. (Penetration, Lethality, Armor & Trauma Engine) replaces the abstract
 damage numbers of the base game with an attempt to reproduce a real physical
-model of terminal ballistics, armor interaction and blood loss. Below is an
-exhaustive list of what behaves differently from vanilla and the reasoning
+model of terminal ballistics, armor, the cover in between, and blood loss. Below
+is an exhaustive list of what behaves differently from vanilla and the reasoning
 behind it. Each section ends with the published work the model rests on, and the
 sources are collected under [References](#references) at the end.
 
@@ -56,6 +56,21 @@ projectile actually brought in. Consequences you will feel:
   the velocity physics leaves it, and whatever it hits next receives damage
   computed from that remaining velocity. Nothing is zeroed out by game-logic
   quirks (vanilla's occasional "no damage" pass-through cases are fixed).
+- **What a body took out of a bullet stays taken out, all the way to the next
+  target.** The game plans a projectile's entire flight the instant it is born, so
+  a speed written onto it afterwards lasted until its first tick and no longer. At
+  contact range the loss showed anyway; across a room it did not, and a round that
+  had crossed one man reached the one behind him having paid nothing for the first.
+  The exit speed is now part of how the projectile is created. A through-and-through
+  is weak at the far end the way it always should have been, and the same applies to
+  anything that crosses cover. Fragments are born with their own mass and calibre
+  too, so the game's own drag finally slows a fragment like a fragment rather than
+  like the bullet it came off.
+- **Every bullet is its own bullet.** The engine recycles the objects it fires, and
+  a recycled one used to arrive still carrying the last round's draw: where it
+  turns, what tissue it crosses, and which organs it had already been through. A hit
+  on a heart could therefore be read as the same shot reaching the same organ twice
+  and quietly deliver nothing. Cleared at birth now.
 - **Bullet fragmentation splits the bullet's mass.** Each fragment continues as
   its own small projectile; fragments that cannot exit the current body part
   deposit their energy there. No bonus damage appears out of thin air.
@@ -143,8 +158,10 @@ than one severe. Which injuries are unsurvivable comes from a combat autopsy
 series of 4,596 deaths, which also measured the split between deaths at the
 moment of wounding and deaths over the following minutes, and where on the body
 the fatal bleeding came from. The cavity radius is anchored on published gelatin
-profiles, and bullet lengths are derived from mass and calibre — which reproduces
-the measured lengths of 7.62×51 M80 and 5.56×45 M855 to a tenth of a millimetre.
+profiles, and bullet length — which is what the channel widens to once the bullet
+turns — is taken from a published drawing wherever somebody has measured one and
+otherwise derived from mass and calibre, an inference that reproduces the measured
+lengths of 7.62×51 M80 and 5.56×45 M855 to a tenth of a millimetre.
 
 ## Armor: a physical barrier, not a dice roll
 
@@ -262,6 +279,160 @@ from bruising to lung and heart contusion with internal bleeding — follows the
 clinical literature on behind-armor blunt trauma and the backface-deformation
 limits used in armor certification.
 
+## Environment: cover is a barrier, not a threshold
+
+**Vanilla:** whether a bullet crosses a wall, a door or a sheet of tin is one
+comparison — the round's penetration number against a number the level designer
+put on the collider — followed by a coin flip weighted per material. A round that
+wins pays *nothing*: the projectile spawned on the far side carries the parent's
+full speed, its full damage and its full penetration. Cover is therefore
+transparent to the rest of the game, and the same cartridge is as lethal through
+a plank as it is in the open.
+
+**PLATE:** an obstacle is a material and a thickness, settled by the same four
+values that settle a plate or a body — mass, calibre, impact velocity,
+construction. Whether it goes through, what it costs, what comes out the far
+side and whether a shallow hit skips off are all computed rather than rolled.
+What each material is, and how thick a thing made of it usually is, lives in
+`obstacle-reference.jsonc` next to the plugin, in plain text with the reasoning
+beside every number. It is its own module — on by default, switchable off to
+vanilla on its own — and it needs nothing from the server half.
+
+- **Crossing something costs speed, and the cost is still there at the far end
+  of the room.** A round through a door arrives at whatever is behind it having
+  paid for the door — slower, and therefore doing less when it lands, because
+  everything else in the mod reads velocity at impact. Where the barrier stops
+  it, it stops.
+- **The thickness is the object you actually shot, not an average of its kind.**
+  It is measured off the collider along the real line of flight, so an oblique hit
+  is already paying for the longer path, and an electric motor is an electric motor
+  where a locker door is a locker door — both are "thick metal" as far as the game
+  is concerned. The book's per-material figure is the fallback for a graze or a
+  shape the probe cannot resolve; the journal and the marker label say which of the
+  two produced the number.
+- **A drum is not six hundred millimetres of steel.** Sheet materials are read as
+  a skin around air: a barrel, a plastic canister, a shipping container panel or a
+  cabinet costs its wall going in and, where there was genuinely room inside for
+  two walls, its wall coming out. Measuring those honestly and believing the
+  measurement is what would make a fuel drum bulletproof. Timber, logs and closed
+  crates go the other way and are taken at what they measure.
+- **A door costs a door.** A leaf is recognised where the map says it is one, and
+  what a leaf is depends on what it is made of: thin steel and plastic laminate into
+  two skins over a frame, a wooden door is a fixed 50 mm of wood rather than the
+  100–200 mm box its collider draws around the whole assembly, and a steel door is
+  one 5 mm plate. Before that split, 1,716 ordinary entrance, interior and garage
+  doors were being priced as the heaviest steel in the game. Blast doors in the
+  bunkers are the exception and stay shut — nothing a rifle carries opens one.
+- **What a collider is made of is read from what the map says, not only from the
+  preset.** Level designers write the material into the object's own name, and
+  about six thousand colliders in the shipped maps carry a name that disagrees with
+  the material stamped on them — an entire shower block tagged as sheet metal, a
+  thousand door frames tagged as thin wood. The map's own word wins, the scene's
+  grouping (a vehicle node, a door node) is applied on top of it, and a short list
+  of named objects settles the cases neither can. Every one of those layers can
+  only ever *add* information: an object nobody named anything keeps the preset it
+  always had, and so does any map or mod that names things its own way.
+- **Cars are cover for exactly as long as a car is.** A vehicle flank is 3 mm —
+  outer panel, inner panel and the window mechanism between them — and crossing
+  the body pays both sides. A 9x19 meets roughly even odds on the near door across
+  a pistol's useful range, arrives nearly spent if it gets through, and does not
+  make the far side; a .45 does not make the near one; rifle ball crosses the whole
+  car with two thirds of its speed. What is *not* modelled: every part of a vehicle
+  is that same flank. The engine block, the wheels, the seats and the B-pillar are
+  not there, because the colliders offer no way to find them — usually a car is one
+  or two boxes spanning the whole vehicle. Cover behind a car is therefore uniformly
+  weaker than cover behind a real one, in precisely the spots where a real one is
+  strong.
+- **Masonry behaves like masonry.** A single 115 mm course of brick stops a pistol
+  round, is crossed by a hard-cored 5.45 and by a 7.62, and takes two courses to
+  stop a .50. The same course in concrete keeps the 5.45 out; a 300 mm structural
+  wall keeps everything out. Brick is lighter and weaker than concrete and is
+  treated as its own material — the game has no material for it, so it is picked
+  out by the level author's own naming, which means a brick wall somebody named
+  something else is priced as concrete.
+- **Wood is checked against Hatcher's pine.** Seasoned white pine takes a .22 LR
+  four to six inches deep and a .30-06 twenty-seven to thirty, and four cartridges
+  spanning a factor of six in energy land where his tables put them — off pine's
+  own published strength and density, not off a curve bent to fit.
+- **A pallet of boxes is a lottery.** Palletised cargo is a stack of near-empty
+  cardboard with packed goods drawn along the path, so clipping a corner costs
+  what a cardboard box costs, crossing the pallet is survivable but expensive, and
+  a shot down its length usually is not survivable at all — and two rounds on the
+  same line can genuinely disagree, one threading the voids and one finding three
+  boxes of goods. The stack does not know which way it was stacked; a shot along
+  the layers meets the same statistics as one across them.
+- **The second wall costs more than the first.** A bullet leaving a barrier is
+  tumbling, and a tumbling bullet presents several times its own frontal area to
+  whatever it meets next: more drag, less depth, a much higher bar to clear. A
+  5.45 that used to sail through twelve sheets of tin with 291 m/s still on the
+  clock now dies on the sixth — three oil drums. The anchor is the keyholing
+  forensic reconstructions find on targets shot through car doors.
+- **A bullet through a barrier does not come out on the line it went in on.** A
+  9x19 through a 45 mm pine door leaves about two degrees off, which is where the
+  reconstruction literature puts it, and everything else is that number scaled by
+  sectional density: heavy and slow goes straighter than light and fast. Speed by
+  itself does not make a bullet wander — the physics says so unanimously — it makes
+  it wander by killing the bullet, and a barrier that flattened a core throws what
+  is left of it much further off line.
+- **What comes out the far side is a changed projectile,** through the same code a
+  plate uses, scaled by how hard the barrier had to work. Wood does not deform
+  bullets at any speed a gun produces, which is why wood and water are the classic
+  recovery media and the model reproduces it without being told. Steel does, and a
+  hard core takes its jacket through a tin wall and leaves it in a steel one.
+- **Ricochet is a property of the surface, not of the ammunition card.** Vanilla
+  uses one angle window for everything in the game and then rolls the cartridge's
+  chance; here each surface has its own critical grazing angle, falling as impact
+  speed rises — around 17° for concrete, stone and steel, 25° for soil and gravel,
+  15° for wood, and 7° for water, which is one of the best-measured numbers in the
+  ricochet literature. What leaves is slower and flatter than what arrived. One
+  gate sits in front of it all: **a barrier can only throw off what it could have
+  refused.** A round that would punch through a roof does that instead of bouncing,
+  and a 20 mm table top stops mirroring P90 fire at a standing shooter, which is
+  the raid observation the rule came from.
+- **A bullet does not disintegrate on tin.** Vanilla rolls the cartridge's
+  fragmentation chance against the collider's, and a round that loses is replaced
+  by fragments carrying 23% of its speed — 95% of its energy gone. One measured
+  raid caught sixty-three of those, the worst being a 5.45 steel core "destroyed"
+  by 0.7 mm of sheet metal; one scene prop carried nine times its own preset's
+  chance, so two bullets in three came apart on that single object. Break-up is
+  now decided by what actually happened to the core. Said plainly, because it cuts
+  both ways: with the shipped book that is nearly never, and the real case at the
+  other end — a soft rifle bullet coming apart against thick steel — is currently
+  expressed as heavy deformation and lost mass rather than as pieces.
+- **Glass costs what a pane costs.** A window is fractured out rather than crushed
+  through, so it charges a flat energy price: a 9x19 loses about 5 m/s, a birdshot
+  pellet loses most of what it had, and one already down to 200 m/s does not get
+  through at all. Wire mesh and low grass are the same idea at no cost.
+- **What is deliberately left to the game.** Water's penetration (a medium of
+  unknown depth), gratings, tall grass, and the default collider an unconfigured
+  object gets. Ground and road surfaces — stone, asphalt, soil, gravel — stay
+  barriers nothing gets through, because they have no far face to measure a
+  thickness against; the shot that skips off a kerb and out the other side is the
+  price of that. Every one of these is named in the book as vanilla on purpose, so
+  a material left out by accident and one left out by decision can be told apart.
+- **Walls do not remember being shot.** A wall that has taken a hundred rounds is
+  exactly as strong as a new one, unlike a plate, which wears; concrete spall and
+  secondary debris are not modelled at all. And the model inherits whatever the
+  level designer drew — map geometry was never authored to be shot through, so a
+  door whose collider is twice the door is now a door whose collider is twice the
+  door, instead of being averaged away.
+
+*What this is based on:* one law for everything with substance — Poncelet's
+two-term resistance, the material's own crushing strength plus the inertial cost
+of throwing it aside — with the confinement factor cavity-expansion theory puts
+on the static term, checked against Hatcher's white-pine penetration tables.
+Steel sheet goes through the same ballistic-limit model the armour section
+describes, against structural mild steel's published properties, which is
+literally the same material the armour model's one non-armour ladder is measured
+on. Concrete's resistance follows Forrestal's cavity-expansion fit, validated
+across concrete strengths from 14 to 97 MPa and striking velocities from 250 to
+800 m/s, with the NDRC perforation relation for the cone a free rear face throws
+off; the check is a published test the fit was not made against, where 120 mm of
+ultra-high-performance concrete takes 55 mm from a 7.62 ball and the law says 57.
+Critical ricochet angles, velocity retention and the departure angle being
+shallower than the arrival come from shooting-incident reconstruction, and the
+water figure from Kneubuehl's ricochet work.
+
 ## Ammunition and grenade data: normalized against real prototypes
 
 - **Bullet construction comes from a table of real cartridges,** keyed by the
@@ -272,6 +443,22 @@ limits used in armor certification.
   happened to have, so clones of one bullet could come out with different physics
   and a plain M80 could be read as an expanding round. Ammunition the table does
   not name still falls back to that inference.
+- **Five cartridges carry a measured bullet length now.** No item in the game holds
+  one, so the model works length out from how much mass sits behind the calibre —
+  right to a fraction of a millimetre for a lead-cored bullet, and short for a
+  steel-cored one, because steel is lighter than lead for the same volume. The
+  5.45x39 PS came out at 20.4 mm against a measured 24.8; the 9x19 7N31, steel under
+  an aluminium jacket, came out at 9.4 mm against a measured 13 — shorter than its
+  own calibre, which is a model calling a pistol bullet a ball. That matters twice
+  over: length is how wide the wound channel gets once the bullet turns, and it is
+  the lever arm a barrier tips a bullet over with. The 5.45x39 PS, the 7.62x39 PS,
+  the 9x19 7N31, the 7.62x51 M80 and the 5.56x45 M855 now use the published figure;
+  the first three hit harder for it, on the card and in a raid alike, since the
+  server bakes the displayed number through the same length the client uses at
+  impact. Everything else stays inferred on purpose — a length invented per
+  cartridge would be worse than an openly approximate one. `ammo-reference.jsonc`
+  moves to version 17 and is rewritten once, with your previous copy kept beside it
+  as `.v16.bak`.
 - **The 7.62x39 MAI AP is the round its own description says it is.** The game calls
   it a sabot carrying a tungsten carbide penetrator; the mod was reading it as lead,
   because no core was on file for it and lead is what the absence of one means. It
@@ -443,12 +630,37 @@ which is what makes a tourniquet applied late still worth applying.
   but scavs should not bleed out in the woods" is two sliders. Fine-tuning —
   material profiles, model constants — lives in the config files next to the
   mod, server side and client side.
-- An event journal (`events.log`, size-capped) records every hit with its full
-  physical breakdown — who fired, from what weapon, into whom, and what the
-  round did on the way. The names in it are the templates' internal ones,
+- **Each half of the mod is a switch.** Ballistics, the blood system, obstacle
+  physics and the debug overlay turn on and off independently in F12, and off means
+  vanilla for that half rather than a softened version of it.
+- An event journal records every hit with its full physical breakdown — who fired,
+  from what weapon, into whom, and what the round did on the way. It is written to
+  two files, not one: `events.log` takes everything unfiltered, because that is what
+  a bug report is built out of and it is the version you cannot reconstruct
+  afterwards, and `events-player.log` takes only what your own shots produced,
+  because finding your three doorways in four thousand lines of other people's
+  firefights is not reading. The names in them are the templates' internal ones,
   because the display fields BSG leaves on cloned items lie wholesale: by those,
   every .50 AE round "is" a 9x19 PSO and the Desert Eagle "is" an M1911. Please
   attach the journal to bug reports.
+- **Obstacle traffic has a file of its own** (`events-obstacles-hits.log`, off by
+  default), because a firefight in the open generates a wall hit for every round
+  that misses and it used to be the bulk of the journal. Two modes: one line per
+  wall per bullet, with the model's decision and the game's outcome side by side, or
+  the hits collapsed into one line per object per fifteen seconds for walking a map
+  and seeing what is made of what.
+- **Optional 3D markers show where your bullets actually went** (off by default): a
+  cross at each impact with a ray back along the line of arrival and a label —
+  damage and behind-armour trauma on a body, the material and the thickness it was
+  charged for on an obstacle, with the verdict in the colour: through, stopped, or
+  bounced. Markers on a body hang off the bone, so they follow the
+  target and stay put where he falls, which is the whole point of walking up
+  afterwards to see where you hit him.
+- **Two field aids sit in the debug section for anyone auditing the model**
+  (both off, both neutral at their defaults): a ghost mode where bots neither see
+  nor hear you and groups already hunting you forget you within a couple of seconds,
+  and a movement-speed multiplier for you alone. They exist for surveying a map's
+  cover without a firefight, not for taking into a real raid.
 
 ## Compatibility note
 
@@ -459,6 +671,13 @@ class numbers) will produce unpredictable — sometimes hilarious, sometimes
 broken — results in combination with PLATE. Mods that overhaul the same systems
 (ballistics/armor/medical overhauls) are incompatible by definition. Co-op
 (Fika) is untested.
+
+The obstacle module reads the maps as they were built: the material the level
+designer stamped on a collider, the word he wrote into its name, and the shape he
+drew. A custom map or a map edit is handled by the same rules and falls back to
+the material's own figures wherever it names things differently — it will not
+break, but an object nobody has looked at is priced as the average of its kind
+rather than as itself.
 
 ## Release history
 
@@ -916,6 +1135,23 @@ hand-tuned game feel. The principal sources:
   basis of the armor penetration thresholds.
 - **Ordnance gelatin test data** (the standard 10% tissue simulant) — used to
   calibrate penetration depth.
+- **Hatcher**, *Hatcher's Notebook* — penetration of small-arms bullets in
+  seasoned white pine, the ladder the bulk-material law for the environment is
+  checked against.
+- **Poncelet**, and the cavity-expansion literature after him — resistance as a
+  static strength term plus an inertial one, and the confinement factor on the
+  static term. Basis of how anything with substance is crossed.
+- **Forrestal & Altman**; **Forrestal, Frew, Hanchak & Brar**, *International
+  Journal of Impact Engineering* (1994-96) — concrete's resistance to a
+  penetrating projectile, fitted across concrete strengths from 14 to 97 MPa and
+  striking velocities from 250 to 800 m/s. With the **NDRC penetration formulae**
+  for the perforation limit standing above it, because a wall's free rear face
+  scabs off ahead of the bullet. Basis of concrete and brick.
+- **Haag & Haag**, *Shooting Incident Reconstruction* — critical ricochet angles
+  and velocity retention off concrete, asphalt and sheet metal, the departure
+  angle being shallower than the arrival, and the deflection of a handgun bullet
+  through a wooden door. With **Kneubuehl** on ricochet off water. Basis of the
+  ricochet and deflection models.
 - **Open-source prototype specifications** — service manuals and public
   reference works for shell loads, pellet counts, grenade fragment mass and
   velocity, and explosive charge weights; plus the cube-root scaling law for

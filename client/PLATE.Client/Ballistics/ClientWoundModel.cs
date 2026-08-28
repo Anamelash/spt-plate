@@ -76,9 +76,13 @@ namespace PLATE.Client.Ballistics
         /// <param name="neckMm">Travel before this projectile goes broadside — the shot's
         /// own draw, not the cartridge's median.</param>
         /// <param name="tissueScale">Density of the tissue along this channel, 1 = calibrated.</param>
+        /// <param name="lengthMm">Measured bullet length from the reference book, mm, as
+        /// the server published it for this cartridge; 0 = none, and the geometry infers
+        /// it. The server bakes the card's Damage through the same YawModel with the same
+        /// figure, which is what keeps the two halves on one number.</param>
         public static Deposit Compute(float massG, float diaMm, float v, float x,
             float coreMassFrac, float pathMm, AmmoDataCache.WoundParams p,
-            float neckMm = float.MaxValue, float tissueScale = 1f)
+            float neckMm = float.MaxValue, float tissueScale = 1f, float lengthMm = 0f)
         {
             var e = 0.5f * (massG / 1000f) * v * v;
             var budget = e / Mathf.Max((float)p.EnergyCapPerHp, 0.1f);
@@ -110,7 +114,7 @@ namespace PLATE.Client.Ballistics
             var yaw = Yaw(p);
             var pc = (float)YawModel.CavityVolumeMm3(
                 YawModel.NoseAreaMm2(diaMm, x, p.ExpansionAreaFactor),
-                YawModel.SideAreaMm2(massG, diaMm, x, yaw),
+                YawModel.SideAreaMm2(massG, diaMm, x, yaw, lengthMm),
                 neckMm, path) / (float)p.WoundVolumePerHp;
 
             // fragmentation: the envelope fails where this shot's own turn came, if

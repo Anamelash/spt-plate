@@ -18,6 +18,42 @@ namespace PLATE.Client.Overlay
 
         private GUIStyle _floatStyle;
         private GUIStyle _panelStyle;
+        private GUIStyle _markerStyle;
+
+        /// <summary>
+        /// The marker sizes are applied when they change rather than read every frame —
+        /// the rule BloodHudView established. The geometry is re-placed and the label
+        /// style is rebuilt, so a scale turned in F12 lands on markers already on screen
+        /// instead of only on the next shot.
+        /// </summary>
+        private void OnEnable()
+        {
+            if (PlateClientConfig.Source != null)
+            {
+                PlateClientConfig.Source.SettingChanged += OnSettingChanged;
+            }
+        }
+
+        private void OnDisable()
+        {
+            if (PlateClientConfig.Source != null)
+            {
+                PlateClientConfig.Source.SettingChanged -= OnSettingChanged;
+            }
+        }
+
+        private void OnSettingChanged(object sender, BepInEx.Configuration.SettingChangedEventArgs e)
+        {
+            var key = e.ChangedSetting?.Definition?.Key;
+            if (key == null || !key.StartsWith("Marker") && key != "Hit point scale" &&
+                key != "Trajectory ray scale")
+            {
+                return;
+            }
+
+            _markerStyle = null;
+            HitMarkers.ApplyLayout();
+        }
 
         /// <summary>
         /// Event filter. A null argument = participant unknown.
@@ -74,6 +110,8 @@ namespace PLATE.Client.Overlay
                     _inRaid = false;
                     _mainProfileId = null;
                     HitFeed.Clear();
+                    HitMarkers.Clear();
+                    ObstacleSurvey.FlushAll(Time.time);
                     Patches.OverlayPatches.ResetRaidState();
                 }
 
@@ -90,6 +128,8 @@ namespace PLATE.Client.Overlay
             }
 
             HitFeed.Tick(Time.time);
+            HitMarkers.Tick(Time.time);
+            ObstacleSurvey.Tick(Time.time);
         }
 
         private void OnGUI()
@@ -102,6 +142,7 @@ namespace PLATE.Client.Overlay
             var t = PerfTrace.Begin();
             EnsureStyles();
             DrawFloats();
+            DrawMarkerLabels();
             if (PlateClientConfig.OverlayPanelVisible.Value)
             {
                 DrawPanel();
@@ -110,8 +151,173 @@ namespace PLATE.Client.Overlay
             PerfTrace.End("overlay.gui", t);
         }
 
+        /// <summary>
+        /// Marker labels: projected to the screen and pinned to the point, with no
+        /// upward drift. A floating label belongs to a victim and wants to be read as it
+        /// rises; this one belongs to a place and has to stay on it, or it stops being
+        /// evidence about where the bullet went.
+        /// </summary>
+        private void DrawMarkerLabels()
+        {
+            if (!PlateClientConfig.MarkersEnabled.Value)
+            {
+                return;
+            }
+
+            var mode = PlateClientConfig.MarkerLabelProjection.Value;
+            var cam = LabelCamera(mode);
+            if (cam == null)
+            {
+                return;
+            }
+
+            var maxDist = PlateClientConfig.OverlayMaxFloatDistance.Value;
+            var maxDistSqr = maxDist * maxDist;
+            var camPos = cam.transform.position;
+
+            int live = 0, drawn = 0, tooFar = 0, behind = 0, noText = 0;
+            var sample = "";
+
+            foreach (var m in HitMarkers.Live)
+            {
+                live++;
+                var pos = m.WorldPos;
+
+                if ((pos - camPos).sqrMagnitude > maxDistSqr)
+                {
+                    tooFar++;
+                    continue;
+                }
+
+                if (!Project(cam, mode, pos, out var gui))
+                {
+                    behind++;
+                    continue;
+                }
+
+                if (sample.Length == 0)
+                {
+                    sample = $"first at {pos} -> gui {gui} of {Screen.width}x{Screen.height}" +
+                             $" (cam rect {cam.pixelRect}) text '{m.Text}'";
+                }
+
+                if (string.IsNullOrEmpty(m.Text))
+                {
+                    noText++;
+                    continue;
+                }
+
+                var rect = new Rect(gui.x - 150f, gui.y - 20f, 300f, 20f);
+                GUI.color = new Color(0f, 0f, 0f, 0.8f);
+                GUI.Label(new Rect(rect.x + 1, rect.y + 1, rect.width, rect.height),
+                    m.Text, _markerStyle);
+                GUI.color = m.Color;
+                GUI.Label(rect, m.Text, _markerStyle);
+                drawn++;
+            }
+
+            GUI.color = Color.white;
+            ReportLabels(live, drawn, tooFar, behind, noText, sample);
+        }
+
+        /// <summary>
+        /// World point to GUI point (origin top-left), by whichever of the candidate
+        /// projections is selected. False = behind the camera, nothing to draw.
+        ///
+        /// The three that are not the obvious one exist because EFT does not render
+        /// through a plain full-screen camera: WorldToScreenPoint answers in the
+        /// CAMERA's pixel space, GUI wants the window's, and the two are the same thing
+        /// only when the camera owns the whole window.
+        /// </summary>
+        /// <summary>Which camera this projection reads the world through.</summary>
+        private static Camera LabelCamera(LabelProjection mode)
+        {
+            if (mode == LabelProjection.MainCamera && Camera.main != null)
+            {
+                return Camera.main;
+            }
+
+            return WorldCamera();
+        }
+
+        private static bool Project(Camera cam, LabelProjection mode,
+            Vector3 world, out Vector2 gui)
+        {
+            gui = default;
+
+            if (mode == LabelProjection.Viewport)
+            {
+                var vp = cam.WorldToViewportPoint(world);
+                if (vp.z <= 0f)
+                {
+                    return false;
+                }
+
+                gui = new Vector2(vp.x * Screen.width, (1f - vp.y) * Screen.height);
+                return true;
+            }
+
+            var sp = cam.WorldToScreenPoint(world);
+            if (sp.z <= 0f)
+            {
+                return false;
+            }
+
+            if (mode == LabelProjection.CameraPixels)
+            {
+                var r = cam.pixelRect;
+                gui = new Vector2(r.x + sp.x, Screen.height - (r.y + sp.y));
+                return true;
+            }
+
+            gui = new Vector2(sp.x, Screen.height - sp.y);
+            return true;
+        }
+
+        private float _nextLabelReport;
+
+        /// <summary>
+        /// Why the marker labels are or are not on screen, once a second under Verbose.
+        ///
+        /// Here because the labels went missing once and reading the code did not find
+        /// it: the geometry rendered, no exception was thrown, the config was on, and
+        /// every explanation that fit one of those facts contradicted another. This
+        /// prints the four things that can silently swallow a label — nothing live, too
+        /// far, behind the camera, no text — plus where the first one actually projects,
+        /// so the next raid settles it instead of a fifth theory.
+        /// </summary>
+        private void ReportLabels(int live, int drawn, int tooFar, int behind, int noText,
+            string sample)
+        {
+            if (!PlateClientConfig.VerboseLog.Value || Time.time < _nextLabelReport)
+            {
+                return;
+            }
+
+            _nextLabelReport = Time.time + 1f;
+            if (live == 0 && drawn == 0)
+            {
+                return; // nothing has been shot yet; not worth a line a second
+            }
+
+            Plugin.Log.LogInfo(
+                $"[PLATE] marker labels: live {live}, drawn {drawn}, too far {tooFar}, " +
+                $"behind camera {behind}, no text {noText}. {sample}");
+        }
+
         private void EnsureStyles()
         {
+            if (_markerStyle == null)
+            {
+                _markerStyle = new GUIStyle(GUI.skin.label)
+                {
+                    fontSize = Mathf.Max(6, Mathf.RoundToInt(
+                        HitMarkers.BaseFontSize * PlateClientConfig.MarkerTextScale.Value)),
+                    fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.MiddleCenter,
+                };
+            }
+
             if (_floatStyle != null)
             {
                 return;
@@ -152,7 +358,11 @@ namespace PLATE.Client.Overlay
 
         private void DrawFloats()
         {
-            var cam = WorldCamera();
+            // the same projection the markers use: both are world points turned into
+            // screen text, and they were both landing in the wrong place for the same
+            // reason. One switch governs both.
+            var mode = PlateClientConfig.MarkerLabelProjection.Value;
+            var cam = LabelCamera(mode);
             if (cam == null)
             {
                 return;
@@ -170,15 +380,16 @@ namespace PLATE.Client.Overlay
                     continue;
                 }
 
-                var sp = cam.WorldToScreenPoint(f.WorldPos);
-                if (sp.z <= 0f)
+                if (!Project(cam, mode, f.WorldPos, out var gui))
                 {
                     continue;
                 }
 
                 var age = (Time.time - f.BornAt) / ttl;
-                var rect = new Rect(sp.x - 150f,
-                    Screen.height - sp.y - age * 45f - f.Stack * 16f, 300f, 20f);
+
+                // unlike a marker label, a float is meant to drift upward as it ages
+                var rect = new Rect(gui.x - 150f,
+                    gui.y - age * 45f - f.Stack * 16f, 300f, 20f);
 
                 var alpha = age > 0.7f ? 1f - (age - 0.7f) / 0.3f : 1f;
                 GUI.color = new Color(0f, 0f, 0f, alpha * 0.8f);

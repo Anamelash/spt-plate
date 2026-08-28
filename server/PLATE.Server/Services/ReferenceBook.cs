@@ -82,6 +82,17 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         /// </summary>
         public double MassG { get; set; }
 
+        /// <summary>
+        /// Measured length of the bullet, mm. 0 = nobody published one, and the geometry
+        /// infers it from mass over calibre (<see cref="YawModel.LengthMm"/>). The
+        /// inference assumes one density for every bullet, so it reads a steel-cored
+        /// round short — the same class of reason <see cref="MassG"/> exists for: what
+        /// is known beats what is worked out. Length sets how wide the channel is past
+        /// the turn and, since the obstacle module, how readily a barrier tips the
+        /// projectile over: slenderness is L/d − 1.
+        /// </summary>
+        public double LengthMm { get; set; }
+
         public string Source { get; set; } = "";
     }
 
@@ -624,13 +635,24 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // three published, the 7N26 BP at 5.55 g of tool steel, 30.5 mm long and 6.14 mm
           // across. Cross-check: the two tungsten-carbide cores of different calibre and
           // different maker, M993 and 7N37, land at 0.49 and 0.53 of their bullet's area.
+          //
+          // LengthMm is the MEASURED length of the bullet, mm, and it is optional. Left
+          // out, the geometry works the length out from mass over calibre at one density
+          // for all bullets, which is right for a lead core and short for a steel one —
+          // 5.45 PS infers 20.4 mm against a measured 24.8, and 9x19 7N31 infers 9.4
+          // against 13, which is a model calling a pistol bullet a ball. That matters
+          // twice: length is the width of the wound channel past the turn, and it is the
+          // lever arm the obstacle module tips a bullet over with (slenderness L/d - 1).
+          // Only rounds with a length somebody actually published carry the field; the
+          // rest stay inferred, on purpose, because a made-up length is worse than an
+          // openly approximate one.
           "Bullets": {
             // --- 5.45x39. Core masses: ru.wikipedia, sourced to the GRAU indices;
             // core diameters and hardness: Adept Armor threat survey, except the PS,
             // which is the one round in the calibre where the survey and the Russian
             // sources describe different cartridges - see its own Source line ---
-            "patron_545x39_PS":   { "Prototype": "7N6M PS",       "X": 0.25, "CoreAreaFrac": 0.51, "CoreMassFrac": 0.42, "CoreHardnessHv": 697,
-                                    "Source": "core 1.43 g of Steel 65G in a 3.4 g bullet, 4.0 mm, 60 HRC. The 1987 modernisation changed the core steel and its heat treatment without changing the bullet, the marking or the index, so 7N6 names both this and the untreated Steel 10 original it replaced - which has not been produced since. The survey that reads this core at 40-45 HRC gives no year for its sample, and 40-45 HRC is what the literature gives for that original" },
+            "patron_545x39_PS":   { "Prototype": "7N6M PS",       "X": 0.25, "CoreAreaFrac": 0.51, "CoreMassFrac": 0.42, "CoreHardnessHv": 697, "LengthMm": 24.8,
+                                    "Source": "core 1.43 g of Steel 65G in a 3.4 g bullet, 4.0 mm, 60 HRC. Bullet length 24.8 mm, the figure the Russian ammunition literature gives for the 7N6 bullet and the one the channel geometry has been quoting as its known miss - the mass-over-calibre inference reads it 20.4, because the core is steel and not lead. The 1987 modernisation changed the core steel and its heat treatment without changing the bullet, the marking or the index, so 7N6 names both this and the untreated Steel 10 original it replaced - which has not been produced since. The survey that reads this core at 40-45 HRC gives no year for its sample, and 40-45 HRC is what the literature gives for that original" },
             "patron_545x39_PP":   { "Prototype": "7N10 PP",       "X": 0.15, "CoreAreaFrac": 0.532, "CoreMassFrac": 0.478, "CoreHardnessHv": 697,
                                     "Source": "core 1.72-1.80 g of Steel 70/75 in a 3.62-3.74 g bullet, 4.1 mm, 60 HRC" },
             "patron_545x39_BP":   { "Prototype": "7N22 BP",       "X": 0.08, "CoreAreaFrac": 0.507, "CoreMassFrac": 0.477, "CoreHardnessHv": 765,
@@ -651,8 +673,8 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                     "Source": "heavy subsonic on a blunt VK8 core; too slow to do anything with it" },
 
             // --- 5.56x45 ---
-            "patron_556x45_M855":     { "Prototype": "M855 / SS109", "X": 0.25, "CoreAreaFrac": 1.0, "CoreMassFrac": 0.162, "CoreHardnessHv": 410,
-                                        "Source": "10 gr steel tip over a 32 gr lead rear in a 62 gr bullet, 4.6 mm, 40-45 HRC - the tip is not hard enough to hold its shape, so the area fraction stays 1. It still arrives on the far side as 0.65 g of steel" },
+            "patron_556x45_M855":     { "Prototype": "M855 / SS109", "X": 0.25, "CoreAreaFrac": 1.0, "CoreMassFrac": 0.162, "CoreHardnessHv": 410, "LengthMm": 23.0,
+                                        "Source": "10 gr steel tip over a 32 gr lead rear in a 62 gr bullet, 4.6 mm, 40-45 HRC - the tip is not hard enough to hold its shape, so the area fraction stays 1. It still arrives on the far side as 0.65 g of steel. Bullet length 23.0 mm (0.906 in), the SS109 drawing; the inference lands on the same number, which is what a mostly-lead bullet is supposed to do" },
             "patron_556x45_M855A1":   { "Prototype": "M855A1 EPR",   "X": 0.10, "CoreAreaFrac": 0.569, "CoreMassFrac": 0.306, "CoreHardnessHv": 670,
                                         "Source": "19 gr exposed hardened steel over a copper slug, 4.3 mm, 58-60 HRC - the same 62 gr as the M855 and a different weapon against steel" },
             "patron_556x45_M856A1":   { "Prototype": "M856A1 tracer EPR", "X": 0.10, "CoreAreaFrac": 0.569, "CoreMassFrac": 0.306, "CoreHardnessHv": 670,
@@ -670,8 +692,8 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "patron_556x45_varmageddon":  { "Prototype": "Varmageddon", "X": 0.95 },
 
             // --- 7.62x39 ---
-            "patron_762x39_PS":     { "Prototype": "57-N-231 PS",  "X": 0.25, "CoreAreaFrac": 0.50, "CoreMassFrac": 0.468, "CoreHardnessHv": 697,
-                                      "Source": "core 55-60 gr of 65G/70/75 spring steel in a 7.9 g bullet, 5.6 mm, heat-treated. The 1989 modernisation changed the core steel and its heat treatment without changing the index - the same story as the 5.45 PS, and the penetration moved with it: a helmet at 1000 m rather than 900, a fragmentation vest at 700 rather than 600, and a rifle-rated vest at 100 m, which the mild core could not do at any range. The geometry is the survey's and is not in dispute; its 35-45 HRC is, and is what the literature gives for the pre-1989 steel 10 it evidently sampled" },
+            "patron_762x39_PS":     { "Prototype": "57-N-231 PS",  "X": 0.25, "CoreAreaFrac": 0.50, "CoreMassFrac": 0.468, "CoreHardnessHv": 697, "LengthMm": 26.8,
+                                      "Source": "core 55-60 gr of 65G/70/75 spring steel in a 7.9 g bullet, 5.6 mm, heat-treated. Bullet length 26.8 mm, the figure the Russian ammunition literature gives for the 57-N-231 bullet, against 23.5 inferred - the steel core again. The 1989 modernisation changed the core steel and its heat treatment without changing the index - the same story as the 5.45 PS, and the penetration moved with it: a helmet at 1000 m rather than 900, a fragmentation vest at 700 rather than 600, and a rifle-rated vest at 100 m, which the mild core could not do at any range. The geometry is the survey's and is not in dispute; its 35-45 HRC is, and is what the literature gives for the pre-1989 steel 10 it evidently sampled" },
             "patron_762x39_BP":     { "Prototype": "7N23 BP",      "X": 0.07, "CoreAreaFrac": 0.399, "CoreMassFrac": 0.492, "CoreHardnessHv": 697,
                                       "Source": "60 gr hardened core, 5.0 mm, 60 HRC, in the same 123 gr bullet as the PS" },
             "patron_762x39_pp":     { "Prototype": "7N27 PP",      "X": 0.15 },
@@ -684,8 +706,8 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "patron_762x39_US":     { "Prototype": "57-N-231U US", "X": 0.25 },
 
             // --- 7.62x51 ---
-            "patron_762x51_M80":    { "Prototype": "M80 ball",     "X": 0.25,
-                                      "Source": "147 gr of lead alloy in a jacket; one piece of metal" },
+            "patron_762x51_M80":    { "Prototype": "M80 ball",     "X": 0.25, "LengthMm": 28.9,
+                                      "Source": "147 gr of lead alloy in a jacket; one piece of metal. Bullet length 28.9 mm (1.138 in), the M80 drawing; the inference gives 28.8, which is the calibration anchor the geometry was checked against in the first place" },
             "patron_762x51_m80a1":  { "Prototype": "M80A1 EPR",    "X": 0.12, "CoreAreaFrac": 0.491, "CoreMassFrac": 0.347, "CoreHardnessHv": 550,
                                       "Source": "45 gr hardened steel tip over a copper slug, 5.5 mm, 50-55 HRC, in a 130 gr bullet" },
             "patron_762x51_M61":    { "Prototype": "M61 AP",       "X": 0.10, "CoreAreaFrac": 0.491, "CoreMassFrac": 0.365, "CoreHardnessHv": 730,
@@ -726,8 +748,8 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                                 "Source": "solid copper hollow point, made to open into petals" },
 
             // --- 9x19 ---
-            "patron_9x19_7n31":       { "Prototype": "7N31 PBP",  "X": 0.08, "CoreAreaFrac": 0.563, "CoreMassFrac": 0.687, "CoreHardnessHv": 700,
-                                        "Source": "hardened carbon steel core 2.7-3.0 g in a 4.1-4.2 g bullet, exposed at the tip under an aluminium alloy jacket. Diameter is not published: 363 mm3 of steel over 0.78 of the bullet's own 13 mm gives 6.8 mm" },
+            "patron_9x19_7n31":       { "Prototype": "7N31 PBP",  "X": 0.08, "CoreAreaFrac": 0.563, "CoreMassFrac": 0.687, "CoreHardnessHv": 700, "LengthMm": 13.0,
+                                        "Source": "hardened carbon steel core 2.7-3.0 g in a 4.1-4.2 g bullet, exposed at the tip under an aluminium alloy jacket. Diameter is not published: 363 mm3 of steel over 0.78 of the bullet's own 13 mm gives 6.8 mm. That 13 mm is the length, and it is entered here as one: the inference reads this bullet at 9.4 mm, shorter than its own calibre, because a steel core under an aluminium jacket is the lightest construction in the book and the one density assumption is furthest wrong on it" },
             "patron_9x19_ap_63":      { "Prototype": "AP 6.3",     "X": 0.15 },
             "patron_9x19_PST_gzh":    { "Prototype": "7N21 PST",   "X": 0.20,
                                         "Source": "hardened steel core; core figures not published" },
@@ -1830,7 +1852,14 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           //    every Desert Eagle paid 13% for it; it is a 152 mm pistol round. And the
           //    5.7x28 constant came from the case rule, which put the Five-seveN 24%
           //    below the P90 where FN publishes 9%
-          "Version": 16
+          // 17: bullets can carry a measured LengthMm. The inference behind it assumes
+          //    one density for every bullet on earth, which reads a steel-cored round
+          //    short - 5.45 PS at 20.4 mm against 24.8, and 9x19 7N31 at 9.4 against 13,
+          //    i.e. shorter than its own calibre. That was tolerable while length only
+          //    widened the wound channel past the turn; it is not now that it is also
+          //    the lever arm a barrier tips a bullet over with. Five rounds carry a
+          //    published length, the rest stay inferred
+          "Version": 17
         }
         """;
 }

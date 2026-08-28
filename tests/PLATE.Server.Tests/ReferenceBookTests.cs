@@ -763,6 +763,46 @@ public class ReferenceBookTests
         Assert.DoesNotContain(Shipped().ArmorByClass.Keys, k => k.StartsWith("Glass/"));
     }
 
+    /// <summary>
+    /// The three lengths the geometry was checked against, plus the two the inference is
+    /// furthest wrong on. They are in the book because the book is where the client gets
+    /// them from: nothing in the game carries a bullet length, so an entry lost here is
+    /// silently an inferred length again, with no error anywhere to say so.
+    /// </summary>
+    [Theory]
+    [InlineData("patron_762x51_M80", 28.9)]
+    [InlineData("patron_556x45_M855", 23.0)]
+    [InlineData("patron_545x39_PS", 24.8)]
+    [InlineData("patron_762x39_PS", 26.8)]
+    [InlineData("patron_9x19_7n31", 13.0)]
+    public void The_measured_bullet_lengths_are_in_the_book(string key, double lengthMm)
+    {
+        Assert.True(Shipped().Bullets.TryGetValue(key, out var b), $"{key} is not in the book");
+        Assert.Equal(lengthMm, b!.LengthMm, 3);
+    }
+
+    /// <summary>
+    /// Coverage is partial on purpose, so an absent length is not an error — but a
+    /// present one that is nonsense is. A bullet is longer than it is wide and shorter
+    /// than a finger; anything outside that is a typo, and a typo here quietly widens or
+    /// narrows a cartridge's whole wound channel.
+    /// </summary>
+    [Fact]
+    public void Every_published_bullet_length_is_a_bullet_length()
+    {
+        foreach (var (name, b) in Shipped().Bullets)
+        {
+            if (b.LengthMm <= 0)
+            {
+                continue; // no measurement published; the geometry infers it
+            }
+
+            Assert.InRange(b.LengthMm, 5.0, 70.0);
+            Assert.False(string.IsNullOrWhiteSpace(b.Source),
+                $"{name} states a measured length and does not say where it came from");
+        }
+    }
+
     [Fact]
     public void Integral_barrel_weapons_have_plausible_lengths()
     {

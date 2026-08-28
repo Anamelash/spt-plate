@@ -12,6 +12,11 @@ namespace PLATE.Server.Tests;
 /// known about a bullet is how much mass sits behind its calibre. That the resulting
 /// lengths land on the measured ones to within a tenth of a millimetre is the check that
 /// the derivation is not a fudge.
+///
+/// It is a fudge for one family, though: the inference assumes lead, and a steel-cored
+/// bullet is longer than its mass suggests. So the reference book may publish a length
+/// per cartridge, and a published length outranks the inference — the tests below say
+/// what that means where a book has an entry and where it does not.
 /// </summary>
 public class YawModelTests
 {
@@ -33,6 +38,75 @@ public class YawModelTests
         var length = YawModel.LengthMm(massG, diaMm, Tuning());
 
         Assert.InRange(length, measuredMm * 0.92, measuredMm * 1.08);
+    }
+
+    /// <summary>
+    /// A measurement outranks a model. The inference exists to answer the question where
+    /// nobody has answered it already; where the reference book publishes a length, that
+    /// is the length, and nothing about mass or calibre gets a vote.
+    /// </summary>
+    [Fact]
+    public void A_published_length_outranks_what_the_mass_would_have_said()
+    {
+        var t = Tuning();
+
+        Assert.Equal(24.8, YawModel.LengthMm(9.5, 7.85, t, 24.8), 6);
+        Assert.Equal(24.8 * 7.85 * t.BroadsideFraction,
+            YawModel.SideAreaMm2(9.5, 7.85, 0.25, t, 24.8), 6);
+    }
+
+    /// <summary>
+    /// Coverage is deliberately partial: most cartridges have no published length, and a
+    /// made-up one would be worse than an openly approximate one. Nothing published — a
+    /// book that is silent, a server that is old, no server at all — has to land back on
+    /// the inference, never on zero, which would be a bullet with no broadside.
+    /// </summary>
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(-1.0)]
+    public void An_absent_length_falls_back_to_the_inference(double published)
+    {
+        var t = Tuning();
+
+        Assert.Equal(YawModel.LengthMm(9.5, 7.85, t), YawModel.LengthMm(9.5, 7.85, t, published), 6);
+        Assert.Equal(YawModel.SideAreaMm2(9.5, 7.85, 0.25, t),
+            YawModel.SideAreaMm2(9.5, 7.85, 0.25, t, published), 6);
+    }
+
+    /// <summary>
+    /// The failure the override exists for. One density for every bullet is a lead
+    /// density, and a mild-steel core is lighter than lead for the same volume, so the
+    /// inference reads 5.45x39 7N6 at 20.4 mm against a measured 24.8 — a fifth narrower
+    /// once it turns, and a fifth less lever arm against a wall.
+    /// </summary>
+    [Fact]
+    public void The_545_reads_its_measured_length_instead_of_the_lead_assumption()
+    {
+        var t = Tuning();
+
+        Assert.InRange(YawModel.LengthMm(3.4, 5.60, t), 20.0, 20.8);
+        Assert.Equal(24.8, YawModel.LengthMm(3.4, 5.60, t, 24.8), 6);
+    }
+
+    /// <summary>
+    /// The same failure at its worst, and the one that is not only a channel width. A
+    /// steel core under an aluminium jacket is the lightest construction there is: the
+    /// inference gives 9x19 7N31 a length barely over its own calibre, which the obstacle
+    /// module reads as a sphere — slenderness L/d − 1 near zero, so no barrier can ever
+    /// tip it over. The raid says otherwise. Its published 13 mm gives it a lever arm.
+    /// </summary>
+    [Fact]
+    public void A_light_steel_cored_pistol_bullet_stops_reading_as_a_sphere()
+    {
+        var t = Tuning();
+        const double massG = 4.1;
+        const double diaMm = 9.0;
+
+        var inferred = YawModel.LengthMm(massG, diaMm, t) / diaMm - 1.0;
+        var published = YawModel.LengthMm(massG, diaMm, t, 13.0) / diaMm - 1.0;
+
+        Assert.InRange(inferred, 0.0, 0.08);          // "this is a ball"
+        Assert.InRange(published, 0.40, 0.50);        // a lever arm a wall can work on
     }
 
     /// <summary>
@@ -129,5 +203,26 @@ public class YawModelTests
     {
         Assert.Equal(0, YawModel.CavityVolumeMm3(64.7, 169.3, 157, 0));
         Assert.Equal(0, YawModel.CavityVolumeMm3(64.7, 169.3, 157, -10));
+    }
+
+    /// <summary>
+    /// The length has to reach the number the server bakes onto the card, not only the
+    /// geometry underneath it. The client computes the damage of a real hit through the
+    /// same YawModel with the same figure off the same /plate/ammo-data entry, so if the
+    /// bake ignored the book the card and the raid would disagree — which is the one
+    /// invariant this project will not trade.
+    /// </summary>
+    [Fact]
+    public void The_baked_damage_moves_with_the_published_length()
+    {
+        var a = new PLATE.Server.Config.PlateServerConfig.AmmoNormalizerSection();
+
+        // 5.45x39 PS: measured 24.8 mm, inferred 20.4
+        var inferred = WoundModel.Compute(3.4, 5.60, 880, 0.25, 0.42, a);
+        var measured = WoundModel.Compute(3.4, 5.60, 880, 0.25, 0.42, a, 24.8);
+
+        Assert.True(measured.Pc > inferred.Pc,
+            $"measured PC {measured.Pc:0.##} did not beat inferred {inferred.Pc:0.##}");
+        Assert.Equal(inferred.Pc, WoundModel.Compute(3.4, 5.60, 880, 0.25, 0.42, a, 0).Pc, 6);
     }
 }

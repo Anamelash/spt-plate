@@ -10,6 +10,24 @@ namespace PLATE.Client
     /// Duck-typed attributes for BepInEx ConfigurationManager (F12): read via reflection
     /// by field names. IsAdvanced settings are only visible with the "Advanced" checkbox.
     /// </summary>
+    /// <summary>
+    /// What the obstacle journal writes into events-obstacles-hits.log. Public because
+    /// BepInEx binds it (same rule as <see cref="Overlay.LabelProjection"/>).
+    ///
+    /// EveryHit is the debugging channel — the model's and the engine's reading of each
+    /// collision, side by side. Aggregated is the survey — one line per prop per window,
+    /// chords averaged — for walking a map and classifying prop names. They are one
+    /// setting rather than two toggles because they answer the same question ("what do
+    /// I want in the obstacle file?") and having both on floods the survey chunks with
+    /// per-hit noise.
+    /// </summary>
+    public enum ObstacleLogMode
+    {
+        Off,
+        EveryHit,
+        Aggregated,
+    }
+
     internal sealed class ConfigurationManagerAttributes
     {
         public bool? IsAdvanced;
@@ -28,6 +46,7 @@ namespace PLATE.Client
         // --- Modules ---
         public static ConfigEntry<bool> BallisticsEnabled;
         public static ConfigEntry<bool> BloodEnabled;
+        public static ConfigEntry<bool> ObstacleEnabled;
         public static ConfigEntry<bool> OverlayEnabled;
 
         // --- Ballistics ---
@@ -161,6 +180,13 @@ namespace PLATE.Client
         public static ConfigEntry<bool> OverlayOnlyMyFights;
         public static ConfigEntry<bool> OverlayLogHits;
         public static ConfigEntry<float> OverlayMaxFloatDistance;
+        public static ConfigEntry<bool> MarkersEnabled;
+        public static ConfigEntry<float> MarkerTtlSec;
+        public static ConfigEntry<int> MarkerBuffer;
+        public static ConfigEntry<float> MarkerPointScale;
+        public static ConfigEntry<float> MarkerRayScale;
+        public static ConfigEntry<float> MarkerTextScale;
+        public static ConfigEntry<Overlay.LabelProjection> MarkerLabelProjection;
 
         // --- Player survivability (section 7) ---
         // The overrides that depart from the model on purpose; the ": Player" halves of
@@ -198,6 +224,10 @@ namespace PLATE.Client
         public static ConfigEntry<bool> LegacyBloodHudVisible;
 
         // --- Debug ---
+        public static ConfigEntry<ObstacleLogMode> ObstacleLog;
+        public static ConfigEntry<bool> ObstacleLogMineOnly;
+        public static ConfigEntry<bool> GhostMode;
+        public static ConfigEntry<float> PlayerSpeedMult;
         public static ConfigEntry<bool> TrackSelfHits;
         public static ConfigEntry<bool> SelfTestOnLoad;
         public static ConfigEntry<bool> VerboseLog;
@@ -213,7 +243,7 @@ namespace PLATE.Client
         public static ConfigFile Source => _cfg;
 
         /// <summary>Bump on every change to an existing setting's default.</summary>
-        private const int CurrentConfigVersion = 9;
+        private const int CurrentConfigVersion = 10;
 
         /// <summary>Shown on a key that only exists to be read once by a migration.</summary>
         private const string RetiredNote =
@@ -294,6 +324,13 @@ namespace PLATE.Client
             BloodEnabled = Bind(sMod, "Blood system", true,
                 "Blood system: volume, bleedings, thresholds, cripple effects, fractures, " +
                 "death from blood loss. Works on the player and bots.");
+            ObstacleEnabled = Bind(sMod, "Obstacle physics", true,
+                "Walls, doors and sheet metal as barriers instead of a threshold and a " +
+                "coin flip: whether a bullet gets through, how much speed it loses doing " +
+                "it, and whether a shallow hit bounces are all computed from the " +
+                "projectile's state and the material. What each material is made of and " +
+                "how thick it is lives in obstacle-reference.jsonc next to the plugin. " +
+                "Off = vanilla behaviour, entirely.");
 
             // ===== 2. Ballistics (regular) =====
             BabtEnabled = Bind(sBal, "BABT enabled", true,
@@ -745,6 +782,43 @@ namespace PLATE.Client
             OverlayMaxFloatDistance = Bind(sOverlay, "Max float distance, m", 300f,
                 "Floating text is not drawn beyond this distance.",
                 new AcceptableValueRange<float>(50f, 1000f), true);
+            MarkersEnabled = Bind(sOverlay, "World hit markers", false,
+                "Draw a cross at every impact point YOUR shots make, with a ray back " +
+                "along the line of arrival and a label: damage and behind-armor trauma " +
+                "on a body; on an obstacle, the material and the thickness it was " +
+                "charged for, with the verdict in the colour — green through, red " +
+                "stopped, yellow bounced, blue an exit already paid for on the way in " +
+                "(labelled F, and carrying no thickness because none was charged). The " +
+                "tool the obstacle model is checked with — it answers \"which door, at " +
+                "what angle\", which the journal alone cannot.", null, true);
+            MarkerTtlSec = Bind(sOverlay, "Marker TTL, s", 30f,
+                "How long a marker stays. 0 = until the end of the raid.",
+                new AcceptableValueRange<float>(0f, 600f), true);
+            MarkerBuffer = Bind(sOverlay, "Marker buffer", 100,
+                "How many markers exist at once; the oldest is reused. Changing this in " +
+                "raid rebuilds the pool.",
+                new AcceptableValueRange<int>(10, 500), true);
+            MarkerPointScale = Bind(sOverlay, "Hit point scale", 1.0f,
+                "Multiplier on the impact cross (3 cm at 1.0). Raise it to read markers " +
+                "from further away.",
+                new AcceptableValueRange<float>(0.2f, 10f), true);
+            MarkerRayScale = Bind(sOverlay, "Trajectory ray scale", 1.0f,
+                "Multiplier on the incoming-trajectory ray (0.75 m at 1.0).",
+                new AcceptableValueRange<float>(0.1f, 20f), true);
+            MarkerTextScale = Bind(sOverlay, "Marker text scale", 1.0f,
+                "Multiplier on the marker label size.",
+                new AcceptableValueRange<float>(0.5f, 4f), true);
+            MarkerLabelProjection = Bind(sOverlay, "Marker label projection",
+                Overlay.LabelProjection.Viewport,
+                "How a world position becomes a place on screen for text drawn over it — " +
+                "both the hit markers' labels and the floating damage numbers. " +
+                "Several candidates because EFT does not render through a plain " +
+                "full-screen camera, and the obvious one puts the label somewhere else " +
+                "on some setups. Screen = the obvious one. CameraPixels = measured " +
+                "against the camera's pixel rect instead of the window. Viewport = " +
+                "scaled from the viewport, immune to the pixel rect. MainCamera = " +
+                "Camera.main instead of EFT's own. Switch until the text sits on the " +
+                "cross; the Verbose log prints where it lands.", null, true);
 
             // ===== 6. Debug (all advanced, off by default) =====
             // The journal is deliberately NOT under the overlay section: it used to be,
@@ -754,6 +828,31 @@ namespace PLATE.Client
                 "Write the event journal to events.log next to the plugin (buffered, " +
                 "rotated at 500 KB). Works with the overlay off. Attach this to bug reports.",
                 null, true);
+            ObstacleLog = Bind(sDebug, "Log obstacle hits", ObstacleLogMode.Off,
+                "What goes into events-obstacles-hits.log next to the plugin (the " +
+                "event journal itself carries no obstacle traffic). EveryHit — the " +
+                "debugging channel: one line per wall, door or sheet per bullet, the " +
+                "model's decision and the engine's outcome side by side. Aggregated — " +
+                "the prop survey: your hits collapsed to one line per prop per 15 s " +
+                "(count, chord min/avg/max, chord reduced to the surface normal), for " +
+                "walking a map and classifying props. The file is never rotated away, " +
+                "chunked at 4 MB; the survey needs the Hit overlay module enabled at " +
+                "game start.", null, true);
+            ObstacleLogMineOnly = Bind(sDebug, "Log obstacle hits: my shots only", true,
+                "Only log obstacles YOUR shots meet. Every bullet a bot fires and misses " +
+                "with ends in soil, concrete or a tree, and each one is an obstacle: with " +
+                "this off a firefight buries the journal and the panel under other " +
+                "people's misses. Turn it off to study bot wallbangs.", null, true);
+            GhostMode = Bind(sDebug, "Ghost mode", false,
+                "Survey aid: bots neither see nor hear you — you never become anyone's " +
+                "enemy, your sounds are dropped at every bot's ear, and groups that " +
+                "already hunt you forget you within a couple of seconds. Turn off to " +
+                "fight again.", null, true);
+            PlayerSpeedMult = Bind(sDebug, "Player speed mult", 1f,
+                "Survey aid: scales your movement (bots untouched). 1 = vanilla. The " +
+                "character controller's own speed limit is lifted while this is " +
+                "engaged and restored at 1.",
+                new AcceptableValueRange<float>(0.2f, 10f), true);
             TrackSelfHits = Bind(sDebug, "Track hits on you", false,
                 "Instrument hits ON YOU (noisy during development).", null, true);
             SelfTestOnLoad = Bind(sDebug, "Patch targets self-test on load", true,
@@ -1083,6 +1182,17 @@ namespace PLATE.Client
             // vanilla flash effect it tuned: the blind knob is gone, replaced by the
             // custom disorientation whose keys are new and need no migration. The
             // version number stays spent — a config stamped 9 must not replay anything.
+
+            // v10: marker labels project through the viewport rather than the screen.
+            // EFT's camera does not own the whole window, so WorldToScreenPoint answers
+            // in the camera's pixel space and GUI wants the window's — the difference put
+            // every label somewhere other than its marker. Written out rather than run
+            // through Migrate because that helper needs IEquatable, which an enum is not.
+            if (ConfigVersion.Value < 10 &&
+                MarkerLabelProjection.Value == Overlay.LabelProjection.Screen)
+            {
+                MarkerLabelProjection.Value = Overlay.LabelProjection.Viewport;
+            }
 
             ConfigVersion.Value = CurrentConfigVersion;
             Plugin.Log.LogInfo($"[PLATE] Config migrated to v{CurrentConfigVersion}");

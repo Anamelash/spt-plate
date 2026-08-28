@@ -23,6 +23,11 @@ namespace PLATE.Client
         public static Type BallisticsCalculator => FindType("EFT.Ballistics.BallisticsCalculator");
         public static Type Shot => FindType("EFT.Ballistics.Shot");
         public static Type BodyPartCollider => FindType("BodyPartCollider");
+
+        /// <summary>Everything shootable in a scene that is not a person: walls, doors,
+        /// sheet metal, glass. BodyPartCollider derives from it and overrides both of
+        /// the virtuals below, so a patch here never reaches a body.</summary>
+        public static Type BallisticCollider => FindType("EFT.Ballistics.BallisticCollider");
         public static Type ArmorComponent => FindType("EFT.InventoryLogic.ArmorComponent");
         public static Type ArmorResistanceData => FindType("ArmorResistanceData");
         public static Type DamageInfo => FindType("EFT.Ballistics.DamageInfo");
@@ -39,6 +44,32 @@ namespace PLATE.Client
         public static MethodBase Bullet_DegradeOnHit => Method(Shot, "HandleCollision");
         /// <summary>Deterministic body overpenetration check.</summary>
         public static MethodBase BodyPart_IsPenetrated => Method(BodyPartCollider, "IsPenetrated");
+        /// <summary>A bullet that bounced: the ricochet "child" (heavy armor and environment).</summary>
+        public static MethodBase Bullet_Ricochet => Method(Shot, "CreateRicochetedFragment");
+
+        /// <summary>
+        /// Where every projectile in the game is born — the muzzle, an overpenetration,
+        /// a ricochet, a fragment — and the only place before its trajectory table is
+        /// built.
+        ///
+        /// Two separate things need exactly this moment. The table is formed inside from
+        /// the `direction` and `speed` ARGUMENTS and then overwrites the projectile's
+        /// position and velocity every tick, so anything the mod writes to a child
+        /// afterwards is discarded on its first tick: the exit state of a barrier has to
+        /// arrive here or not at all. And the shot object itself comes out of a pool of
+        /// two hundred, carrying whatever the mod recorded against it in a previous life,
+        /// which is where its per-projectile tables have to be cleared.
+        ///
+        /// The parameter NAMES are part of the contract (PatchIntegrityTests pins them):
+        /// Harmony binds a prefix's arguments by name, so a rename in a future SPT would
+        /// silently stop both fixes rather than fail loudly.
+        /// </summary>
+        public static MethodBase Bullet_Create => Method(Shot, "Create");
+        /// <summary>The environment's penetration gate (threshold + roll in vanilla).</summary>
+        public static MethodBase Obstacle_IsPenetrated => Method(BallisticCollider, "IsPenetrated");
+        /// <summary>The environment's ricochet gate (one angle window for every surface
+        /// in vanilla).</summary>
+        public static MethodBase Obstacle_Deflects => Method(BallisticCollider, "Deflects");
         /// <summary>Armor penetration roll.</summary>
         public static MethodBase Armor_SetPenetrationStatus => Method(ArmorComponent, "SetPenetrationStatus");
         /// <summary>Armor damage cut + blunt (behind-armor trauma hook).</summary>
@@ -60,6 +91,21 @@ namespace PLATE.Client
         /// <summary>Explosion: MaxExplosionDistance is a hard cap on fragment spread (transpiler).
         /// Blast/concussion are computed in a separate method with its own radius read — left alone.</summary>
         public static MethodBase Grenade_Explosion => Method(GrenadeExplosionHelper, "Explosion");
+
+        // --- Debug field tools (ghost mode, speed) ---
+        public static Type BotsGroup => FindType("BotsGroup");
+        public static Type BotHearingSensor => FindType("BotHearingSensor");
+        public static Type MovementContext => FindType("EFT.MovementContext");
+
+        /// <summary>The one funnel through which anyone becomes a bot group's enemy.</summary>
+        public static MethodBase Bots_AddEnemy => Method(BotsGroup, "AddEnemy");
+        /// <summary>Each bot's ear; vanilla's own mute flag is read-only, so this is
+        /// where a ghosted player's sounds are dropped.</summary>
+        public static MethodBase Bots_HearSound => Method(BotHearingSensor, "OnSoundPlayed");
+        /// <summary>Where displacement is actually handed to the CharacterController.
+        /// Virtual but overridden nowhere, so the base implementation is the one that
+        /// runs (ClientPlayerMovementContext overrides only ApplyMotion above it).</summary>
+        public static MethodBase Player_DirectApplyMotion => Method(MovementContext, "DirectApplyMotion");
 
         // --- Health ---
         public static Type ActiveHealthController => FindType("EFT.HealthSystem.ActiveHealthController");
@@ -199,6 +245,7 @@ namespace PLATE.Client
             { nameof(BallisticsCalculator), () => BallisticsCalculator },
             { nameof(Shot), () => Shot },
             { nameof(BodyPartCollider), () => BodyPartCollider },
+            { nameof(BallisticCollider), () => BallisticCollider },
             { nameof(ArmorComponent), () => ArmorComponent },
             { nameof(ArmorResistanceData), () => ArmorResistanceData },
             { nameof(DamageInfo), () => DamageInfo },
@@ -208,6 +255,10 @@ namespace PLATE.Client
             { nameof(Bullet_ShouldFragment), () => Bullet_ShouldFragment },
             { nameof(Bullet_DegradeOnHit), () => Bullet_DegradeOnHit },
             { nameof(BodyPart_IsPenetrated), () => BodyPart_IsPenetrated },
+            { nameof(Bullet_Ricochet), () => Bullet_Ricochet },
+            { nameof(Bullet_Create), () => Bullet_Create },
+            { nameof(Obstacle_IsPenetrated), () => Obstacle_IsPenetrated },
+            { nameof(Obstacle_Deflects), () => Obstacle_Deflects },
             { nameof(Armor_SetPenetrationStatus), () => Armor_SetPenetrationStatus },
             { nameof(Armor_ApplyDamage), () => Armor_ApplyDamage },
             { nameof(Armor_GetPenetrationChance), () => Armor_GetPenetrationChance },
@@ -241,6 +292,12 @@ namespace PLATE.Client
             { nameof(Health_DoFracture), () => Health_DoFracture },
             { nameof(GrenadeExplosionHelper), () => GrenadeExplosionHelper },
             { nameof(Grenade_Explosion), () => Grenade_Explosion },
+            { nameof(BotsGroup), () => BotsGroup },
+            { nameof(BotHearingSensor), () => BotHearingSensor },
+            { nameof(MovementContext), () => MovementContext },
+            { nameof(Bots_AddEnemy), () => Bots_AddEnemy },
+            { nameof(Bots_HearSound), () => Bots_HearSound },
+            { nameof(Player_DirectApplyMotion), () => Player_DirectApplyMotion },
             { nameof(Health_CanApplyItem), () => Health_CanApplyItem },
             { nameof(Health_ApplyItemOverloads), () =>
                 Health_ApplyItemOverloads.Count > 0 ? Health_ApplyItemOverloads : null },

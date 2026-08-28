@@ -225,6 +225,26 @@ namespace PLATE.Client.Ballistics
             Table.Add(child, carried);
         }
 
+        /// <summary>
+        /// Drops the draw recorded against this projectile object.
+        ///
+        /// Same reason as <see cref="ProjectileState.Forget"/> and a worse consequence.
+        /// The engine pools its shots, and a recycled object arrives here still carrying
+        /// the previous bullet's neck length, its tissue scale — and its memory of which
+        /// organs it has already been through. A round whose pool predecessor put a
+        /// lethal channel through a heart has its own heart hit silenced by
+        /// <see cref="FirstLethal"/>, because as far as this table is concerned it is the
+        /// same shot arriving at the same organ twice. Cleared when a projectile is born,
+        /// which is before <see cref="Inherit"/> hands the child its parent's draw.
+        /// </summary>
+        public static void Forget(object projectile)
+        {
+            if (projectile != null)
+            {
+                Table.Remove(projectile);
+            }
+        }
+
         /// <summary>A projectile with no identity to hang a draw on — the median shot.</summary>
         private static readonly ShotSpread Fallback = new ShotSpread
         {
