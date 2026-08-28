@@ -12,7 +12,7 @@ namespace PLATE.Client
     {
         public const string Guid = "com.anamelash.plate";
         public const string Name = "P.L.A.T.E.";
-        public const string Version = "1.3.2";
+        public const string Version = "1.4.0";
 
         internal static ManualLogSource Log;
         internal static Harmony HarmonyInstance;
@@ -46,6 +46,14 @@ namespace PLATE.Client
                 RunPatchTargetsSelfTest();
             }
 
+            // Birth of a projectile: the exit state of a barrier, and the clearing of
+            // everything the pooled shot object was carrying from a previous life.
+            // Applied whatever the modules are set to, and FIRST — the clearing is a
+            // wound-model correctness fix as much as a barrier one (a recycled shot
+            // inherits the previous bullet's spread draw and its memory of which organs
+            // it has already destroyed), and the exit-state half gates itself at runtime.
+            ShotLifecyclePatches.Apply(HarmonyInstance);
+
             // Terminal ballistics.
             // Applied BEFORE the overlay so its postfixes log the already-corrected values.
             if (PlateClientConfig.BallisticsEnabled.Value)
@@ -56,6 +64,15 @@ namespace PLATE.Client
                 // trigger sits in the wound model, so the ticker follows this module
                 gameObject.AddComponent<Blood.DisorientationTicker>();
                 Log.LogInfo("[PLATE] Ballistics enabled");
+            }
+
+            // Environment barriers. Its own module: the walls do not need the wound
+            // model and the wound model does not need them, and either half is worth
+            // having on its own. Applied after ballistics so the overlay still sees
+            // corrected values last.
+            if (PlateClientConfig.ObstacleEnabled.Value)
+            {
+                ObstaclePatches.Apply(HarmonyInstance);
             }
 
             // Blood system + the bar in the Health tab
@@ -80,6 +97,12 @@ namespace PLATE.Client
             // rather than only when something is off-default, so that flipping a switch
             // in F12 takes effect the way every other setting in the mod does.
             SurvivabilityPatches.Apply(HarmonyInstance);
+
+            // Debug field tools (section 6): ghost mode and the speed multiplier.
+            // Applied whatever the modules are set to, for the same reason as above —
+            // they are gated at runtime by their own F12 values.
+            GhostPatches.Apply(HarmonyInstance);
+            gameObject.AddComponent<GhostTicker>();
 
             // Hit overlay
             if (PlateClientConfig.OverlayEnabled.Value)
@@ -120,6 +143,11 @@ namespace PLATE.Client
             {
                 HitFeed.WriteHookReport();
                 _warmed.Clear();
+
+                // the "material not in the book" report is per raid: which map you were
+                // on is half of what the line is worth. Cleared here rather than by the
+                // overlay, which is off by default.
+                ObstaclePatches.ResetRaidState();
             }
 
             _wasInRaid = inRaid;
