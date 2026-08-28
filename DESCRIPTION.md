@@ -70,6 +70,20 @@ Buying zeroed or heavily damaged armor means you're just gambling that the next 
 
 Even if the plate stops the round, Newton always gets his cut. You can still suffer pain, stamina drain, and contusions. Your helmet might catch a bullet, but you'll still be seeing stars and fighting a massive concussion.
 
+## Cover Is a Thing Again
+
+The wall between you and the guy shooting at you used to be a dice roll: his penetration number against a number the level designer typed onto the collider. Whatever won the roll came out the other side at full speed, damage untouched, as if the wall had been a rumour.
+
+Now every obstacle is a material and a thickness, and going through it costs.
+
+- **Doors are doors.** A wooden one is 50 mm of wood, an office steel one is a plate, a tin one is two skins over a frame. Bunker blast doors are still shut and will remain shut.
+- **A drum is not a safe.** Barrels, canisters, container panels and car bodies are skin around air. You pay for the wall going in and the wall coming out, not for the six hundred millimetres of nothing in between.
+- **Cars are cover, briefly.** A flank is 3 mm and you cross two of them. A pistol round dies inside the car. Rifle ball crosses the whole thing and finds whoever thought a Lada was a plate carrier.
+- **The second wall costs more than the first.** A bullet leaving a barrier is tumbling, and a tumbling bullet hits the next one sideways. Rifle rounds that used to thread twelve sheets of tin now die on the sixth.
+- **Ricochet belongs to the surface.** Concrete, wood, soil and water each have their own angle, and a surface can only bounce a round it could have stopped. Table tops have stopped mirroring P90 fire back at the man standing over them.
+
+Shooting through cover works. It just isn't free, and neither is hiding behind it.
+
 ## Surviving the Aftermath
 
 When the shooting stops, don't instantly go prone on the body to loot six mags of warm PRS. Find cover. Reload. Check if you're leaking.

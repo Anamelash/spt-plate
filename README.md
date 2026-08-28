@@ -13,7 +13,7 @@ armor material and the actual path through the body all matter. If the rest of
 your SPT mod setup handles AI, spawns, progression, quests, loot or graphics,
 P.L.A.T.E. handles what happens when the shooting starts.
 
-**Current release:** P.L.A.T.E. 1.3.2
+**Current release:** P.L.A.T.E. 1.4.0
 
 **Supported game:** SPT 4.1.x (including the current 4.1.3) / EFT 0.16.9.40087
 
@@ -39,7 +39,8 @@ Prebuilt packages are published under
 [latest release](https://github.com/Anamelash/spt-plate/releases/latest) for
 SPT 4.1.x, including the current 4.1.3. For SPT 4.0.13, take the newest 0.x
 release: [0.11.0](https://github.com/Anamelash/spt-plate/releases/tag/v0.11.0)
-carries everything 1.3.2 does.
+carries everything 1.3.2 did. The environment model that arrived in 1.4.0 has
+not been ported to that line yet.
 
 Do not mix releases. The client plugin and server mod work as a pair and are
 tied to the SPT and EFT APIs they were built against. Two matching halves or no
@@ -104,6 +105,26 @@ Steel and titanium can shrug off shallow impacts without becoming disposable.
 Aramid and UHMWPE mainly pay when penetrated. Ceramic pays for serious stops
 because ceramic really does turn into yesterday's construction material. One
 durability curve no longer pretends those are the same thing.
+
+### Cover Is a Barrier, Not a Coin Flip
+
+Vanilla settles a wall by rolling the cartridge's penetration number against a
+number typed onto the collider, and whatever wins the roll carries on at full
+speed. Here an obstacle has a material and a thickness, and crossing it costs
+the round exactly what it should: shoot a man through a door and he takes what
+got through the door, not what left the muzzle.
+
+Thickness is measured off the collider along the real line of flight, with the
+material's own figure as the fallback. Sheet things are read as a skin around
+air, because a barrel is a wall, some air and another wall rather than 600 mm
+of steel. What comes out the far side is slower, often deformed, and tumbling —
+so the second wall costs more than the first. Ricochet belongs to the surface
+rather than to the ammunition card, and a surface can only throw off what it
+could have stopped.
+
+Materials, thicknesses and the reasoning behind each number live in
+`obstacle-reference.jsonc` next to the plugin, in plain text you can edit. Read
+the [environment model](docs/MODEL.md#environment-barriers) for the derivations.
 
 ### The Body Has an Inside
 
@@ -172,6 +193,8 @@ loss rate. Position, scale, color and an optional time estimate are configurable
   rifle bullet.
 - A stopped round can leave the wearer bruised, concussed, winded or worse
   without granting the projectile a penetration it did not earn.
+- Shooting through cover works, and costs. The man behind the door takes what
+  survived the door, and the round that crossed it arrives tumbling.
 - An enemy who breaks contact may be flanking. He may also be emptying his
   tactical fluid behind a bush. The same rules apply to you.
 
@@ -199,7 +222,7 @@ For the complete player-facing comparison, see
 
 | Component | Required version |
 |---|---|
-| P.L.A.T.E. | 1.3.2 |
+| P.L.A.T.E. | 1.4.0 |
 | SPT | 4.1.x, including the current 4.1.3 |
 | EFT client | 0.16.9.40087 |
 | .NET SDK | 10, only when building from source |
@@ -220,9 +243,10 @@ P.L.A.T.E. releases follow the SPT compatibility split below:
 SPT 4.1.3 refuses to start a server that registers items as late as P.L.A.T.E.
 1.3.0 did, so on 4.1.3 the mod has to be 1.3.1 or newer.
 
-The number is the server API, not the amount of mod behind it: 0.11.0 and 1.3.2
-model the same physics and ship the same features, and 0.11.0 is the newest
-release for SPT 4.0.13. Neither line loads on the other's server.
+The number is the server API, not the amount of mod behind it. 0.11.0 is the
+newest release for SPT 4.0.13 and matches 1.3.2 feature for feature; the
+environment model added in 1.4.0 has not reached it yet. Neither line loads on
+the other's server.
 
 Mods that overhaul the same ballistics, armor or medical systems are incompatible.
 Modded weapons, ammunition and armor are supported when they provide sensible
