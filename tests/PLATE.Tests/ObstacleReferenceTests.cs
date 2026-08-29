@@ -166,6 +166,12 @@ namespace PLATE.Tests
         [InlineData("MetalThick", "Transformer_substation_03_L_Door_01", "MetalThick")]
         // the player's ruling: a closed ammo crate is its contents, not its boards
         [InlineData("WoodThick", "Military_AmmoBox122mm_Closed_BALLISTIC_Metalthick", "WoodThick")]
+        // the same shield the other way round: a shower locker's own word says
+        // concrete, and sheet is what a locker is made of
+        [InlineData("MetalThin", "Case_shower_BALLISTIC_Concrete", "MetalThin")]
+        [InlineData("MetalThin", "Case_shower_Door_BALLISTIC_Concrete", "MetalThin")]
+        // the room around them is not a locker: a concrete preset keeps its word
+        [InlineData("Concrete", "Admin_office_Shower_BALLISTIC_concrete", "Concrete")]
         [InlineData("WoodThick", "pallet_weapon_box_1_BALLISTIC_woodthick", "WoodThin")]
         [InlineData("WoodThin", "Poleno_1_LOD0", "WoodThick")]
         [InlineData("Fabric", "military_Sandbag_01_BALLISTIC_fabric", "Sand")]
@@ -413,10 +419,10 @@ namespace PLATE.Tests
         /// </summary>
         [Theory]
         // the classes no hand-written rule had reached: metal door frames and sling
-        // loops tagged as boards, a shower block tagged as tin, the Labs cells tagged
-        // as mesh, and a material with no rules of its own at all
+        // loops tagged as boards, the Labs cells tagged as mesh, and a material with
+        // no rules of its own at all. The shower block used to be the fourth of these
+        // and is not any more — its word is wrong about it, so identity shields it
         [InlineData("WoodThin", "Metal_sling_loop_01_BALLISTIC_metalthin", "MetalThin")]
-        [InlineData("MetalThin", "Case_shower_01_BALLISTIC_concrete", "Concrete")]
         [InlineData("Chainfence", "lab_basement_cell_02_BALLISTIC_metalthin", "MetalThin")]
         [InlineData("MetalNoDecal", "Ladder_frame_BALLISTIC_metalthin", "MetalThin")]
         // BSG's misspellings are in the alias table on purpose: they are in shipped

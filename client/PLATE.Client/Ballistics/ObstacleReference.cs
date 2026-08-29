@@ -1483,6 +1483,14 @@ namespace PLATE.Client.Ballistics
                         // not a car door. NOT bare 'loader' — autoloader is a truck
                         ""loader_01"": ""StructuralSteel"",
                         ""loader_small"": ""StructuralSteel"",
+                        // a shower block's lockers name the material back at
+                        // themselves — a shield, not a change. Their word is
+                        // ""concrete"" (BSG tagged the whole block that way; the census
+                        // counted 454 sheet colliders saying it), and without this the
+                        // suffix layer reads a changing-room locker as a concrete slab:
+                        // a raid put a 5.45 through both faces of one and the round
+                        // arrived at the far wall with a quarter of its speed left
+                        ""case_shower"": ""MetalThin"",
                         // a cable drum is wound copper, whatever its rim is made of
                         ""cable_drum"": ""Cable"",
                         ""kabel_pallet"": ""Cable"",
@@ -2168,7 +2176,11 @@ namespace PLATE.Client.Ballistics
   // 23 — The rest of the gates, all of them found on the same plain-69 anchor: swing
   //      gates, the PTOR checkpoint, garage gates and transfer gateways read as the
   //      leaves they are, and roller shutters as the 1 mm curtain of slats they are.
-  ""Version"": 23
+  // 24 — The shower block's lockers are sheet again. They were the survey's own
+  //      open question — 454 sheet colliders whose designer word says ""concrete"" —
+  //      and a raid answered it: read as concrete slabs, a locker cost a 5.45 three
+  //      quarters of its velocity across two faces of tin.
+  ""Version"": 24
 }
 ";
     }
