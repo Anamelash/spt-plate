@@ -1359,7 +1359,11 @@ suffix, and dead branches kept as insurance for maps nobody has surveyed. The fa
   sheet like a Kamaz door. Cast-iron heating radiators go to the GunSafe shell: ~4 mm
   of iron plus a water column is exactly what that 4 mm shell prices, while the bare
   word `radiator` was refused — the Heating_Radiator_Set parent hangs over a family
-  of pipes the ancestor climb would have turned into safes.
+  of pipes the ancestor climb would have turned into safes. A shower block's lockers
+  (`case_shower`) name sheet back at themselves, the same kind of shield as the ammo
+  crate below: BSG tagged the whole block `concrete`, which is 454 of the census's
+  sheet colliders saying it, and left to the suffix layer a changing-room locker is
+  read as a concrete slab.
 - *Wood*: crates that are boards around air → the board shell; firewood billets
   (`poleno`) the other way, boards → solid timber; a closed ammunition crate names
   its own material back at itself (`ammobox` → `WoodThick`), which is a shield rather
