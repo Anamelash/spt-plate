@@ -88,6 +88,14 @@ titanium, ceramic, UHMWPE, aramid and composite plates respond differently to
 the same projectile. Penetration depends on the core, impact velocity and angle
 rather than a direct comparison between two item-card values.
 
+The protection class on the item card is a GOST R 50744-95 class: class N means
+БрN, class 0 is the anti-fragment tier (glasses, replica helmets, headsets), and
+class 6 — the 12.7 mm AP round — is deliberately empty, because no wearable
+armor stops it. Each item's class is derived from the real product it is
+modelled on: a published certificate first, otherwise what its documented
+construction actually stops. The vanilla habit of reading Penetration against
+ten times the class does not apply.
+
 The projectile core may remain intact, flatten or fracture on impact. A
 penetrating projectile loses energy and may also lose mass or stability. A
 stopped projectile can still cause behind-armor blunt trauma. Details are in
