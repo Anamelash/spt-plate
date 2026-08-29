@@ -186,11 +186,17 @@ public class ArmorNormalizer(
             var stated = spec is { ThicknessMm: <= 0 } ? spec : null;
             spec = stated == null ? spec : null;
 
+            // the game is right about the material far more often than not, so this
+            // corrects the exceptions rather than overriding everything. Whichever
+            // kind of entry answered, the correction has to land before the ceiling
+            // below reads the material: a shell the game files under Combined is the
+            // aramid the book says it is, and it caps like aramid
+            var corrected = stated ?? spec;
             var was = "";
-            if (stated != null && stated.Material.Length > 0 && stated.Material != material)
+            if (corrected != null && corrected.Material.Length > 0 && corrected.Material != material)
             {
                 was = material;
-                material = stated.Material;
+                material = corrected.Material;
                 p.ArmorMaterial = Enum.TryParse<SPTarkov.Server.Core.Models.Enums.ArmorMaterial>(
                     material, out var known2) ? known2 : p.ArmorMaterial;
             }
@@ -296,16 +302,6 @@ public class ArmorNormalizer(
             if (spec.ShearMPa > 0 || spec.YieldMPa > 0 || spec.HardnessHv > 0)
             {
                 _grade[item.Id] = (spec.ShearMPa, spec.YieldMPa, spec.HardnessHv);
-            }
-
-            // the game is right about the material far more often than not, so this
-            // corrects the exceptions rather than overriding everything
-            if (spec.Material.Length > 0 && spec.Material != material)
-            {
-                row.MaterialWas = material;
-                row.Material = spec.Material;
-                p.ArmorMaterial = Enum.TryParse<SPTarkov.Server.Core.Models.Enums.ArmorMaterial>(
-                    spec.Material, out var parsed) ? parsed : p.ArmorMaterial;
             }
         }
 

@@ -650,6 +650,11 @@ fragment gate, the fallback threshold below, the item card, other mods — belie
 the label. An aramid package rated 3 was being modelled as the class 2 package it is
 and gated fragments as though it were a class 3 plate.
 
+The material the ceiling reads is the book's, not the game's: the construction is
+identified first, so a shell the game files under Combined caps like the aramid it
+is actually made of. That covers the aventail too — discrete fabric hung off a
+helmet caps as the shell it hangs from, not as a sewn package.
+
 The one exemption is a hard element the game files under some other slot, and it is
 data rather than a rule: the Velocity SLAAP is 18 mm of polyethylene against the
 7.3 mm of the thickest shell anyone fields — a rifle-rated applique that bolts onto
