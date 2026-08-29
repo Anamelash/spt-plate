@@ -589,7 +589,7 @@ namespace PLATE.Client.Patches
         /// Which limb segment the wound is in. A thigh is not a calf and an upper arm is
         /// not a forearm — they carry different bones and so different odds — but only the
         /// ballistics side knows which of them the bullet went into: it reads the collider
-        /// the shot actually struck. <see cref="DamageInfo"/> carries a field of the same
+        /// the shot actually struck. <see cref="DamageInfoStruct"/> carries a field of the same
         /// name and it does not arrive usable here; over a raid of 1625 limb hits the
         /// fracture roll fired exactly zero times, and the only gate that can swallow all
         /// of them is this one returning a segment with no bone chance. The other two
@@ -597,7 +597,7 @@ namespace PLATE.Client.Patches
         /// fractured" check is honest — on a limb still above zero one fracture blocks
         /// every later roll on it, which is exactly what the next raid's journal showed.
         ///
-        /// So ask the ballistics side first, take DamageInfo only if it names a limb, and
+        /// So ask the ballistics side first, take DamageInfoStruct only if it names a limb, and
         /// otherwise fall back to the body part — which is always right — reading it as the
         /// limb's proximal segment, the larger of the two and so the likelier to be hit.
         /// </summary>

@@ -152,6 +152,117 @@ namespace PLATE.Tests
         }
 
         /// <summary>
+        /// The obstacle module patches the base collider's two virtuals, and it must
+        /// never reach a body through them. What guarantees that is that
+        /// BodyPartCollider declares its own overrides: Harmony rewrites the method it
+        /// is given, and a call that dispatches to an override never enters the base
+        /// body. If a game update drops either override, every hit on a person starts
+        /// going through the wall model — the guards in the patch bodies are the
+        /// backstop, this is the thing that makes them unnecessary.
+        /// </summary>
+        [Theory]
+        [InlineData("IsPenetrated")]
+        [InlineData("Deflects")]
+        public void The_body_overrides_the_collider_virtuals_the_wall_model_patches(string name)
+        {
+            if (Skip) return;
+
+            var baseType = PatchTargets.BallisticCollider;
+            var bodyType = PatchTargets.BodyPartCollider;
+            Assert.NotNull(baseType);
+            Assert.NotNull(bodyType);
+            Assert.True(baseType.IsAssignableFrom(bodyType));
+
+            var onBase = AccessTools.Method(baseType, name);
+            Assert.NotNull(onBase);
+            Assert.True(onBase.IsVirtual, $"{Describe(onBase)} is not virtual");
+
+            var onBody = bodyType.GetMethods(AccessTools.all | BindingFlags.DeclaredOnly)
+                .FirstOrDefault(m => m.Name == name);
+            Assert.True(onBody != null,
+                $"BodyPartCollider no longer overrides {name}: the base patch would " +
+                "start deciding hits on people as if they were walls");
+        }
+
+        /// <summary>
+        /// The obstacle model reads the material and the level straight off the collider
+        /// — the presets are a designer's palette and any scene object may carry any
+        /// value, so the reference book is keyed on the pair.
+        /// </summary>
+        [Fact]
+        public void A_collider_still_says_what_it_is_and_how_hard_it_is()
+        {
+            if (Skip) return;
+
+            var type = PatchTargets.BallisticCollider;
+            var material = AccessTools.Property(type, "TypeOfMaterial");
+            var level = AccessTools.Field(type, "PenetrationLevel");
+
+            Assert.NotNull(material);
+            Assert.Equal("MaterialType", material.PropertyType.Name);
+            Assert.NotNull(level);
+            Assert.Equal(typeof(float), level.FieldType);
+        }
+
+        /// <summary>
+        /// Harmony binds a prefix's arguments to the target's parameters BY NAME, and the
+        /// prefix on the projectile constructor rewrites three of them. A rename in a
+        /// future SPT would not fail to compile and would not fail to patch: the hook
+        /// would simply stop receiving the arguments it exists to change, and both the
+        /// barrier exit state and every ricochet would quietly revert to vanilla speeds
+        /// with nothing in any log to say so.
+        ///
+        /// `parent` is in the list for the same reason: it is what identifies whose
+        /// collision spawned this projectile, and without it the prefix cannot tell a
+        /// muzzle shot from a bullet coming out of a door.
+        ///
+        /// The mass and the calibre are there because a fragment is a smaller projectile
+        /// than the bullet it broke off, and saying so at the spawn is also what gives
+        /// vanilla's own drag the fragment's sectional density instead of the parent's.
+        /// </summary>
+        [Theory]
+        [InlineData("origin")]
+        [InlineData("direction")]
+        [InlineData("speed")]
+        [InlineData("bulletMassGram")]
+        [InlineData("bulletDiameterMilimeters")]
+        [InlineData("parent")]
+        public void The_projectile_constructor_still_names_its_arguments(string name)
+        {
+            if (Skip) return;
+
+            var create = PatchTargets.Bullet_Create;
+            Assert.NotNull(create);
+            Assert.True(create.IsStatic, "EftBulletClass.Create is expected to be the static factory");
+
+            var names = create.GetParameters().Select(p => p.Name).ToList();
+            Assert.True(names.Contains(name),
+                $"EftBulletClass.Create no longer has a parameter called '{name}': " +
+                string.Join(", ", names));
+        }
+
+        /// <summary>
+        /// And the three it rewrites must still be the types the prefix takes them by
+        /// reference as — a float speed turned into a Vector3 velocity would fail to
+        /// patch loudly, but a Vector3 turned into a Vector2 would not.
+        /// </summary>
+        [Fact]
+        public void The_projectile_constructor_still_takes_a_point_a_direction_and_a_speed()
+        {
+            if (Skip) return;
+
+            var byName = PatchTargets.Bullet_Create.GetParameters()
+                .ToDictionary(p => p.Name, p => p.ParameterType);
+
+            Assert.Equal(typeof(UnityEngine.Vector3), byName["origin"]);
+            Assert.Equal(typeof(UnityEngine.Vector3), byName["direction"]);
+            Assert.Equal(typeof(float), byName["speed"]);
+            Assert.Equal(typeof(float), byName["bulletMassGram"]);
+            Assert.Equal(typeof(float), byName["bulletDiameterMilimeters"]);
+            Assert.Equal(PatchTargets.EftBulletClass, byName["parent"]);
+        }
+
+        /// <summary>
         /// The 0.9.2 regression: hook telemetry attached a second Harmony patch to
         /// every target. Observing something must never modify it.
         /// </summary>

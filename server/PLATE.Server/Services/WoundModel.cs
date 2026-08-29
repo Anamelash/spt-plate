@@ -35,8 +35,14 @@ public static class WoundModel
     /// <param name="v">Impact velocity (muzzle velocity on the server), m/s.</param>
     /// <param name="x">Expansiveness index 0..1.</param>
     /// <param name="coreMassFrac">Mass share of the hard core, which never breaks up.</param>
+    /// <param name="lengthMm">Measured bullet length from the reference book, mm;
+    /// 0 = none published, and the geometry infers it from mass over calibre. The client
+    /// is sent the same figure per cartridge (/plate/ammo-data) and feeds it to
+    /// ClientWoundModel, so the damage baked onto the card and the damage a raid deals
+    /// come out of the same length.</param>
     public static Result Compute(double massG, double diaMm, double v, double x,
-        double coreMassFrac, PlateServerConfig.AmmoNormalizerSection a)
+        double coreMassFrac, PlateServerConfig.AmmoNormalizerSection a,
+        double lengthMm = 0)
     {
         var area = Math.PI * diaMm * diaMm / 4.0;          // mm²
         var e0 = 0.5 * (massG / 1000.0) * v * v;           // J
@@ -62,7 +68,7 @@ public static class WoundModel
         var yaw = YawTuning(a);
         var pc = YawModel.CavityVolumeMm3(
             YawModel.NoseAreaMm2(diaMm, x, a.ExpansionAreaFactor),
-            YawModel.SideAreaMm2(massG, diaMm, x, yaw),
+            YawModel.SideAreaMm2(massG, diaMm, x, yaw, lengthMm),
             YawModel.MedianNeckMm(diaMm, a.YawNeckCalibres),
             inBody) / a.WoundVolumePerHp;
 

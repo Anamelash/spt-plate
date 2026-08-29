@@ -32,6 +32,14 @@ namespace PLATE.Client.Ballistics
 
             /// <summary>Share of large fragments (1/grenade FragmentsCount); shrapnel only.</summary>
             public double? LargeShare { get; set; }
+
+            /// <summary>
+            /// Measured bullet length, mm, where the reference book publishes one.
+            /// 0 — nobody did, and the geometry infers it from mass over calibre. An
+            /// older server does not send the field at all, which reads as the same 0
+            /// and therefore as the behaviour that was there before.
+            /// </summary>
+            public double L { get; set; }
         }
 
         /// <summary>Wound channel model constants (server-side AmmoNormalizer config).</summary>
@@ -238,6 +246,24 @@ namespace PLATE.Client.Ballistics
 
             areaFrac = 1f;
             massFrac = 1f;
+        }
+
+        /// <summary>
+        /// Measured bullet length for a cartridge, mm; 0 when the book does not publish
+        /// one, when the server is not there at all, or when it is an older one. Zero is
+        /// what every caller passes on to YawModel, which then infers the length from
+        /// mass over calibre — never a crash and never a zero-length bullet.
+        /// </summary>
+        public static double GetLengthMm(string ammoTemplateId)
+        {
+            EnsureLoaded();
+            if (ammoTemplateId != null && _data != null &&
+                _data.TryGetValue(ammoTemplateId, out var e) && e.L > 0)
+            {
+                return e.L;
+            }
+
+            return 0;
         }
 
         /// <summary>Vickers hardness of the core; 60 (lead and copper) when unknown.</summary>

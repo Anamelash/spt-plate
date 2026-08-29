@@ -1,6 +1,8 @@
 using System;
 using System.Reflection;
+using Comfort.Common;
 using EFT;
+using EFT.Ballistics;
 using EFT.HealthSystem;
 using EFT.InventoryLogic;
 using HarmonyLib;
@@ -22,6 +24,12 @@ namespace PLATE.Client.Patches
             PatchSafe(harmony, PatchTargets.Armor_ApplyDamage, nameof(ArmorApplyDamagePostfix),
                 prefixName: nameof(ArmorApplyDamagePrefix));
             PatchSafe(harmony, PatchTargets.Bullet_DegradeOnHit, nameof(BulletDegradePostfix));
+
+            // Obstacles, on the same method and deliberately as its own hook: it runs
+            // after CreateFragments, so it sees what the engine actually decided —
+            // the bullet state, the child and its speed — which the gate prefixes
+            // upstream cannot, because the child does not exist yet when they run.
+            PatchSafe(harmony, PatchTargets.Bullet_DegradeOnHit, nameof(ObstacleHitPostfix));
             PatchSafe(harmony, PatchTargets.Bullet_Overpenetrate, nameof(BulletOverpenPostfix));
             PatchSafe(harmony, PatchTargets.Bullet_Fragment, nameof(BulletFragmentPostfix));
 
@@ -185,9 +193,20 @@ namespace PLATE.Client.Patches
 
         private static bool Off => !PlateClientConfig.OverlayEnabled.Value;
 
+        /// <summary>
+        /// Which projectile this is, for the journal and for stitching an impact to the
+        /// damage it caused.
+        ///
+        /// The same serial the obstacle journal uses, and for the same reason: this used
+        /// to be built from `RandomSeed`, which looks like an identity and is not one —
+        /// a primary shot draws it from a range of 512, so the pellets of one volley
+        /// share it routinely. A label that collides is a nuisance; a STITCH that
+        /// collides attributes one bullet's damage to another, which is worse, and this
+        /// value is what ties `BulletImpact` to `ApplyDamage`.
+        /// </summary>
         private static string ChainOf(EftBulletClass shot)
         {
-            return $"b{shot.RandomSeed & 0xfff:x3}/{shot.FragmentIndex}";
+            return HitFeed.ShotId(shot);
         }
 
         private static string FlagsOf(EftBulletClass shot)
@@ -277,6 +296,28 @@ namespace PLATE.Client.Patches
                 HitFeed.PushPanel(
                     $"{OverlayHud.NameOf(victim)} {bodyPart} -{applied:0.#} (raw {damageInfo.Damage:0.#})" +
                     $"{hpAfter} [{tag}]{extra}");
+
+                // A marker where the bullet actually landed. Filtered hard on "I fired
+                // it" rather than through PassesFightFilter: the tool is specified as
+                // the player's own shots, and its filter must not move when someone
+                // turns off "Only my fights" to watch a bot fight.
+                //
+                // F is what the flesh took, B is what came through the armour as blunt
+                // trauma — in PLATE a blocked hit IS the BABT, so the two are exclusive
+                // and the pair reads as "which of the two happened, and how much".
+                if (PlateClientConfig.MarkersEnabled.Value &&
+                    LocalPlayerRef.IsShooter(aggressorId))
+                {
+                    // hung on the bone the bullet actually hit, so it travels with the
+                    // body: a marker left at the world point a target has since walked
+                    // away from is evidence about nothing. The bone comes from the
+                    // ballistics side — the damage event knows the victim and the number
+                    // but not where on the rig it landed.
+                    HitMarkers.Add(damageInfo.HitPoint, damageInfo.Direction,
+                        blocked ? $"F:0 B:{applied:0.#}" : $"F:{applied:0.#} B:0",
+                        blocked ? HitMarkers.BodyBlocked : HitMarkers.BodyPenetrated,
+                        BallisticsPatches.HitBoneThisFrame);
+                }
             }
             catch (Exception ex)
             {
@@ -355,6 +396,215 @@ namespace PLATE.Client.Patches
             catch (Exception ex)
             {
                 LogPatchError(nameof(BulletDegradePostfix), ex);
+            }
+        }
+
+        /// <summary>
+        /// Everything the player's shots meet that is not a person: one journal line and
+        /// one world marker per interaction, penetration, stop and bounce alike.
+        ///
+        /// Deliberately not gated on the obstacle module. Its whole value during the
+        /// module's own smoke test is that the same instrument reads the vanilla tract
+        /// and the modelled one, so "before" and "after" are the same measurement.
+        ///
+        /// A postfix on HandleCollision runs after CreateFragments, which is what makes
+        /// the outgoing state readable at all: the child exists, the bullet state is
+        /// final, and the obstacle model's verdict for this collision is still on its
+        /// slot.
+        /// </summary>
+        private static void ObstacleHitPostfix(EftBulletClass __instance)
+        {
+            PatchStats.Hit($"overlay:{nameof(ObstacleHitPostfix)}");
+            var mode = PlateClientConfig.ObstacleLog.Value;
+            var wantSurvey = mode == ObstacleLogMode.Aggregated;
+
+            // Neither obstacle journal answers to the overlay's own live toggle. The
+            // survey never did, on the argument that turning the overlay off mid-walk to
+            // save frames must not silently stop a measurement — and the per-hit line
+            // did, for no reason anyone wrote down. The raid that found it produced 1 142
+            // model lines and ZERO engine lines, so the one comparison the two channels
+            // exist for ("what the model decided" against "what the game then did") could
+            // not be made at all.
+            var wantLine = mode == ObstacleLogMode.EveryHit;
+            if (Off && !wantSurvey && !wantLine)
+            {
+                return;
+            }
+
+            try
+            {
+                var collider = __instance.HittedBallisticCollider;
+                if (collider == null || collider is BodyPartCollider)
+                {
+                    return; // bodies have their own marker, on the damage event
+                }
+
+                if (!LocalPlayerRef.IsShooter(__instance.PlayerProfileID))
+                {
+                    return; // the spec is the player's own shots, and a firefight is loud
+                }
+
+                // The far face of a crossing the model already charged. Both instruments
+                // fire on every COLLISION, and without this they report a free exit as a
+                // second, full-price crossing: two markers six centimetres apart, both
+                // labelled with the whole thickness, and n=8 on a door four shots went
+                // through.
+                var freeExit = ObstaclePatches.FreeExitThisHit(__instance, collider);
+
+                if (wantSurvey)
+                {
+                    var got = ObstaclePatches.TryMeasureThicknessMm(__instance, out var chord);
+                    ObstacleSurvey.Note(
+                        Singleton<GameWorld>.Instance?.LocationId ?? "?",
+                        NameOfObject(collider),
+                        ParentChain(collider),
+                        ObstaclePatches.MaterialOf(collider),
+                        collider.PenetrationLevel,
+                        chord, __instance.Float_3, got,
+                        Time.time, freeExit);
+                }
+
+                var wantMarker = !Off && PlateClientConfig.MarkersEnabled.Value;
+                if (!wantMarker && !wantLine)
+                {
+                    return;
+                }
+
+                var state = __instance.BulletState.ToString();
+                var stopped = state == nameof(EftBulletClass.EBulletState.StopHit);
+                var ricochet = state == nameof(EftBulletClass.EBulletState.RicochetHit);
+
+                var vIn = __instance.Vector3_1.magnitude;
+                var dirIn = __instance.Vector3_1.sqrMagnitude > 1e-8f
+                    ? __instance.Vector3_1.normalized
+                    : __instance.Direction;
+
+                var child = __instance.Fragments.Count > 0
+                    ? __instance.Fragments[__instance.Fragments.Count - 1]
+                    : null;
+
+                float? vOut = null;
+                float? devDeg = null;
+                if (child != null)
+                {
+                    vOut = child.Vector3_1.magnitude;
+                    if (child.Vector3_1.sqrMagnitude > 1e-8f)
+                    {
+                        devDeg = Vector3.Angle(dirIn, child.Vector3_1.normalized);
+                    }
+                }
+
+                if (wantLine)
+                {
+                    // into the obstacle file, next to the model's own line for the same
+                    // collision and never into the event journals: walls were most of
+                    // those by volume and the event journal is about what happens to
+                    // bodies. Sitting in the same file is also what makes the two
+                    // readings of one collision comparable at a glance.
+                    ObstacleSurvey.LogLine(WallJournal.Line(
+                        ObstaclePatches.MaterialOf(collider),
+                        NameOfObject(collider),
+                        collider.PenetrationLevel,
+                        collider.PenetrationChance,
+                        collider.RicochetChance,
+                        collider.FragmentationChance,
+                        BallisticsPatches.AmmoLabel(__instance),
+                        vIn, vOut, devDeg,
+                        WallJournal.EffectOf(state, ObstaclePatches.DeformedThisHit(__instance)),
+                        !stopped && !ricochet,
+                        ParentChain(collider), HitFeed.ShotId(__instance), freeExit));
+                }
+
+                if (wantMarker)
+                {
+                    // What it was and how much of it there was. The verdict is already in
+                    // the colour — green through, red stopped, yellow bounced — so
+                    // spelling it out again in the label wastes the one line of text the
+                    // marker gets. What the colour cannot say is the number the whole
+                    // decision rests on: the thickness the model charged for, which for a
+                    // shell is its wall and NOT the chord through the object. Showing the
+                    // chord there reads as a contradiction — 900 mm of tyre with a hole
+                    // through it — and the marker is meant to explain the verdict.
+                    var text = ObstaclePatches.MaterialOf(collider);
+                    if (freeExit)
+                    {
+                        // no thickness at all here, because none was charged: the label
+                        // used to repeat the entry face's figure and read as a second
+                        // full-price crossing of the same wall. One letter rather than a
+                        // word — the marker gets one line, and this one has to be
+                        // readable next to a neighbour that does carry a number
+                        text += " F";
+                    }
+                    else if (ObstaclePatches.TryThicknessUsedMm(__instance, collider, out var mm,
+                                 out var measured))
+                    {
+                        // where it came from, in one character: the book and the scene
+                        // disagreeing is the thing being debugged
+                        text += $" {mm:0.#}mm{(measured ? "" : "*")}";
+                    }
+
+                    var color = freeExit
+                        ? HitMarkers.WallFreeExit
+                        : ricochet
+                            ? HitMarkers.WallRicochet
+                            : stopped
+                                ? HitMarkers.WallStopped
+                                : HitMarkers.WallPenetrated;
+                    HitMarkers.Add(__instance.HitPoint, dirIn, text, color);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogPatchError(nameof(ObstacleHitPostfix), ex);
+            }
+        }
+
+        /// <summary>
+        /// Which object in the scene this was. The whole point of the journal is that a
+        /// collider carries whatever numbers its designer gave it, so the line has to
+        /// say which door on which map produced them.
+        /// </summary>
+        private static string NameOfObject(BallisticCollider collider)
+        {
+            try
+            {
+                return collider.gameObject != null ? collider.gameObject.name : "?";
+            }
+            catch
+            {
+                return "?";
+            }
+        }
+
+        /// <summary>
+        /// The collider's ancestry, immediate parent first, two levels. Needed because
+        /// half the maps name the collider itself nothing at all — Factory writes
+        /// `Cistern_01_A_BALLISTIC_metalthick`, Shoreline writes `metal` — and the
+        /// prop's real name then lives a transform or two up. Two levels rather than
+        /// one for the same reason: the immediate parent is often a grouping node
+        /// ("Colliders"), and the name after it is the one the survey is for.
+        /// </summary>
+        private static string ParentChain(BallisticCollider collider)
+        {
+            try
+            {
+                var t = collider.transform != null ? collider.transform.parent : null;
+                if (t == null)
+                {
+                    return "-";
+                }
+
+                var chain = t.name;
+                if (t.parent != null)
+                {
+                    chain += "/" + t.parent.name;
+                }
+
+                return chain;
+            }
+            catch
+            {
+                return "-";
             }
         }
 

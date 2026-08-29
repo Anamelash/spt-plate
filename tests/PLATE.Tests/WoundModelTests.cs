@@ -207,5 +207,48 @@ namespace PLATE.Tests
                 last = d.DamageHp;
             }
         }
+
+        /// <summary>
+        /// The client is handed the cartridge's measured length by the server, and it has
+        /// to reach the channel: past the turn a bullet cuts with L by d, so a length read
+        /// a fifth short is a fifth of the permanent cavity missing. 5.45x39 7N6 is the
+        /// case — 24.8 mm measured against 20.4 inferred, because the inference assumes a
+        /// lead core and this one is steel.
+        /// </summary>
+        [Fact]
+        public void A_measured_length_widens_the_channel_past_the_turn()
+        {
+            var p = Params();
+            const float mass = 3.4f;
+            const float dia = 5.6f;
+            const float neck = 60f;   // well inside the chord, so the turn is in the wound
+            const float chord = 400f;
+
+            var inferred = ClientWoundModel.Compute(mass, dia, 880f, 0.25f, 0.42f, chord, p,
+                neck);
+            var measured = ClientWoundModel.Compute(mass, dia, 880f, 0.25f, 0.42f, chord, p,
+                neck, lengthMm: 24.8f);
+
+            Assert.True(measured.Pc > inferred.Pc * 1.15f,
+                $"measured PC {measured.Pc:0.#} is barely over inferred {inferred.Pc:0.#}");
+        }
+
+        /// <summary>
+        /// And where no length was published — an older server, a cartridge the book is
+        /// silent about, or no server at all, which the obstacle module is built to run
+        /// without — the fallback is the inference, unchanged, not a bullet of no length.
+        /// </summary>
+        [Fact]
+        public void No_published_length_leaves_the_channel_exactly_as_it_was()
+        {
+            var p = Params();
+            var absent = ClientWoundModel.Compute(MassG, DiaMm, V, X, 0f, 400f, p, 150f);
+            var zero = ClientWoundModel.Compute(MassG, DiaMm, V, X, 0f, 400f, p, 150f,
+                lengthMm: 0f);
+
+            Assert.Equal(absent.Pc, zero.Pc, 4);
+            Assert.Equal(absent.DamageHp, zero.DamageHp, 4);
+            Assert.True(zero.Pc > 0);
+        }
     }
 }

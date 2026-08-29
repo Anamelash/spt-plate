@@ -17,6 +17,15 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <!--
+      The signed upstream Newtonsoft, NOT the copy in the game's Managed folder. Same
+      assembly identity (13.0.0.0, same public key token), but Unity's build of it fails
+      strong-name verification, which the game's own mono does not check and a .NET
+      Framework test host does: loading it throws before a single obstacle-book test can
+      parse anything. The client still compiles against the game's copy — that is the one
+      that will be loaded in raid.
+    -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
   <ItemGroup>
@@ -56,10 +65,6 @@
     </Reference>
     <Reference Include="ItemComponent.Types">
       <HintPath>$(SptGameDir)\EscapeFromTarkov_Data\Managed\ItemComponent.Types.dll</HintPath>
-      <Private>true</Private>
-    </Reference>
-    <Reference Include="Newtonsoft.Json">
-      <HintPath>$(SptGameDir)\EscapeFromTarkov_Data\Managed\Newtonsoft.Json.dll</HintPath>
       <Private>true</Private>
     </Reference>
   </ItemGroup>

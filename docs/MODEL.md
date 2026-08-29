@@ -22,6 +22,7 @@ shipped defaults, not hardcoded truths.
 - [Penetration](#penetration)
 - [Armor](#armor)
 - [Behind-armor blunt trauma](#behind-armor-blunt-trauma)
+- [Environment barriers](#environment-barriers)
 - [Blood and trauma](#blood-and-trauma)
 - [Ammunition normalization](#ammunition-normalization)
 - [Calibration](#calibration)
@@ -101,8 +102,30 @@ wounds the tissue it passed through.
 
 `N` is the travel before the turn — `YawNeckCalibres · d` as a median, drawn
 log-normally per shot in a raid (see [Spread](#spread)). `L_b` is the
-projectile's length, which is not in any template, so it comes from the one thing
-always known about a bullet — how much mass sits behind its calibre:
+projectile's length. See [Bullet length](#bullet-length) for where it comes from.
+
+Two things fall out of the geometry rather than being written down. A round ball
+comes out the same area whichever way it faces — the square around a circle is
+1.27 times its area and a tumbling projectile averages three quarters of its
+widest face — so buckshot has no broadside to turn into. And a fully expanded
+bullet is short and blunt, so `A_side` never exceeds `A_nose` for it either.
+
+### Bullet length
+
+`L_b` is read twice — as the width of the channel past the turn, above, and as the
+lever arm a barrier tips a projectile over with
+([Yaw](#yaw-and-why-the-second-wall-costs-more-than-the-first)) — and no game
+template carries it. Two sources, in this order.
+
+**Published, when there is one.** The reference book may carry `LengthMm` per
+cartridge, the same idiom as its `MassG` override and for the same class of
+reason: what somebody measured outranks what the model works out. The server
+reads it while normalizing, bakes the card's Damage through it, and publishes it
+to the client per cartridge in `/plate/ammo-data` (`L`), so both halves compute
+the same channel from the same number.
+
+**Inferred, otherwise** — from the one thing always known about a bullet, how
+much mass sits behind its calibre:
 
 ```
 L_b = m / (A · ρ · f)
@@ -112,14 +135,32 @@ with `ρ` the mean density of a jacketed bullet and `f` how much of its bounding
 cylinder it fills once the ogive and boat tail are taken out. That puts 7.62×51
 M80 at 28.8 mm against a measured 28.9 and 5.56×45 M855 at 23.0 against 23.0.
 
-Two things fall out of the geometry rather than being written down. A round ball
-comes out the same area whichever way it faces — the square around a circle is
-1.27 times its area and a tumbling projectile averages three quarters of its
-widest face — so buckshot has no broadside to turn into. And a fully expanded
-bullet is short and blunt, so `A_side` never exceeds `A_nose` for it either.
+The inference's limit is one density for every bullet on earth. That density is a
+lead one, and a steel core is lighter for the same volume, so a steel-cored round
+reads short: 5.45×39 7N6 at 20.4 mm against a measured 24.8, and 9×19 7N31 —
+steel under an aluminium jacket, the lightest construction in the book — at 9.4 mm
+against 13, which is **shorter than its own calibre**. At `L/d ≈ 1.05` the yaw
+term calls that bullet a sphere and no barrier can ever turn it, while the raid
+journal shows it keyholing. That is what the published field is for.
 
-Known limit: one density for every bullet, so a mild-steel core reads short —
-5.45×39 7N6 comes out at 20.4 mm against a measured 24.8.
+The rejected alternative was a mean density derived from the core fractions. Only
+two dozen cartridges publish a core geometry; for everything else those fractions
+are themselves inferred, and a density built on them would be a guess resting on a
+guess. A measured length is a measured length.
+
+Coverage is therefore **deliberately partial**, and what is not covered stays
+inferred at the accuracy above — right to a fraction of a millimetre for a
+lead-cored bullet, up to ~20% short for a steel-cored rifle round and ~30% short
+for the extreme pistol case. Published entries at the time of writing: 7.62×51
+M80 (28.9), 5.56×45 M855 (23.0), 5.45×39 7N6 (24.8), 7.62×39 PS (26.8), 9×19
+7N31 (13.0).
+
+One consequence is worth stating: a published length does not shrink when a
+barrier strips a bullet's jacket, where the inference would have shrunk it with
+the mass. That is the better of the two errors — a jacket-stripped core keeps
+roughly the length of the bullet it came out of, and it is the mass-scaled
+inference that would wrongly make it stubby — but neither is a measurement of a
+deformed projectile, and nothing here models one.
 
 ### Temporary cavity
 
@@ -321,7 +362,25 @@ Fragmentation splits the parent's mass rather than inventing damage: each fragme
 carries `share/n` of the mass, its diameter follows from the cube root of that
 mass, and it is then an ordinary projectile with its own state. Fragments too
 small to matter deposit their energy locally instead of spawning. Total damage
-therefore stays inside the parent bullet's energy budget.
+therefore stays inside the parent bullet's energy budget. Where in the part the
+bullet broke up is not knowable, so a fragment is priced against half the remaining
+chord — the midpoint is the only answer that does not invent one.
+
+**Both of these are handed over at the moment the child is created**, for the reason
+set out under "Environment barriers": the engine builds a projectile's entire
+predicted trajectory when it is born, from the arguments it is born with, and
+overwrites its velocity out of that table on every tick afterwards. A speed written
+into a child after the fact survives until that child's first tick. Inside a person
+this hid well — the next collider is usually met within that same tick, and the
+impact interpolation returns almost all of it — and at the far end of a
+through-and-through it was total: a bullet that had crossed a torso arrived at the
+next thing it hit having paid nothing for the first. So the exit speed goes into the
+spawn arguments, and for a fragment so do its mass and calibre, which additionally
+gives the engine's own drag the fragment's sectional density instead of the parent
+bullet's. A projectile that does not get out, and a fragment under the mass floor,
+are launched at a speed that drops them where they were born rather than at zero: a
+spawn with no speed has no direction either, and the whole trajectory is built from
+direction × speed.
 
 ## Penetration
 
@@ -787,6 +846,949 @@ logistic in `BC`, and a severe branch with lung or heart contusion, guaranteed
 internal bleeding and a long stamina penalty. Vanilla blunt damage is disabled
 when this is active — otherwise the same hit is paid for twice.
 
+## Environment barriers
+
+A wall, a door or a sheet of tin is a barrier with a material and a thickness, and
+the same four values decide it as decide everything else. Vanilla decides it with
+a gate instead: `PenetrationPower > collider.PenetrationLevel` and a coin flip
+weighted by two per-material chances, after which a projectile that got through
+pays **nothing** — the child spawned on the far side of a door carries the
+parent's full speed, damage and penetration. That made the environment
+transparent to the wound model (the same round is as lethal through a plank as in
+the open) and left the obstacle gate as the last consumer of a template number the
+rest of the mod had already replaced.
+
+The engine hands over two facts about what was hit: a `MaterialType` and a
+`PenetrationLevel` read **off the collider**, not off the preset — a map's
+`_MedPen` and `_HiPen` variants are the same material with different numbers, and
+a level designer may put any value on any object. The reference book
+(`obstacle-reference.jsonc`, next to the plugin) turns that pair into a barrier by
+naming a mechanism and the material's own published properties. It also carries a
+thickness per level, interpolated piecewise-linearly between anchors and flat outside
+them, but that is the fallback: where the collider can be measured, the scene wins
+(see below). The level does nothing else: it used to be read as the designer saying
+"this is a wall", overriding the material, and a raid census killed that reading —
+level 100 carries concrete walls alongside an IBC tote's plastic cage, a polythene
+box, a cistern, a boiler, a run of pipes and a patch of gravel floor. It is a blanket
+"not meant to be shot through" applied by hand, and treating it as geometry made a
+plastic tote bulletproof.
+
+### Thickness, and what a collider means
+
+How much of the barrier the projectile has to cross is **measured off the scene**, not
+looked up. At the moment of the hit the engine hands over the collider that was struck;
+a ray cast backwards from beyond it, tested against that collider alone, finds the far
+face, and the distance from the entry point to it is the thickness along the actual line
+of flight. Obliquity is therefore already in the number and the secant law above applies
+only to what the measurement cannot see.
+
+The measurement is taken as it comes. There is no sanity check against the book, and
+that is the point rather than an oversight: a hollow shell measures as the whole shell
+and an electric motor measures as an electric motor, which are exactly the objects a
+per-material anchor gets wrong. The book's anchor is what a thing of that kind *usually*
+is; the collider is the thing. An electric motor and a locker door are both `MetalThick`
+and only one of them should stop a 5.45.
+
+The anchors stay as the fallback, for the cases where the probe comes back with nothing:
+a graze along the surface with no depth to cross, or a collider the ray cannot resolve.
+The journal says which of the two produced the number, `h=2.03mm(measured)` against
+`h=0.7mm(book)`, because when a wall behaves unexpectedly that is the first thing worth
+knowing.
+
+**A collider is not always a path.** Measuring it and believing the number made
+barrels, plastic canisters and the corrugated sides of shipping containers
+bulletproof, and rightly so on its own terms: a barrel is six hundred millimetres of
+collider around one millimetre of steel, and the measurement reports the outline. What
+separates the two cases is not in the geometry — Unity has no hollow flag, and
+`MeshCollider.convex` is about physics representation rather than about the object.
+What the game does carry is the `MaterialType` the level designer put on the collider,
+and `MetalThin` on a barrel is that statement in as many words.
+
+So the book classifies each material as solid through or a shell around air. For a
+solid one the measurement is the path and is used. For a shell the measurement is only
+the outline, and the wall is the book's thickness — which is what the anchor was always
+describing. A shell is also charged **twice** where there was room inside it for two
+walls with air between them: a bullet through a barrel really does cross steel going in
+and coming out. How much room that has to be (`ShellCavityMm`, 150 mm) is the one
+number here that is a judgement about how maps are authored rather than a piece of
+physics, because a container panel is a single sheet whose collider is a few
+centimetres thick and must not be charged as if it were a drum. It is the first thing
+to reach for if sheet metal starts feeling expensive.
+
+**What is measured against that threshold is the projectile's own path inside the
+object, not the chord of the collider.** The distinction does not exist for a drum and
+is everything for the commonest shape in the maps. A trailer, a gantry crane, a stack
+of pipes, a truck body: each is one non-convex mesh drawn around the whole prop, and the
+engine raises a collision at every face of every solid region inside it. The chord of
+such a mesh is metres where its sheet is millimetres, so a chord-based rule read "there
+is room for two walls in here" and charged the exit of each sheet as a second skin —
+crossing two real sheets of one trailer cost up to four. What actually says whether
+there was a cavity is how far the projectile FLEW inside the object since it last
+struck it: two faces of one sheet are millimetres apart however big the mesh around them
+is, and the two skins of a barrel are the barrel's diameter apart. That distance is read
+off the projectile's own ancestry — every crossing spawns a child whose parent remembers
+the collider it hit and where — so the nearest ancestor that hit this same collider is
+the last time the chain was at one of its faces. Whether that ancestor met a front face
+or a back one is deliberately not asked: a projectile crossing the second sheet of a
+trailer meets its front face, and requiring otherwise would break the chain at exactly
+the case this exists for.
+
+Where there is no such ancestor to be had — a fragment born inside the object, a chain
+the engine released early — the chord is still the best guess there is and the old rule
+stands. The cost of the change is that a genuine cavity under 150 mm (a small pipe, a
+box section) drops from two walls to one, which is an undercharge bounded by a single
+wall of the book; if a crane leg should cost two skins, that is a question for its
+material and not for the geometry.
+
+There is one thing that rule cannot see, and it is the commonest object in the game
+that has it: a door leaf. Geometry cannot tell a leaf from a single profiled sheet
+lying inside a deep collider — but the scene can, because BSG park their door leaves
+under a `DOORS` node, and the resolution layers below read it. Where they do not, a
+name can say it instead (`DoorNames`, matched like the vehicle families over the
+collider's own name and its ancestors'): Factory's entrance gate hangs off
+`Enterance_Gate_01` with no such node in the chain at all, and on the maps that do
+have one the gate's wicket door sits four levels below it, out of the ancestor walk's
+reach. The same words carry the rest of the family — swing gates, the PTOR
+checkpoint, garage gates, transfer gateways — which the census found on that same
+plain-69 anchor. Roller shutters are deliberately left out of it and given a material
+instead: a shutter is a curtain of 0.8–1.2 mm slats, one layer and not a leaf of two.
+Either way the answer only says "this is a leaf"; **what a leaf is, the material
+says** (`DoorLeaf` in the book), because nobody builds every door the same way:
+
+- *Sheet that cannot carry itself* — thin steel, plastic — laminates: **a leaf is two
+  skins over a frame** (`DoorLeaf: skins`), and its 46 mm collider is far under the
+  cavity threshold, so without the rule it was charged one sheet where the bullet
+  crosses two. The **entry** face is charged `DoorWalls` (2) of the book's wall and
+  the exit face is left exactly as it was: under the cavity threshold it is free, so
+  a leaf costs two sheets in total and no more.
+- *A wooden door is ~50 mm of wood* (`DoorLeafMm: 50`) — a **fixed** thickness that
+  replaces the shell's one-board anchor. Not the measured chord: a leaf's collider is
+  the door assembly, 100–200 mm deep, and reading that as timber made every wooden
+  door a safe. The collider's depth is the box's, not the wood's.
+- *A thick-steel door is 5 mm* (`DoorLeafMm: 5`) and **one plate**, never two —
+  nobody welds a door out of two slabs. Five is the armoured end of a real steel
+  entrance door (1.5–3 mm of sheet over a frame); the plain-69 anchor it replaces
+  was handing 1 716 ordinary colliders — entrance doors, interior metal doors,
+  garage shutters, the PTOR gates — 10 mm of the heaviest steel in the game, the
+  tier vanilla reserved for .50. A hull off a door still gets the anchor. The
+  bunkers' blast doors and gates go the other way and are `Machinery` by identity
+  outright — a hermetic door is a machine, and nothing a rifle carries opens one
+  (the bunkers' interior shells wear the same material and stay in the
+  building-shell class: they are not doors).
+
+The count rides in the barrier itself, so everything that reads a thickness — the
+ballistic limit, the path, the refusal gate, the journal line and the marker label —
+argues about the same object. Vehicles are deliberately **not** given the flag: their
+3 mm flank already contains the inner panel, and crossing the body is a chord over
+the cavity threshold, which the ordinary shell rule prices at two flanks by itself.
+
+Which materials are shells was settled empirically — first object by object off raid
+journals, then by a survey campaign across four maps (one aggregated measurement line
+per prop; 3 206 props under fire) checked against a census of all 18 430 collider
+names in the shipped scenes. `MetalThin`, `Plastic`, `Fabric`, `Cardboard`,
+`GarbagePaper` and `Glass` are sheets. `WoodThin` joins them because "thin" names a
+board and what is built out of boards — cabinets, crates, pallets, doors, window frames
+— is hollow; its colliders measured 50–96 mm where the board is twenty. `Rubber` joins
+them because every object carrying it was a loader's wheel, whose collider spans the
+whole tyre: read as solid it is unshootable, read as a shell the bullet pays for tread
+going in and tread coming out, which is what a tyre is. `MetalThick` joined with the
+campaign: its census carriers are barrels, cisterns, pipes, gates, trucks and
+dumpsters — outlines around air that measured as metres of "steel" — and the genuinely
+dense ~2.6% (machinery, rails, columns, hatches) is carved out by name instead (see
+the reference below). `WoodThick` stays solid on the opposite evidence — logs, piles,
+stumps and live trees measure honestly, and a closed crate reads as a box full of
+something rather than as a bare plank.
+
+One consequence worth stating. Map geometry is not authored to be shot through, so what
+the model reads is whatever the level designer drew — a door whose collider is twice the
+door, a housing that is solid where it looks hollow — and the mod now inherits those
+decisions instead of averaging over them.
+
+### The path through it
+
+```
+h_path = h / max(|cos θ|, AngleMinCos)
+```
+
+The same secant law and the same clamp as the armor model, for the same reason: a
+graze presents more material, and without a floor it presents infinitely more.
+
+### Steel
+
+A steel sheet is the armor model's problem with a different plate. It goes through
+`BallisticLimit` unchanged — ballistic limit, Recht-Ipson residual, plug mass and
+all — against structural mild steel: 250 MPa yield, 158 HV, 7.85 g/cm³, failing by
+hole expansion rather than by shear plugging, because an alloy with
+strain-hardening reserve left cannot localise a shear band at any price. Those are
+the same figures the published mild-steel ladder in `ArmorStandardTests` is
+measured on, so the environment's sheet metal and the armor model's one non-armor
+alloy are literally the same material.
+
+The thicknesses are what the objects plausibly are: 1.0 mm for the common sheet of
+the environment (`MetalThin` — the survey census put 95% of its instances on one
+level, and the typical carrier is a car body or a cabinet at 0.8–1.0 mm, not the
+0.5–0.7 fence profile the first edition was anchored to), 1.5 mm for scrap lying over
+itself (`GarbageMetal`, 7), 3 mm for a vehicle's flank (`VehicleChassis` — an outer
+panel of 0.8–1.0, an inner panel of 0.7–1.0 and the window mechanism, intrusion beam or
+seat frame between them; a shell, so crossing a whole car pays both flanks), and
+a 2 / 4 / 6 / 10 mm ladder for `MetalThick` at its four levels (7, 18, 32, 69).
+That ladder reproduces vanilla's hierarchy for a pistol round by geometry rather
+than by a threshold — 9x19 ball crosses 2 mm and 4 mm and stops at 6 — and lets a
+rifle round through all of it, which is what a rifle round does to mild steel.
+
+The vehicle flank is anchored the same way, on what shooting cars is known to do: its
+limit for 9x19 ball comes out at 281 m/s, so across a pistol's useful range the near
+door is roughly even odds, what gets through arrives nearly spent, and the far flank
+stops it outright — while rifle ball crosses the whole car with two thirds of its
+speed and a slow heavy pistol round (.45 ACP ball) does not cross even one side.
+
+The limit itself is a distribution, not a number. The certification criteria the
+armor model is calibrated against price the shot-to-shot scatter of a measured V50
+at a coefficient of variation of 0.04, and each encounter with a sheet draws its
+own limit uniformly within the ±2σ of that — one draw per encounter, shared by the
+verdict, the residual and the ricochet gate, because all three describe the same
+square inch of material. Near the limit this makes what the testing standards call
+a zone of mixed results: some rounds dribble through and some stop, instead of
+every round splitting the same way at a single figure.
+
+### Bulk media
+
+Everything with substance — wood, cardboard, rubber, gravel, snow — obeys one law,
+parameterised by the material's own crushing strength and density. A projectile in
+a resisting medium meets a static term (the material's strength) and an inertial
+term (throwing the material aside), which is Poncelet:
+
+```
+F = A · (S·σ + ½·C_d·ρ·v²)
+```
+
+Integrating it gives the depth and the residual directly:
+
+```
+λ      = 1000 · (m/A) / (C_d · ρ) · (1 − ExpansionDepthFactor · X)     mm
+v_stop = √( 2000 · S · σ / (C_d · ρ) )                                 m/s
+D      = λ · ln( 1 + (v/v_stop)² )                                     mm
+v_res  = v_stop · √( max(0, (1 + (v/v_stop)²)·exp(−h_path/λ) − 1) )    m/s
+```
+
+with `σ` in MPa and `ρ` in g/cm³. It gets through when `v_res > 0`, which is the
+same statement as `D > h_path`.
+
+This is the wound channel's law with the static term kept instead of dropped.
+Gelatin has almost no strength, so there the term vanishes and the depth collapses
+to the familiar `λ·2·ln(v/v_stop)`; wood has a great deal of it, and dropping it
+puts a rifle round and a pistol round a factor of two apart in pine when the
+published tables put them a factor of four apart. The consistency check runs the
+other way too: read the wound channel's fitted 50 m/s backwards through the
+`v_stop` expression at ρ = 1.0 and it asks for a strength of 0.25 MPa, which is
+where 10% ordnance gelatin's quasi-static crush strength actually sits.
+
+One difference in reading. Here `D` is where the projectile comes to **rest**,
+because the medium's static term brings it to rest. The wound channel's `L` is
+where tissue stops being **cut**, which happens long before the bullet stops. The
+two are not the same quantity and must not be compared as if they were.
+
+**The two constants come from theory, not from a fit.** `S` is the confinement
+factor cavity-expansion theory puts at three to five times a material's uniaxial
+strength — the same scale the armor model's ductile hole-growth constant sits on —
+and is taken at 5. `C_d` is Poncelet's inertial coefficient, taken at 1, the
+classic value for a blunt cavity. What justifies them is that with pine's own
+published properties (6 MPa across the grain, 0.50 g/cm³) four cartridges spanning
+a factor of six in energy land where Hatcher's white-pine tables put them:
+
+| Cartridge | m, d, v | Model | Published |
+|---|---|---|---|
+| .22 LR | 2.6 g, 5.7 mm, 330 m/s | 132 mm | ~4-6 in |
+| .45 ACP ball | 14.9 g, 11.5 mm, 250 m/s | 120 mm | ~5-6 in |
+| 9x19 ball | 8.0 g, 9.0 mm, 380 m/s | 199 mm | ~6-8 in |
+| .30-06 M2 ball | 9.7 g, 7.82 mm, 838 m/s | 778 mm | ~27-30 in |
+
+Pine's stop velocity comes out at 346 m/s, which is why a pistol bullet spends most
+of its path in wood pushing through it and a rifle bullet spends most of its path
+throwing it aside.
+
+Everything else with bulk carries its own two properties on the same law:
+corrugated board at 0.3 MPa and 0.10 g/cm³, cloth at 0.05 and 0.15, rigid sheet
+plastic at 45 and 1.20, rubber at 15 and 1.20, fired clay tile at 40 and 1.90,
+loose aggregate at 1 and 1.60, compacted snow at 0.3 and 0.35. The thicknesses sit
+beside them in the book.
+
+### Packed media: a carrier and its contents
+
+One material is not enough for palletised cargo, and averaging two into one gets
+both ends wrong at the same time.
+
+A pallet of boxes is two things at once. The **stack** is cardboard around air: clip
+a corner of it and it has to cost about what a cardboard box costs. What is **in**
+the boxes is packed goods, and a round sent down the long axis of a loaded pallet
+meets a great deal of it. The book used to answer both with `GenericSoft`, one
+homogeneous solid at 0.40 g/cm³ over the whole measured chord. That made a corner
+clip stop rifle fire, made the long axis no worse than the short one — the chord is
+the only thing a homogeneous medium reads, and it does not know how much of the
+object is behind it — and made every shot into the same pallet come out identical,
+which is the one thing shooting into stacked cargo demonstrably is not.
+
+So the carrier is crossed **continuously** and the contents are met **discretely**:
+
+```
+layers  = ceil(h_path / SpacingMm)
+step_i  = min(SpacingMm, remaining)                 mm of carrier
+package = ContentFraction · step_i  with probability Chance    mm of contents
+```
+
+Each sub-crossing is the ordinary bulk-media law above; the projectile's whole state
+— speed, mass, calibre, deformable fraction and **yaw** — is handed forward from one
+to the next, so a package met late in the stack is paid for at the yaw the earlier
+ones left. Deflections do not add: each layer throws the round off in its own
+direction, so they combine in quadrature, as a random walk does. `Penetrates` means
+it survived every sub-crossing.
+
+Two properties fall out of this that a homogeneous medium cannot have. The first is
+that the cost grows with the path **in packages** rather than in millimetres, which
+is the difference between a corner and a long axis. The second is that it is a
+**lottery**: two rounds on the same line get different answers, one threading the
+voids and one meeting three boxes of goods.
+
+The shipped numbers: the carrier `BoxCargo` at 0.1 MPa and 0.03 g/cm³ (corrugated
+board at the volume fraction a stack of boxes actually has, i.e. near enough to air)
+and the contents `BoxContent` at 1 MPa and 0.40 g/cm³ — the density the whole pallet
+used to be given, now carried by the fraction of it that earns it. Spacing 300 mm,
+`ContentFraction` 0.3, `Chance` 0.5.
+
+**The spacing is a grain size, not a strength knob.** A package is a *fraction of
+the layer it sits in*, so the expected cargo per metre of path is
+`ContentFraction · Chance` — 15% — whatever the spacing is. It is not perfectly
+neutral, and the reason is worth stating because it was the first thing the model
+got wrong: **once yaw exists, slicing a homogeneous medium is no longer free.** Each
+slice asks the destabilisation question again, and the sum of `Work` over slices
+always exceeds the `Work` of one crossing, so a finer stack is a slightly stronger
+one. Measured over 4 000 seeds, a 5.45 BS across a 1200 mm pallet (mean exit
+velocity, a stop counting as zero):
+
+| Spacing | 600 | 300 | 150 | 100 |
+|---|---|---|---|---|
+| Mean exit, m/s | 405 | 325 | 281 | 265 |
+
+It converges, and halving the shipped spacing costs 13% of the answer. That is the
+honest residue of the mechanism; it is pinned as a band under a fifth rather than
+claimed to be nothing, and it is why the spacing is a weak lever rather than a free
+parameter.
+
+**Measured behaviour.** 5.45 BS (3.68 g, 5.6 mm, 850 m/s) and 9x19 ball (8.0 g,
+9.0 mm, 380 m/s), rigid, square on, exit velocity by how many packages the draw
+actually produced:
+
+| Packages in 1200 mm | 0 | 1 | 2 (expected) | 3 | 4 |
+|---|---|---|---|---|---|
+| 5.45 BS out, m/s | 704 | 510 | **301** | 149 | stopped |
+| 9x19 out, m/s | 312 | 248 | **178** | 96 | stopped |
+
+and the three geometries over 4 000 seeds each:
+
+| Geometry | Through | Mean exit (5.45) |
+|---|---|---|
+| Corner clip, 300 mm | 100% | 763 m/s (702-824) |
+| Across a pallet, 1200 mm | 94% | 347 m/s (149-704) |
+| Down the length, 2400 mm | 15% | 171 m/s |
+
+A corner is a cardboard box, a crossing is survivable and expensive, and the long
+axis usually is not survivable — with a real chance of the round threading it,
+which is the point.
+
+Two things are deliberately left out and are listed again under *What is
+deliberately not modelled*: the layers are **isotropic along the path** (a real
+pallet is layered and knows where its top is, and a shot along its layers meets
+different geometry from one across them), and an IBC tote is assumed empty rather
+than remembering whether the first round found liquid in it.
+
+### Concrete, brick, and the free rear face
+
+Concrete obeys the same law, with two things said about it that the softer media do
+not need.
+
+**The strength is not the cube strength.** A projectile opening a cavity in concrete
+meets far more than the unconfined compressive strength `f'c`, and how much more is
+itself a function of `f'c`. Forrestal's cavity-expansion fit, validated against
+penetration data at 14, 35 and 97 MPa for striking velocities from 250 to 800 m/s,
+puts the resistance at
+
+```
+R = S · f'c        with        S = 82.6 · f'c^(−0.544)      (f'c in MPa)
+```
+
+so ordinary structural concrete at `f'c` = 30 MPa resists at 389 MPa. That is the
+same product `S·σ` the Poncelet law above already asks for, so nothing new enters the
+model: the book carries `R` divided by the global confinement factor of 5 and the
+depth law multiplies them back together. The check is a published test the fit was
+not made against — 120 mm of ultra-high-performance concrete takes 55 mm from a
+7.62 ball, and the same law at that material's strength says 57.
+
+**A slab is not a block.** The depth law answers for a semi-infinite medium. A wall
+has a free rear face, the compression wave reaches it and throws a cone of material
+off it, and the projectile follows through the gap without ever having to cross that
+last part. The NDRC relation puts the perforation limit for concrete at about 1.3
+times the semi-infinite penetration, so the model divides the path by a per-material
+`SpallFactor` before comparing:
+
+```
+h_resist = h_path / SpallFactor
+```
+
+This is a property of brittle failure, not a fudge for concrete: steel petals, wood
+splits, and both are left at 1. What it changes is exactly the case it should — a
+wall between one and 1.3 depths thick is perforated with very little left, which is
+what shooting through masonry looks like.
+
+**One preset, two materials — split by name.** The game puts `Concrete` on brick walls
+as well, and fired clay brick is the weaker and lighter of the two: 15-25 MPa against
+concrete's 30, 1.9 g/cm³ against 2.35, and fired clay's hardness rather than crushed
+stone's. What separates them in the scene is that the level author said so in the
+object's name — `Area_01_inside_wall_C_bricks_01_BALLISTIC_concrete` — so the book
+carries a `Brick` material of its own and a name rule that selects it.
+
+The strength follows the same route as concrete's: `R = S·f'c` at `f'c` = 20 MPa gives
+324 MPa. Applying a fit made on concrete to brick is an extrapolation and is named as
+one here; what it is not is a free parameter.
+
+What comes out of it, at one course of 115 mm: a pistol round is stopped by both, a
+hard-cored 5.45 crosses brick and not concrete, a 7.62 crosses both, and a .50 crosses
+two courses of brick. A structural concrete wall at 300 mm stops everything.
+
+### Resolution layers
+
+The brick rule was the first admission that **the `MaterialType` is not the last word on
+what a collider is made of**, and the census settled how far that goes. Of 567 504
+colliders in the shipped scenes, 346 080 carry a `_BALLISTIC_<word>` suffix — the level
+designer's own word for the material — and about six thousand of those words contradict
+the material on the same object. Whole classes were affected and no hand-written rule
+had reached them: 1 099 `WoodThin` colliders whose name says metal (door frames, sling
+loops, the capped lids of equipment boxes), 454 `MetalThin` whose name says concrete (an
+entire shower block), the Labs holding cells tagged as sheet while their `Chainfence`
+material gives them away for free, 209 colliders of `MetalNoDecal`, a preset with no
+rules of its own at all. Ten thousand more colliders hang under the scene's own
+`VEHICLE(S)` nodes, where a sheet is a car's flank rather than a road sign.
+
+So a material is resolved in **three layers**, in this order, and each of them can only
+ever *add* a material the book already defines:
+
+```
+identity (NameOverrides)  →  suffix  →  taxonomy  →  the preset
+```
+
+- **Identity** — the book's own name rules, below. It settles the question outright:
+  an object claimed by name is that object, and no later layer may take it back. That
+  finality is not a convenience, it is what protects the exceptions — armour parked
+  under a `VEHICLES` node is still armour, a shipping container on a truck bed is still
+  a container, a loader's counterweight whose own name says `metalthic` is still cast
+  iron. Names are tried in order, the collider's own first and then its ancestors,
+  nearest first, three transforms up, because half the scene names its colliders
+  nothing at all: a BTR is three boxes called `MetalThick` under `balistic/BTR_82`, a
+  fridge door is `Fridge (1)/Door_D/Ballistic 1/Metal 1`. A named part settles the
+  question itself and never consults its parents.
+- **Suffix** — the word after `_BALLISTIC_` in the collider's **own** name, through the
+  book's `SuffixAliases`. Only the collider's own name: an ancestor may say what the
+  prop *is*, but not what this particular box is made of, or the panel and the frame of
+  a metal-framed wooden door would be priced alike. The word is normalised (the density
+  flags `_LowPen`/`_MedPen`/`_HiPen`, a baked-in `_PL100` and trailing numbering are not
+  material) and looked up whole first, then with up to two trailing segments dropped, so
+  `metalthin_top` finds the sheet while `wood_thin` resolves as itself long before it
+  could decay into the ambiguous `wood`. BSG's misspellings are in the table on purpose
+  — they are in shipped scenes, and it is the engine's own suffix parser failing on them
+  that dumps their colliders onto `None`. The ambiguous half of the vocabulary is
+  deliberately absent: bare `metal` and bare `wood` sit on thin and thick carriers
+  alike, so they name nothing.
+- **Taxonomy** — what the scene graph says the collider is part of, applied to whatever
+  the layer above left, which is a deliberate chaining: a `WoodThin` collider whose own
+  name says `metalthin`, parked under `VEHICLES`, is read as sheet and then as vehicle
+  skin. Grouping nodes are matched as **whole ancestor names**, never as substrings —
+  `vehicle` as a substring swallows the `vechicle_BMP2` prop and everything parked in a
+  named car park, `door` would catch a fridge's `Door_D`. Nodes alone are not enough
+  either: 5 101 vehicle-named colliders live outside any `VEHICLES` node, the same
+  Chevrolet Cruze sitting under the node on one map and under `OFF` on another, so the
+  book also carries a census-built list of model words matched anywhere in the
+  collider's line. The tempting short ones were refused: bare `man_` catches `woman_`,
+  bare `paz_` catches props that are not the bus. `MetalThin` under a vehicle becomes
+  `VehicleChassis`, `MetalThick` becomes structural plate; a `DOORS` node changes no
+  material at all and instead marks the collider as a leaf, whose construction the
+  material's own `DoorLeaf` word decides — skins, solid, or one plate, as described
+  above.
+
+The failure mode of every layer is the same and it is the old answer: an object whose
+name says nothing keeps the preset, a map or a mod that names things differently keeps
+the preset, a word the tables do not know keeps the preset, and a rule pointing at a
+material the book does not define keeps the preset. A suffix also loses outright to the
+substances in `SuffixFinal` — concrete, stone, ground, water, a body — where the word
+describes the skin and the material is what the projectile has to cross: 297 `Concrete`
+colliders say `tile` and 55 say `stone`, and a tiled wall is still a wall.
+
+**The name-override reference.** What began as the one brick rule grew, with the survey
+campaign, into the book's reference of name rules — every keyword validated against the
+full census of collider names, and the words that looked obvious but caught the wrong
+things (`rail` catches handrails, `transformer` the substation shed, `engine` a fire
+engine, `motor` a motorbike, `table` the Warehouse*Vege*table) recorded as rejected.
+Fifteen of those rules are gone again with the layers, because the suffix reproduces
+them for every material at once (the `metalthin` rescue on thick metal, `chainfence` on
+plastic, `woodthin` on thick wood, and most of the `None` typo block). What is left is
+what a layer cannot do: words that are not suffixes at all, shields that must beat the
+suffix, and dead branches kept as insurance for maps nobody has surveyed. The families:
+
+- *Steel*: `gunsafe` → a 4 mm steel box; `chainfence` → the free-pass mesh the
+  designer's own suffix names, kept as an identity rule purely for the ordering (the
+  suffix layer would say the same thing, but `metal_stairs` below is identity and
+  would claim the mesh treads of stairs 02/07/08 before the layer ever ran);
+  `container` → 1.6 mm corrugated Corten; stairs and
+  loader chassis → structural plate (8 mm — the 6–10 mm class between a car body and
+  armour). On `MetalThick`, the dense carve-outs → `Machinery` (solid, measured):
+  pump machinery, turbines, transformers, switchgear, generators, robot arms,
+  columns, rail track, ATMs, cast hatches, a turret, loader counterweights (cast
+  iron, confirmed by eye in a raid), heavy plant (an excavator, a Kirovets), and
+  the armoured fleet — BTR, BMP-2, T-90 (both spellings: the drivable one calls
+  itself T_90A and slipped the first rule), Tigr, Typhoon, Stryker; a BTR hull had
+  carried its material at a level the ladder read as 2 mm, and a 9x19 crossed it
+  in a raid, and the BMP's turret sat on the plain anchor until an AK crossed it. Steel drums go the other way — 1.2-1.5 mm of sheet, not plate.
+  Soft-skinned trucks and appliances go the other way: a fridge is sheet, not the
+  10 mm the plain-69 anchor hands every shell, and every Kamaz variant's cab doors
+  are `VehicleChassis` — a truck cab door is built like a car's, two panels with the
+  window mechanism between them — while the chassis rails, body and drum stay plate.
+  (The `metalthin` rescue on the thick material, ~1100 colliders and the largest
+  single rule the book ever had, is now the suffix layer's work and no longer a rule
+  at all.) The Terrakot mall's steel-clad exterior faces go to Concrete — read
+  as a 10 mm shell they made a shoot-through building. Heavy plant (a JCB backhoe,
+  an asphalt paver, a road roller) is structural plate — not Machinery, because one
+  collider spans the whole machine, cab included; the roller's thin-tagged cab stays
+  sheet like a Kamaz door. Cast-iron heating radiators go to the GunSafe shell: ~4 mm
+  of iron plus a water column is exactly what that 4 mm shell prices, while the bare
+  word `radiator` was refused — the Heating_Radiator_Set parent hangs over a family
+  of pipes the ancestor climb would have turned into safes.
+- *Wood*: crates that are boards around air → the board shell; firewood billets
+  (`poleno`) the other way, boards → solid timber; a closed ammunition crate names
+  its own material back at itself (`ammobox` → `WoodThick`), which is a shield rather
+  than a change — the crate's name says `metalthick` and the suffix layer would
+  otherwise turn a box full of shells into a shell full of air.
+- *Cloth that only wears cloth*: sandbags and rubble sacks → `Sand`; mattresses and
+  upholstered furniture → `Upholstery` (low-density bulk: a pistol round dies inside a
+  couch, a rifle round crosses it slowed).
+- *Containers that are their contents*: palletised cargo (`polythene_box`,
+  `box_carton`, `pallet_cardboard`, `pallet_weapon_box`) → `BoxCargo`, a carrier with
+  packages drawn along the path rather than either empty boxes or one averaged solid
+  (see "Packed media: a carrier and its contents"); cable drums → `Cable` (wound
+  copper — a rifle ball dies inside a full drum); the construction-debris dumpster →
+  its fill, so only its corners, where the chord is short, give.
+- *Props stranded on ground materials*: sandbag walls on `Soil` → `Sand`; curbs on
+  `Stone` → concrete, stone planters and garden fences → masonry; a crushed-concrete
+  barricade on `Gravel` → concrete. The ground materials themselves stay impassable —
+  broad words like `rock` were rejected exactly because they reach terrain cliffs.
+- *Masonry by eye*: Factory's `inside_wall` family is visibly brick under the
+  plaster and joins the `_bricks_` names on the `Brick` material.
+- *Glass*: `glass_block` → a hollow block, ~10 mm of glass per face; `armored_glass` →
+  a BR4-class laminate that stops handguns and not rifles; debris (`chunk`, `broken`)
+  is claimed by identity rules first and stays plain glass.
+- *The `None` bucket*: the census showed it is mostly BSG's own typos — `metaltin`,
+  `chainfance`, `fabrick`, `concete` fail the engine's suffix parse and land lamp
+  posts and a wood stove on "impenetrable". The misspellings themselves now live in
+  the suffix table, where every material benefits from them; what stays here as rules
+  is what the layer cannot see — words that are not suffixes at all (`post`, `rubble`,
+  `metall`, and the `concrete` whose carriers say it in the middle of the name) and
+  the shields that must beat the suffix (the loader counterweight's own name says
+  `metalthic` and it is cast iron). The true default collider matches none of it and
+  stays impassable.
+
+Order within one material's rules is meaningful — first match wins — and two
+collisions are deliberate: `gunsafe` precedes `container` (a safe's name contains
+both), debris identity rules precede `glass_block`.
+
+### Through for a price, and walls
+
+Glass is neither mechanism: a pane is fractured out rather than crushed through, so
+what it costs hardly depends on what is doing it. It carries a flat energy price
+instead (15 J for a pane, 8 for one already shattered), paid out of the
+projectile's energy and scaled by the same secant. A 9x19 loses 5 m/s crossing a
+window; a birdshot pellet loses most of what it had, and one that has slowed to
+200 m/s does not get through at all. Wire mesh and low grass are the same mechanism
+at zero cost.
+
+Stone, asphalt, soil and gravel are walls, and stay walls for a reason the measurement
+cannot fix: ground and road surfaces have no far face for the probe to find, so there
+is no thickness to compare a depth against. Concrete used to be in that list and is not
+any more — a concrete wall has two faces, and once the near one is struck the far one
+is measurable like any other object's.
+
+`PenetrationLevel` no longer overrides anything. It was read as the designer saying
+"this is a wall" whenever it reached 100, and a census of one raid's journal retired
+that reading: the colliders carrying 100 are concrete walls and floors, and also an IBC
+tote's plastic cage, a polythene box, a water cistern, a boiler, a reactor housing, a
+run of pipes, thin metal on a pillar, and a patch of gravel floor. It is a blanket "not
+meant to be shot through" applied by hand, not a statement about geometry, and reading
+it as one made a plastic tote bulletproof. The level now does one job: selecting a
+thickness from the book's anchors, for the cases where the scene cannot be measured.
+
+### How hard the barrier worked
+
+One quantity ties the rest of this section together:
+
+```
+Work = 1 − v_res / v
+```
+
+the share of its speed the barrier took. A plate is always a serious barrier, so the
+armor model can apply its constants flat; an obstacle ranges from a sheet of paper to a
+log, and the difference between a bullet that lost a tenth of its speed and one that
+lost half is the whole difference between a scratch and a mushroom. Everything a
+barrier does to a projectile beyond slowing it is scaled by `Work`, which is why one
+set of constants covers the whole table.
+
+### Yaw, and why the second wall costs more than the first
+
+Everything above prices one crossing. A row of them was priced wrong, and obviously so:
+a rigid core crossed a line of oil drums in a straight line, losing the same six percent
+of its speed at the fifth wall as at the first, because nothing in the model made the
+projectile any different on the far side. Deformation is scaled by `Work`, and `Work` on
+a millimetre of sheet is a few percent — so the bullet came out of the first barrel
+virgin, and out of the fifth virgin as well.
+
+Deflection is not the missing piece and must not be stretched into it. It is pinned on a
+measured anchor (a 9x19 two degrees off through a pine door) and on 1 mm of steel it
+honestly gives about half a degree; a row of barrels is not stopped by a bullet
+wandering. What stops it is that the bullet **arrives at the next wall sideways**. A
+projectile leaving a barrier is turning, and a turning projectile presents several times
+its own frontal area to whatever it meets next — so it drags more, digs less deep, needs
+a much higher ballistic limit and is thrown further off line, all at once.
+
+**The state.** One number per projectile, `yaw ∈ [0,1]`: 0 nose-on, 1 fully broadside. It
+is durable and it is inherited — recorded against the projectile object and found again
+by walking up the chain of parents, exactly as the deformable fraction is (see the end of
+"What the barrier leaves of the bullet"). A bullet through a wall spawns a child on the
+far side, that child spawns another through the next wall, and each finds the nearest
+ancestor a barrier had its way with.
+
+**What a crossing adds:**
+
+```
+Δyaw = YawGainK · Work · (L/d − 1) · (1 + YawObliquityK · tan θ)
+yaw' = min(1, yaw + Δyaw)
+```
+
+Three factors, none of them new to the model:
+
+- **`Work`** — the share of the speed this barrier took. The same measure of "how hard
+  did this barrier have to work" that scales the core's deformation, and it is what keeps
+  a sheet of tin from doing what ten millimetres of plate does without a second table of
+  constants.
+- **`L/d − 1`, slenderness** — the lever arm. A long thin projectile has a large
+  overturning moment about its own centre and very little polar inertia to resist it; a
+  sphere has neither. `L` is the same length the broadside geometry uses — published per
+  cartridge where a measurement exists, inferred from mass and calibre otherwise (see
+  [Bullet length](#bullet-length)) — so the two halves of the mod agree about how long a
+  bullet is. The consequences fall out rather than being written: 9x19 ball 1.05, 7.62x51
+  M80 2.7, a buckshot pellet 0.11 — a ball has no orientation to lose — and a flechette
+  about 14, which is why darts are notorious for losing the plot against the first thing
+  they touch. This is the term the published length was introduced for: 9x19 7N31 read
+  1.05 off its mass, i.e. a sphere that no barrier could ever turn, against 1.44 off its
+  measured 13 mm.
+- **`tan θ`, obliquity** — an angled face loads one side of the nose before the other,
+  which is the systematic reason a projectile leaves a barrier turning at all. θ is
+  measured from the normal, with the same `AngleMinCos` floor the path uses.
+
+Nothing is subtracted. A real bullet does re-stabilise in air over tens of metres, but
+the case this exists for — a row of barrels, a car, a stud wall — is metres, and a decay
+term would need a time of flight the model never sees.
+
+**What yaw then does, and only this:** the area the projectile presents.
+
+```
+A_eff = A_cal + yaw · (A_side − A_cal)          A_side ≥ A_cal always
+d_eff = √(4·A_eff/π)
+```
+
+`A_side` is the broadside area from the same geometry as `L`, and the floor at `A_cal` is
+geometry rather than a rule about shot: a fully expanded hollow point is short and blunt
+and has nothing wider to turn into, and a round ball presents the same disc whichever way
+it faces. Three readers, and no others: the Poncelet decay length `λ` (which is `m/A`),
+the deflection (`m/A` again), and the steel branch's ballistic limit and core-fate test
+through `d_eff`. Because the deflection already carries sectional density in its
+denominator, a yawing projectile is thrown further off line by the expression as it
+stands — no extra term, no extra constant.
+
+**What yaw deliberately does not do.** It never touches the exit calibre. The projectile
+did not get fatter, it is lying over, and writing `d_eff` into the exit state would hand
+the wound model a bullet that had grown. It also does not shorten the wound channel's
+neck: a bullet that arrives at flesh already sideways really would turn earlier, but the
+client's channel formulas are required to match the server's baked ones, and the server
+cannot know what the bullet crossed on the way. Both are listed under what is not
+modelled.
+
+**Calibration.** One anchor: a 9x19 ball through a vehicle flank — 3 mm of steel, `Work`
+0.43, slenderness 1.05 — comes out **about half sideways**, which is the keyholing on the
+target that forensic reconstructions of shots through car doors are recognised by. That
+gives `YawGainK` = 1.1. `YawObliquityK` = 1.0 says the destabilising impulse roughly
+doubles at 45°; it is a judgement and not a measurement, and the book says so where it is
+written down.
+
+What that produces for a 5.45 BS (3.68 g, 5.6 mm, 850 m/s) crossing 1 mm walls, which is
+the case the whole subsection exists for:
+
+| Wall | yaw in | A_eff, mm² | v in → out, m/s | Without yaw |
+|---|---|---|---|---|
+| 1 | 0.00 | 24.6 | 850 → 798 | 850 → 798 |
+| 2 | 0.20 | 37.8 | 798 → 723 | 798 → 748 |
+| 3 | 0.50 | 58.2 | 723 → 615 | 748 → 699 |
+| 4 | 0.97 | 90.1 | 615 → 465 | 699 → 651 |
+| 5 | 1.00 | 66.1* | 465 → 260 | 651 → 605 |
+| 6 | 1.00 | 47.5* | stopped | 605 → 560 |
+
+\* the fourth wall took a quarter of the speed, which is over `JacketStripWork`, so from
+there on the calibre and the broadside area are the bare core's.
+
+Six walls is three oil drums. The old model put the same round through twelve walls with
+291 m/s still on the clock.
+
+### Deflection
+
+A projectile through a barrier does not come out on the line it went in on. The
+resisting force is not exactly on the axis — the material is not uniform at the scale a
+bullet meets it, and the nose is never loaded symmetrically — so some fraction of the
+axial impulse arrives sideways and turns the trajectory by `J_lat / (m·v)`. With an
+inertial resistance the axial impulse is itself `ρ·v·A·h`, the velocity cancels, and
+what is left is a ratio of two areal densities:
+
+```
+tan Δθ  =  DeviationK · (ρ_barrier · h_path) / (m/A)   · (1 + DeviationDeformMult · Work)
+                                                          ← only if the core died
+```
+
+Sectional density in the denominator again — the same quantity that decides how deep it
+goes decides how straight it comes out. `DeviationK` is pinned so that a 9x19 through a
+45 mm pine door leaves about two degrees off line, which is where the forensic
+reconstruction literature puts a handgun bullet through a wooden door. Everything else
+in the table is that number times a ratio:
+
+| Through a 45 mm pine door | Deflection |
+|---|---|
+| .45 ACP, 14.9 g at 250 m/s | ~1.8° |
+| 9x19 ball, 8.0 g at 380 m/s | ~2.0° |
+| 5.7x28, 2.0 g at 716 m/s | ~3.3° |
+| 7.62x51 M80, 9.5 g at 800 m/s | ~1.3° |
+
+**Velocity does not appear, and that is a result rather than an omission.** Every
+rigid-body route to a velocity term cancels. A purely inertial resistance gives the
+expression above. A purely static one — the barrier's strength, acting for a transit
+time `h/v` — deflects *slow* projectiles more, not fast ones. The gyroscopic argument
+cancels twice: the overturning moment goes as `v²`, the spin's angular momentum as `v`,
+and the time in the barrier as `1/v`. Physics is unanimous that a rigid projectile's
+deflection is velocity-independent.
+
+What actually makes a fast bullet worse through a barrier is that a fast bullet is the
+one that stops being a symmetric rigid body. So velocity enters the deflection exactly
+once, through the core's fate below, and it enters hard: a barrier that killed the core
+throws what is left of it much further off. That also settles the practical ordering —
+heavy and slow goes straighter than light and fast — twice over, once through sectional
+density and once through deformation, and never the other way round.
+
+Vanilla's own deviation (a per-material chance of a per-material random kick, the same
+for a fragment and a .50) is replaced wherever the book claims a material. Where it does
+not — a material with no body to it, like wire mesh — the game's draw is left exactly as
+it was, because "no model of ours" must not silently become "no deflection at all".
+
+### What the barrier leaves of the bullet
+
+A plate strips a jacket, blunts a core and hands the flesh model a changed projectile.
+A wall now does the same thing through the same code, because the difference between
+them was never physical — it was that one of them had been written.
+
+Whether the projectile survives the meeting intact is the **Taylor rigidity criterion**,
+two-material form, exactly as the armor model asks it: the barrier's stagnation pressure
+plus the share of its own strength that supports it, against the core's dynamic yield.
+
+```
+½·ρ_barrier·v²  +  DeformPlateSupport · HvToYield · Hv_barrier   ≥   HvToYield · Hv_core
+```
+
+Three consequences worth stating, because all three are checkable:
+
+- **Wood does not deform bullets.** At 0.5 g/cm³ the stagnation pressure never reaches
+  lead's dynamic yield at any speed a gun produces. This is why wood and water are the
+  classic bullet-recovery media, and the model reproduces it without being told.
+- **Steel does.** A lead-cored bullet on a steel sheet meets three times its own yield
+  and mushrooms; a hardened core at the same speed does not. The separation is the same
+  one the armor model is calibrated on.
+- **Speed is what moves a core across the line.** A mild steel core is rigid against
+  sheet metal at pistol velocity and dead against it at rifle velocity — which is the
+  velocity dependence the deflection borrows.
+
+What then happens to it goes through the same `ArmorExit` a plate uses, with the two
+coefficients scaled by `Work`:
+
+```
+kDef  = CoreBluntK  · Work      how much blunter the dead core comes out
+kFrag = CoreErosionK · Work     how much mass it shaves off in the hole
+```
+
+Both are pinned so that a barrier taking a third of the projectile's speed does exactly
+what the plate constants do (`KDef` 0.2, `KFrag` 0.05). A rigid core is untouched: it
+comes out with the mass, calibre and deformable fraction it went in with.
+
+The jacket is the one place the two barriers genuinely differ. A plate always has a rim
+for a jacket to shear against; thin sheet does not, and a hard core takes its jacket
+through a tin wall and leaves it in a steel one. `JacketStripWork` is where that line
+sits, and it is drawn on `Work` for the same reason everything else here is.
+
+The changed state travels with the projectile for the rest of its flight, and to
+anything it spawns. Mass and calibre live on the shot itself; the deformable fraction
+has nowhere in the engine to live, so it is recorded per projectile and found again by
+walking up the chain of parents — which also fixed the armor case, where a post-plate
+projectile that outlived its frame used to revert to its cartridge's figure.
+
+**And the exit speed has to be handed over at the moment the projectile is created.**
+The engine builds a projectile's entire predicted trajectory when it is born, from the
+direction and speed it is created with, and then overwrites its position and velocity
+out of that table on every tick. A speed written into a freshly spawned child after the
+fact therefore survives exactly until that child's first tick. At contact range this is
+invisible — an impact inside the first tick is interpolated back towards the written
+value, so most of the exit speed is returned — and at range it is total: a bullet
+through a door arrived at a body thirty metres away with very nearly its muzzle speed,
+and the barrier's deflection never bent the real flight path at all. Vanilla's own
+deviation and ricochet work for precisely the reason ours did not: they are *arguments*
+to the spawn, computed before it. So the exit speed and the rebuilt direction are laid
+into those arguments instead, together with the spawn point, which vanilla places along
+its own direction and which would otherwise put the child sideways of the hole it came
+out of. Where the model has no deflection of its own — a barrier with no body to it,
+like wire mesh — the direction is left to vanilla, because "no model of ours" must not
+silently mean "no deflection at all".
+
+Two consequences of that are worth stating because they are what a raid will notice.
+Distance now costs what the barrier said it costs, so a round through a wall is weak at
+range in a way it never was. And a shattered core is exempt: the engine builds one by
+spawning N children from the same parent, and handing each of them the whole exit speed
+would create energy out of nothing.
+
+### Ricochet
+
+Vanilla has one angle window for every surface in the game — between 42.5° and 80°
+from the normal — and then rolls the material's chance against the cartridge's.
+That says the same thing about concrete, water and a sheet of tin, and it makes the
+bounce a property of the ammunition card.
+
+Here it is a critical grazing angle per surface. With `α` measured from the surface
+(0 = along it, 90 = square on):
+
+```
+α_crit(v) = α₀ · (V_ref / v) ^ q
+```
+
+Faster is not better for a ricochet: a bullet arriving quickly loads the surface
+hard enough to dig its own crater, or to come apart, before the surface can turn
+it, which is why the forensic critical angles are quoted per velocity band and fall
+as the band rises. `V_ref` is 400 m/s and `q` is 0.35.
+
+Below `α_crit` it bounces, above it does not, and around it there is a band of ±25%
+where the chance is linear — the surface is not a plane at the scale a bullet meets
+it, and roughness is the one thing in this module that is honestly a die roll.
+Vanilla's own limit of two ricochets per shot is left alone.
+
+One gate sits in front of all of this for sheet metal: **a sheet can only throw
+off what it could refuse.** Ricochet off steel is allowed only when the projectile
+is at or under the sheet's ballistic limit along the **true line of arrival** —
+same law and same per-encounter draw as the penetration verdict, but with no
+obliquity floor. The floor answers an exit question: a graze that does get through
+leaves by a chord its own calibre digs, not by an infinite slant. Refusal is not
+an exit question — whether a sheet can turn a projectile away is decided by
+everything the trajectory would have to displace, and at a graze that is
+arbitrarily much. So a round that would punch through a roof does exactly that
+instead of bouncing, and the same roof still skips the bullet that arrives spent —
+or arrives at a few degrees of graze. The folk rule "thinner than the calibre
+never ricochets" falls out as the special case it is, with the speed and the mass
+in it.
+
+For sheet metal the skip angle therefore emerges from the ballistic limit itself:
+1.0 mm of tin refuses a 9x19 at muzzle speed once the slant passes about four
+millimetres of steel, which happens below roughly ten degrees of graze — where the
+forensic sheet-metal tables put it. The tabulated critical angles are left doing
+their real work on the massive surfaces, where the gate is trivially open.
+
+Bulk media are gated the same way, on whether the path at this obliquity would stop
+the projectile. The first edition left them ungated, on the argument that a bounce
+off wood or soil is a surface phenomenon — a trough dug and climbed out of — and for
+a semi-infinite medium that is true and the gate changes nothing: the medium stops
+the round, so it may bounce. What the argument missed is the thin bulk member. A
+table top is 20 mm of pine, a standing shooter meets it at 10–16 degrees of graze,
+and a P90 crosses that whole slant with most of its speed to spare — there is no
+trough to climb out of when the far face is nearer than the stopping depth. In play
+that read as tables mirroring rifle fire, and it is the observation the gate's
+extension came from. Surfaces, logs and walls keep their bounces; planks stop
+pretending to be armour. Zero-cost crossings (water, mud, mesh) are not gated at
+all — refusal does not apply to something that never resists, and their bounces
+live on their own classes.
+
+Wood also left the shared "Soft" ricochet class over the same raid observation. The
+25–30° critical angles in the forensic tables belong to yielding granular ground —
+soil and sand roll a bullet out of the trough — while wood's fibres cut instead of
+yielding and its tabulated angles sit at 12–17° for handgun rounds, less at rifle
+speed. The book now carries a `Wood` class at 15°; at P90 velocity that scales below
+a standing shooter's table-top graze, which together with the refusal gate is what
+retired the mirror.
+
+What leaves is slower and flatter:
+
+```
+k_r        = Retention · (1 − RicochetLoss · α/α_crit)
+tan α_out  = RicochetFlatten · tan α_in
+```
+
+Retention is highest at a grazing bounce and lowest right at the critical angle,
+where the projectile has nearly buried itself before coming out. The shipped values
+put a hard surface between 80% and 40% of the impact speed, which brackets the
+50-80% the forensic literature reports for shallow ricochets off concrete, and a
+soft one at half that. The departure being flatter than the arrival is one of the
+few things that literature is unanimous on, and scaling the normal component of the
+mirror reflection by 0.5 is the same statement as the tangent relation above.
+
+The shipped critical angles are 17° for hard surfaces (concrete, stone, asphalt,
+steel, tile), 25° for soft ones (soil, gravel, wood) and 7° for water — the last
+being one of the best-measured numbers in the whole ricochet literature. Materials
+that bounce nothing (glass, cloth, cardboard, wire mesh) say so explicitly rather
+than by omission.
+
+### What stays vanilla
+
+Water's penetration (a medium of unknown depth, and vanilla's huge deflection is a
+fair reading of that; only the bounce is ours), gratings (whether the bullet went
+between the bars is honestly stochastic geometry), tall grass (vanilla gives it no
+settings at all), tyres, the default collider an unconfigured object gets, and
+every material that belongs to the body and armor models. Each of them is named in
+the book with a mechanism of `vanilla`, so a material left out by accident and one
+left out on purpose can be told apart.
+
+A `vanilla` preset is a statement about the preset, not about the object: the
+resolution layers run first, so a collider on one of these whose own name says what it
+is made of — `MetalNoDecal` is 209 colliders saying `metalthin` — is that material and
+never reaches the vanilla branch. What stays vanilla is what nothing said anything
+about.
+
+Fragmentation against an obstacle does **not** stay vanilla, and it is the last
+thing here that stopped being a roll. Vanilla rolls the cartridge's chance against
+the collider's, and a projectile that loses replaces itself with fragments carrying
+`0.7 / MaxFragments` of its speed — a flat 77% velocity loss, which is 95% of the
+energy. A measured raid put that at sixty-three events, every one landing on exactly
+23.3% of the arrival speed, the worst of them a 5.45 steel core "destroyed" by
+0.7 mm of sheet metal the model had priced at a 6% loss. It is decoration rather
+than material, too: one scene object carried a 0.65 fragmentation chance where its
+own preset says 0.07, so two bullets in three came apart on that one prop.
+
+What happens to a projectile in a barrier is already computed, so it decides this
+as well: a core that merely mushroomed is modelled as mushroomed — blunter and
+lighter through `ArmorExit` — and only a core that **shattered** has stopped
+existing as a projectile.
+
+The consequence is worth stating plainly rather than discovering later: with the
+shipped book that is nearly never. Shattering needs a brittle core — tungsten
+carbide, above 1000 HV — meeting a face hard enough to crack it, and of every
+material in the book only loose aggregate clears that ratio. Environment
+fragmentation therefore all but stops happening. That is the correct reading of "a
+bullet does not disintegrate on tin"; what it costs is the real case at the other
+end — a soft rifle bullet coming apart against thick steel — which the model
+currently expresses as heavy deformation and mass loss rather than as pieces.
+Vanilla still decides for any material the book does not claim.
+
 ## Blood and trauma
 
 ### Volume and thresholds
@@ -1028,6 +2030,13 @@ A core is only recorded when its mass or diameter is published, and an **area**
 fraction only when the core is hard enough to keep its shape against a plate. That
 line runs between the M855 and the M855A1: same case, same 62 grains, same calibre,
 but 40 HRC of steel tip upsets on the face of the panel and 58 HRC does not.
+
+The book can also carry a measured **length**, `LengthMm`, which nothing in the
+game database holds at all. It is optional and partial by design; where it is
+absent the geometry infers a length from mass over calibre. The server bakes the
+card's damage through whichever of the two applies and ships the published figure
+to the client with the rest of the per-cartridge data, so both halves compute one
+channel. See [Bullet length](#bullet-length).
 
 The book can also override the **mass**, which it otherwise takes from the card.
 That exists for one shape of cartridge: a sabot round leaves the barrel as its
@@ -1369,6 +2378,15 @@ third, separate knob.
   ellipsoids, no per-organ geometry, and the same organ comes out a different size
   depending on which of a body part's boxes the bullet went into. The one thing
   that is resolved properly is which way round a box is.
+- **A measured bullet length for most cartridges.** The reference book carries one
+  where somebody published it, and it wins wherever it exists; everything else
+  falls back on mass over calibre at a single lead-ish density, which is right to
+  a fraction of a millimetre for a lead-cored bullet and up to a third short for a
+  light steel-cored one. Coverage is partial on purpose: a density derived from
+  the core fractions would be a guess resting on a guess, since for most rounds
+  those fractions are themselves inferred. See [Bullet length](#bullet-length).
+- **The length of a deformed projectile.** A published length is the length of the
+  intact bullet and does not change when a barrier strips its jacket or upsets it.
 - **A neck length per cartridge.** Where a bullet turns is modelled, but the
   median it is drawn about is one constant in calibres for every round. Published
   gelatin necks run from about twelve calibres to over thirty, and closing that
@@ -1385,6 +2403,14 @@ third, separate knob.
   discarded: applying them too would count the same tissue twice. Every such
   discard above 1 HP on a live, non-blacked part is called out in the event log
   with a `!` line, so the bookkeeping is visible rather than assumed.
+- **How many fragments a bullet breaks into.** The engine draws that count, and the
+  mass split needs it one call before the count becomes visible — the list of
+  fragments is still growing while they are being created. The draw is therefore
+  asked a second time, of the engine's own function with the engine's own arguments,
+  which is exact as long as the engine keeps drawing it that way and silently wrong
+  if it ever stops. Rather than assume, the prediction is compared against the true
+  count where that count finally exists, and a disagreement is written to the log:
+  the assumption is made falsifiable instead of being made safe.
 - **Ricochet angles** beyond the floor on the cosine term; vanilla handles the
   bounce itself. The secant law the floor sits on is verified to 45° and
   extrapolated from there — see "The ballistic limit" — and no published series
@@ -1434,6 +2460,112 @@ third, separate knob.
   looser than that. The book's backing thicknesses were derived from areal
   density at laminate density, so the arithmetic is self-consistent, but a
   measured package density per product would replace an assumption with a fact.
+- **Ground, still.** Stone, asphalt, soil and gravel remain barriers nothing gets
+  through. Concrete no longer is (see "Concrete, brick, and the free rear face"),
+  but these four are surfaces rather than objects: a road, a bank, a floor of
+  rubble. The probe finds no far face on them, so there is no thickness for a depth
+  law to be compared against, and inventing one per map would be a worse answer than
+  none. What is lost is the shot that skips off a kerb and out the other side.
+- **Brick that is not called brick.** Brick is modelled as its own material, but the
+  game has no material for it: it is selected off the scene object's name, so a
+  brick wall a level author named something else is priced as concrete. That is the
+  designed failure — the rule only ever adds a material and never takes the preset
+  away — but it does mean the split is as complete as BSG's naming is, and no more.
+  What would close it: a real second `MaterialType`.
+- **A vehicle as one thickness.** Everything the taxonomy calls a vehicle skin is the
+  same 3 mm flank, which is a car door averaged over a car: the engine block, the
+  wheels, the seats, the B-pillar and the transmission tunnel are all missing, and a
+  round crossing the bonnet meets exactly what a round crossing the rear door does.
+  The colliders offer no way to tell those apart — a car is usually one or two boxes
+  spanning the whole vehicle — so the alternative is not a better model but a
+  per-prop table of guesses. Cover behind a car is therefore uniformly weaker than
+  cover behind a real one, in the places where real ones are strong.
+- **A door leaf that the map calls nothing at all.** A leaf is recognised by BSG's
+  `DOORS` grouping node or by a name the book knows, so a leaf that has neither is
+  charged as plain material. It is the same designed failure as the brick rule — the
+  scene may add information and never take it away — and the same limit: as complete
+  as the naming is, and no more.
+- **Colliders that describe the same panel twice.** A wicket door cut into a gate is
+  a hole in one sheet, but the scene carries it as a second collider nested inside
+  the first, and a shot through it is charged for both. Nothing in the geometry says
+  which of two overlapping boxes is the hole and which is the plate; the model
+  therefore prices the panels so that the doubled crossing lands where a single one
+  should, rather than trying to detect the nesting. That leaves the arithmetic right
+  where it was measured and wrong wherever a map nests three.
+- **What a ricochet does to the projectile.** A bullet that bounces off concrete
+  is badly deformed, and the model does not say so: the bounce changes speed and
+  direction and nothing else. Penetration has an energy budget to price the
+  deformation against — how much of its speed the barrier took — and a bounce
+  does not, so crediting one would mean inventing a third set of constants for
+  the occasion. What would close it: recovered-projectile mass and deformation
+  against incidence angle, which the ricochet literature reports qualitatively
+  and rarely tabulates.
+- **A deformed bullet getting wider.** `ArmorExit` shrinks a calibre when a
+  barrier strips a jacket and never grows one when a core mushrooms, so a
+  flattened bullet carries a larger deformable fraction at its original
+  diameter. The wound model reads that fraction and widens the channel from it,
+  so the effect is not lost — but the projectile's stated calibre is now an
+  understatement, and it is the same understatement the plate path has always
+  had.
+- **The price of a hole not scaling with calibre.** Glass and the other
+  "through for a price" materials charge one flat energy figure, so a fragment
+  and a .50 pay the same for the same pane. For a sheet that fractures out rather
+  than being crushed through that is close to right, and it is why the mechanism
+  is only used where the price is small or symbolic.
+- **A soft bullet coming apart against thick steel.** Fragmentation against an
+  obstacle is now decided by the core's fate rather than by a roll, and the fate
+  has two deaths where reality has three: rigid, mushroomed, shattered. A lead
+  rifle bullet against 6 mm of plate really does leave as pieces, and the model
+  says "badly deformed and lighter" instead — the energy bookkeeping is right, the
+  number of objects leaving is not. Closing it needs a break-up criterion for
+  ductile cores, which is a different measurement from the Taylor one already used.
+- **Which way a pallet is stacked.** Packed cargo (see "Packed media: a carrier and
+  its contents") draws its packages along the path and nothing else: the layers are
+  isotropic, so the stack does not know where its top is and a shot along the boxes
+  meets the same statistics as a shot across them. A real pallet is banded and
+  layered, and the two directions are genuinely different geometry. Closing it needs
+  the impact direction against the prop's own axes, which the collider does offer —
+  but every layer of resolution above this one has cost a table of per-prop guesses,
+  and a stack orientation would be another. What is kept instead is the part that is
+  geometry rather than authoring: a longer path meets more cargo.
+- **An IBC tote is assumed empty.** The census puts `eurocube*` on `Plastic` for the
+  tank and `MetalThin` for the cage, which is already the empty reading, and a full
+  one is a metre of water. Deciding empty-or-full on the first hit and remembering it
+  for the raid is the right answer and is **future work**: it needs per-collider
+  memory (a `ConditionalWeakTable`, as the armour hit record uses), which is a
+  mechanism rather than a constant, and it would be the first thing in this module
+  that is not a pure function of the shot.
+- **Secondary debris a wall throws.** Concrete spall is not modelled at all, and
+  neither is progressive destruction — a wall that has been shot a hundred times is
+  exactly as strong as a new one, unlike a plate, which wears.
+- **What a bullet's construction does to a ricochet.** The bounce is decided by
+  angle, speed and surface; a hardened core and a lead round nose leave the same
+  way. The real difference is that the hard one is more likely to break up on a
+  hard surface instead of coming off it, and nothing in the forensic tables we
+  could find puts a number on that per core material.
+- **Yaw inside a single bulk barrier.** Serial barriers now destabilise a
+  projectile (see "Yaw, and why the second wall costs more than the first"), but a
+  crossing is still resolved at the yaw the projectile arrived with: a flechette in
+  20 mm of pine is priced nose-on for the whole 20 mm, when in reality it starts
+  turning inside. Closing it needs a neck length in the barrier, the way the wound
+  channel has one — a distance before the turn rather than a per-crossing
+  increment — and there is no published neck for wood or sheet steel to pin it on.
+- **Yaw does not shorten the wound channel's neck.** A bullet that comes out of a
+  wall half sideways would, in flesh, turn much earlier than one that arrives
+  point-first, and the mod carries exactly the number that would say so. The border
+  is drawn deliberately: the client's channel formulas must match the server's baked
+  ones, and the server prices a cartridge with no idea what the bullet crossed on
+  the way. Barrier yaw therefore stops at the flesh — it costs the projectile speed
+  and mass on the way in, and the wound it then makes is the wound that state
+  deserves.
+- **The `_MedPen`/`_HiPen` suffix convention** on cloth is now read as the density
+  flag it plainly is (bare `Fabric_MedPen`/`_HiPen` colliders route to the padding
+  material; named sandbags route to sand first). On the metal and wood materials
+  the same suffixes mirror the PenetrationLevel ladder the book already prices, so
+  nothing further hangs on them.
+- **The `Tyre` preset** turned out to sit on two dirty pickup hulls and a baggage
+  cart's wheel — the name rules now send the hull to sheet metal and the wheel to
+  rubber. Any new carrier that ever appears stays vanilla until identified.
 
 ## Sources
 
@@ -1460,6 +2592,27 @@ third, separate knob.
   (*Defence Technology* 2023; Mendeley `10.17632/4f92y6jzzh.2`, CC BY 4.0) — 1084
   measured V50s in aluminium, titanium and steel, including the 0°/30° pairs the
   material-independence of the obliquity term is checked against.
+- **Hatcher**, *Hatcher's Notebook* — penetration of small-arms bullets in
+  seasoned white pine, the ladder the bulk-medium law is checked against.
+- **Poncelet**, and the cavity-expansion literature after it — the two-term
+  resistance law (static strength plus inertial drag) and the three-to-five-times
+  confinement factor on the static term.
+- **Forrestal & Altman**, *An empirical equation for penetration depth of
+  ogive-nose projectiles into concrete targets*, and **Forrestal, Frew, Hanchak &
+  Brar**, *Penetration of grout and concrete targets with ogive-nose steel
+  projectiles*, *Int. J. Impact Engineering* (1994-96) — concrete's resistance as
+  `S·f'c` with `S = 82.6·f'c^(−0.544)`, fitted across 14, 35 and 97 MPa targets and
+  250-800 m/s.
+- **NDRC penetration formulae** for concrete — the perforation limit standing above
+  the semi-infinite penetration depth because the free rear face scabs.
+- Published small-arms tests against ultra-high-performance concrete — the 55 mm a
+  7.62 ball leaves in a 120 mm slab, the check the concrete strength is validated
+  against rather than fitted to.
+- **Haag & Haag**, *Shooting Incident Reconstruction* — critical ricochet angles
+  and velocity retention off concrete, asphalt and sheet metal, and the departure
+  angle being smaller than the angle of incidence.
+- **Kneubuehl**, ricochet and terminal ballistics — the critical angle off water
+  and its velocity dependence, and barrier penetration tables.
 - **Ordnance gelatin test data** (10% tissue simulant) for penetration depth.
 - **Open-source prototype specifications** for shell loads, pellet counts, grenade
   fragment mass and velocity, and explosive charge weights; plus the cube-root

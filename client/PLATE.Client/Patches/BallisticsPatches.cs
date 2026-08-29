@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using EFT;
+using EFT.Ballistics;
 using EFT.HealthSystem;
 using EFT.InventoryLogic;
 using HarmonyLib;
@@ -15,7 +16,7 @@ namespace PLATE.Client.Patches
     /// <summary>
     /// Energy-based damage transfer model plus fixes for vanilla damage zeroing.
     ///
-    /// 1. DamageInfo built from a bullet: the body part receives a (1-F) share of the
+    /// 1. DamageInfoStruct built from a bullet: the body part receives a (1-F) share of the
     ///    damage on overpenetration (F is retention derived from expansiveness X), and
     ///    full damage when the bullet stops. Also cancels the vanilla AVOID zeroing.
     /// 2. ArmorComponent.ApplyDamage: on penetration damage = input * m(pen, class, wear)
@@ -73,7 +74,7 @@ namespace PLATE.Client.Patches
         }
 
         /// <summary>
-        /// Context of the current shot (energy/diameter/victim) — DamageInfo knows it,
+        /// Context of the current shot (energy/diameter/victim) — DamageInfoStruct knows it,
         /// but ArmorComponent.ApplyDamage (same frame, same Player.ApplyShot stack) does not.
         /// </summary>
         private struct ShotContext
@@ -83,6 +84,10 @@ namespace PLATE.Client.Patches
             public Player Victim;
             public Player Attacker;
             public int Frame;
+
+            /// <summary>The bone that was hit. A hit marker has to hang on the body
+            /// rather than at the place the body used to be.</summary>
+            public Transform Bone;
         }
 
         private static ShotContext _shotCtx;
@@ -90,6 +95,15 @@ namespace PLATE.Client.Patches
         /// <summary>Bullet energy of the current frame (for the fracture roll in BloodPatches), -1 if none.</summary>
         internal static float ShotEnergyThisFrame =>
             _shotCtx.Frame == Time.frameCount ? _shotCtx.EnergyJ : -1f;
+
+        /// <summary>
+        /// The bone this frame's hit landed on, for the debug marker to follow; null if
+        /// there is no hit this frame. The damage event downstream knows the victim and
+        /// the damage but not where on the rig it happened, and a marker pinned to a
+        /// world point is left behind the moment the target takes a step.
+        /// </summary>
+        internal static Transform HitBoneThisFrame =>
+            _shotCtx.Frame == Time.frameCount ? _shotCtx.Bone : null;
 
         private static void PatchSafe(Harmony harmony, MethodBase target, string postfixName,
             string prefixName = null)
@@ -229,7 +243,13 @@ namespace PLATE.Client.Patches
                     Victim = bpc.Player as Player,
                     Attacker = shot.Player?.iPlayer as Player,
                     Frame = Time.frameCount,
+                    Bone = bpc.transform,
                 };
+
+                // everything this hit writes to the journal from here on belongs to
+                // whoever fired it — the second journal file is built out of this
+                Overlay.HitFeed.Attribute(
+                    Overlay.LocalPlayerRef.IsShooter(shot.PlayerProfileID));
 
                 DumpCollidersOnce(_shotCtx.Victim);
 
@@ -308,8 +328,12 @@ namespace PLATE.Client.Patches
             // what is not the same twice about this particular shot, drawn once
             var spread = ShotSpread.For(shot, dia, wound);
 
+            // the cartridge's measured length, where the book has one: the same figure the
+            // server baked the card's Damage with, so the two halves cannot disagree
+            var lengthMm = (float)AmmoDataCache.GetLengthMm(shot.Ammo?.TemplateId);
+
             var d = ClientWoundModel.Compute(mass, dia, v, x, coreMassFrac, chordMm, wound,
-                spread.NeckMm, spread.TissueScale);
+                spread.NeckMm, spread.TissueScale, lengthMm);
             var vital = VitalMult(bpc.BodyPartColliderType, bpc.Player as Player);
             __instance.Damage = d.DamageHp * vital * DamageScale(bpc.Player as Player);
 
@@ -367,7 +391,7 @@ namespace PLATE.Client.Patches
         /// A wound the engine is about to throw away, called out in the journal.
         /// BodyPartCollider.ApplyHit forwards only forward hits to ApplyShot: a child
         /// spawned inside a collider (typically the flesh box a pierced plate collider
-        /// is embedded in) meets its back face first, and the whole DamageInfo is
+        /// is embedded in) meets its back face first, and the whole DamageInfoStruct is
         /// dropped, wound and all. Zero damage the model itself expects stays silent:
         /// a blocked hit is paid in BABT, a corpse and an already-blacked part take
         /// nothing by design, and a sliver below 1 HP is not worth a line.
@@ -780,7 +804,7 @@ namespace PLATE.Client.Patches
         /// load ("762x51_M80"); the "patron_" prefix every one of them shares is
         /// dropped. Reading a hit without knowing the round tells you very little.
         /// </summary>
-        private static string AmmoLabel(EftBulletClass shot)
+        internal static string AmmoLabel(EftBulletClass shot)
         {
             var name = RawTemplateName(shot?.Ammo?.Template);
             if (string.IsNullOrEmpty(name))
@@ -1074,7 +1098,7 @@ namespace PLATE.Client.Patches
 
         /// <summary>
         /// Which hitbox this frame's bullet went into, read off the collider it actually
-        /// struck. The health controller is handed the same fact in DamageInfo and it does
+        /// struck. The health controller is handed the same fact in DamageInfoStruct and it does
         /// not survive the trip, so anything downstream that needs the segment rather than
         /// the body part has to ask here.
         /// </summary>
@@ -1158,12 +1182,33 @@ namespace PLATE.Client.Patches
         private static EftBulletClass _xOvrShot;
         private static float _xOvrValue;
 
-        /// <summary>Projectile X accounting for armor-induced deformation in this same hit.</summary>
+        /// <summary>
+        /// Projectile X accounting for whatever has already deformed it.
+        ///
+        /// Three answers in order of how specific they are: this frame's armor
+        /// deformation, then anything durable a barrier recorded for this projectile or
+        /// for the one that spawned it, then the cartridge's own figure.
+        ///
+        /// The walk up the chain is what makes the durable record work without anyone
+        /// having to propagate it: a bullet that came through a wall spawns a child on
+        /// the far side, that child spawns another through the next wall, and each of
+        /// them finds the nearest ancestor a barrier had its way with. It also fixes the
+        /// armor case for a post-plate projectile that outlives its frame, which the
+        /// single frame-scoped slot never covered.
+        /// </summary>
         internal static float EffectiveX(EftBulletClass shot)
         {
             if (_xOvrFrame == Time.frameCount && ReferenceEquals(_xOvrShot, shot))
             {
                 return _xOvrValue;
+            }
+
+            for (var s = shot; s != null; s = s.Parent)
+            {
+                if (ProjectileState.TryGetX(s, out var recorded))
+                {
+                    return recorded;
+                }
             }
 
             return (float)AmmoDataCache.GetX(shot?.Ammo?.TemplateId);
@@ -1709,7 +1754,7 @@ namespace PLATE.Client.Patches
                     AmmoDataCache.Armor is { Enabled: true } && AmmoDataCache.Wound is { Enabled: true })
                 {
                     // The armor already took its price in energy/mass/deformation at the
-                    // penetration decision — W in DamageInfo was computed from the
+                    // penetration decision — W in DamageInfoStruct was computed from the
                     // weakened projectile, no multiplier needed. But the vanilla original
                     // has just run, and on a penetrated hit it does not leave Damage
                     // alone: a hit on an armor-plate collider is zeroed outright (vanilla
@@ -1928,6 +1973,127 @@ namespace PLATE.Client.Patches
             }
         }
 
+        // --- What a projectile leaving a body is born with ---
+
+        /// <summary>
+        /// The exit state of the body collision that is spawning this projectile, for
+        /// <see cref="ShotLifecyclePatches"/> to lay into the arguments the engine builds
+        /// the child's trajectory table from. The body-side twin of
+        /// <see cref="ObstaclePatches.TryChildLaunch"/>, and it exists for the same
+        /// reason: everything written into a child AFTER it is created is overwritten
+        /// out of that table on the child's first tick, so at range a bullet that had
+        /// crossed a torso arrived at the next thing it hit with very nearly the speed it
+        /// entered the torso with.
+        ///
+        /// It asks nothing the postfixes did not already ask. The exit state is a pure
+        /// function of the parent's own state — mass, calibre, speed, deformable
+        /// fraction, this shot's tissue draw, and the chord through the part — all of
+        /// which the parent is carrying by the time it spawns anything.
+        ///
+        /// `massG`/`diaMm` come back as 0 for a projectile that keeps the parent's
+        /// (the overpenetration child is the same bullet); a fragment is a different,
+        /// smaller projectile and says so, which also gets vanilla's own trajectory drag
+        /// computed from the fragment rather than from the bullet it broke off.
+        /// </summary>
+        internal static bool TryChildLaunch(EftBulletClass parent, out float speedMs, out float massG,
+            out float diaMm)
+        {
+            speedMs = 0f;
+            massG = 0f;
+            diaMm = 0f;
+
+            if (Off || parent == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                if (!(parent.HittedBallisticCollider is BodyPartCollider bpc))
+                {
+                    return false; // walls are the obstacle module's, and it was asked first
+                }
+
+                var wound = AmmoDataCache.Wound;
+                if (!PlateClientConfig.PhysDamageModel.Value || !(wound is { Enabled: true }))
+                {
+                    return false; // the fallback branches live in the postfixes, untouched
+                }
+
+                var parentMass = parent.BulletMassGram;
+                var parentDia = parent.BulletDiameterMilimeters;
+                if (parentMass <= 0f || parentDia <= 0f)
+                {
+                    return false;
+                }
+
+                // Which spawner is calling. The engine stamps the state at the top of
+                // each of them, before it creates anything, so this is the one thing at
+                // hand that says "an overpenetration" rather than "a fragment" — the
+                // Fragments list cannot: CreateDeviatedFragment clears it AFTER the
+                // spawn, so during the call it still holds the previous collision's.
+                var fragmenting = parent.BulletState == EftBulletClass.EBulletState.FragmentationHit;
+                if (!fragmenting && (parent.BulletState != EftBulletClass.EBulletState.DeviationHit ||
+                                     !parent.IsForwardHit))
+                {
+                    return false; // a ricochet off a body is vanilla's, as it always was
+                }
+
+                // the same gates the postfixes hold, asked before the chord is measured
+                if (fragmenting && !PlateClientConfig.FragRescale.Value)
+                {
+                    return false;
+                }
+
+                var v = parent.Vector3_1.magnitude;
+                var x = EffectiveX(parent);
+                var spread = ShotSpread.For(parent, parentDia, wound);
+                var chord = ChordMm(bpc, parent.RaycastHit_0.point, parent.Vector3_1, parentDia);
+
+                if (!fragmenting)
+                {
+                    speedMs = BodyExit.LaunchSpeed(parentMass, parentDia, v, x, chord,
+                        spread.TissueScale, 0f, wound);
+                    return true;
+                }
+
+                var n = FragmentCount(parent);
+                if (n <= 0)
+                {
+                    return false;
+                }
+
+                BodyExit.FragmentSplit(parentMass, parentDia,
+                    PlateClientConfig.FragEnergyShare.Value, n, out massG, out diaMm);
+                speedMs = BodyExit.LaunchSpeed(massG, diaMm, v, x, 0.5f * chord,
+                    spread.TissueScale, MinFragMassG, wound);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LogError(nameof(TryChildLaunch), ex);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// How many fragments this collision is about to spawn.
+        ///
+        /// Vanilla draws the count once, at the top of the spawner, and only then starts
+        /// creating — so by the time the last one exists the number is a fact, and while
+        /// they are being created it is not: the list grows underneath us. The draw is
+        /// the engine's own function asked with the engine's own arguments, and it is
+        /// pure (it takes the seed by value and keeps no state), so asking it here gives
+        /// the same answer the engine got a moment ago. That the two still agree is
+        /// checked where the true count is finally visible, in
+        /// <see cref="FragmentBudgetPostfix"/>.
+        /// </summary>
+        private static int FragmentCount(EftBulletClass shot)
+        {
+            return GClass2608.Int(shot.RandomSeed, shot.MinFragmentsCount,
+                shot.MaxFragmentsCount - shot.MinFragmentsCount);
+        }
+
         // --- Fragment energy budget (instead of the vanilla 0.5/MaxFragments) ---
 
         private static void FragmentBudgetPostfix(EftBulletClass __instance)
@@ -1953,45 +2119,35 @@ namespace PLATE.Client.Patches
                 var wound = AmmoDataCache.Wound;
                 if (PlateClientConfig.PhysDamageModel.Value && wound is { Enabled: true })
                 {
-                    // fragments split the parent's MASS (diameter by cube root,
-                    // preserving density); the damage of their hits is computed by the
-                    // wound model from their own mass/speed. Re-fragmentation is
-                    // forbidden by zeroing the instance chance (anti-recursion,
-                    // stateless). Whether a fragment exits THIS part is decided by its
-                    // own channel against the remaining chord (the fragmentation point
-                    // is unknown — take half); one that does not exit or is lighter
-                    // than m_min is inert, its energy has already been deposited in the
-                    // part (the fragmentation TC bonus of the wound model).
-                    var massShare = Mathf.Max(share / n, 1e-3f);
-                    var parentMass = __instance.BulletMassGram;
+                    // What a fragment IS — its share of the parent's mass, the diameter
+                    // that follows from it, and the speed its own channel against the
+                    // remaining chord leaves it with — is handed to the spawn itself
+                    // through TryChildLaunch, because the engine builds the fragment's
+                    // whole trajectory there and would otherwise overwrite anything
+                    // written here on its first tick. What is left for this postfix is
+                    // what needs the fragment to exist.
+                    var assumed = FragmentCount(__instance);
+                    if (assumed != n)
+                    {
+                        // the launch was priced against a different batch size than the
+                        // one that was actually spawned: the engine's own draw has
+                        // changed shape and the split above it is no longer the split
+                        LogError(nameof(FragmentBudgetPostfix), new InvalidOperationException(
+                            $"fragment count drawn {assumed} but spawned {n}"));
+                    }
+
+                    // the same measurement the launch was priced against, taken again
+                    // because the draw can only be handed to a fragment that exists
                     var parentDia = __instance.BulletDiameterMilimeters;
-                    var v = __instance.Vector3_1.magnitude;
-                    var x = EffectiveX(__instance);
                     var halfChord = 0.5f * ChordMm(bpc, __instance.RaycastHit_0.point,
                         __instance.Vector3_1, parentDia);
-                    var spread = ShotSpread.For(__instance, parentDia, wound);
 
                     foreach (var frag in __instance.Fragments)
                     {
-                        var fragMass = parentMass * massShare;
-                        var fragDia = parentDia * Mathf.Pow(massShare, 1f / 3f);
-                        frag.BulletMassGram = fragMass;
-                        frag.BulletDiameterMilimeters = fragDia;
+                        // re-fragmentation is forbidden by zeroing the instance chance
+                        // (anti-recursion, stateless). Pen is not set either: it is
+                        // recomputed absolutely when the fragment hits.
                         frag.FragmentationChance = 0f;
-                        // pen is not set: it is recomputed absolutely when the fragment hits
-
-                        var vOut = 0f;
-                        if (fragMass >= MinFragMassG)
-                        {
-                            var li = ClientWoundModel.ChannelMm(fragMass, fragDia, v, x, wound,
-                                spread.TissueScale);
-                            vOut = ExitSpeed(v, li, halfChord, (float)wound.GelStopVelocity);
-                        }
-
-                        var dir = frag.Vector3_1.sqrMagnitude > 1e-6f
-                            ? frag.Vector3_1.normalized
-                            : __instance.Vector3_1.normalized;
-                        frag.Vector3_1 = dir * Mathf.Max(vOut, 0.1f);
 
                         // one body, one shot: the fragments carry the parent's draw on
                         ShotSpread.Inherit(__instance, frag, halfChord);
@@ -2014,22 +2170,8 @@ namespace PLATE.Client.Patches
             }
         }
 
-        // --- 3. Overpenetration child: speed from the log-drag model's energy balance ---
-
-        /// <summary>
-        /// Exit speed after T mm of tissue: v·exp(−T/λ), λ = L/ln(v/v_stop).
-        /// If T ≥ L (or on a contact impact, L=0) the projectile does not exit — 0.
-        /// </summary>
-        private static float ExitSpeed(float v, float lMm, float tMm, float vStop)
-        {
-            if (lMm <= 0f || lMm <= tMm)
-            {
-                return 0f;
-            }
-
-            var lambda = lMm / Mathf.Log(v / Mathf.Max(vStop, 1f)); // L>0 ⇒ v>v_stop
-            return v * Mathf.Exp(-tMm / lambda);
-        }
+        // --- 3. Overpenetration child: speed from the log-drag model's energy balance
+        // (the arithmetic lives in BodyExit, the delivery in ShotLifecyclePatches) ---
 
         private static void OverpenChildPostfix(EftBulletClass __instance)
         {
@@ -2056,37 +2198,31 @@ namespace PLATE.Client.Patches
                 var wound = AmmoDataCache.Wound;
                 if (PlateClientConfig.PhysDamageModel.Value && wound is { Enabled: true })
                 {
-                    // the energy balance replaces the vanilla k damage/speed of the
-                    // child. Damage and pen are left alone: on the next impact the
-                    // wound model computes the damage and the penetration model the
-                    // pen, both from the actual speed.
-                    var mass = __instance.BulletMassGram;
+                    // The energy balance replaced the vanilla k speed of the child at the
+                    // spawn itself (TryChildLaunch → ShotLifecyclePatches), because the
+                    // engine builds the child's trajectory table there and overwrites its
+                    // velocity out of that table on every tick afterwards — a speed
+                    // written here survived until the child's first tick and no longer.
+                    // Damage and pen are left alone on purpose: on the next impact the
+                    // wound model computes the damage and the penetration model the pen,
+                    // both from the actual speed.
                     var dia = __instance.BulletDiameterMilimeters;
-                    if (mass <= 0f || dia <= 0f)
+                    if (__instance.BulletMassGram <= 0f || dia <= 0f)
                     {
                         return;
                     }
 
-                    var v = __instance.Vector3_1.magnitude;
-                    var x = EffectiveX(__instance);
-                    var spread = ShotSpread.For(__instance, dia, wound);
-                    var l = ClientWoundModel.ChannelMm(mass, dia, v, x, wound,
-                        spread.TissueScale);
                     var t = ChordMm(bpc, __instance.RaycastHit_0.point,
                         __instance.Vector3_1, dia);
-                    var vOut = ExitSpeed(v, l, t, (float)wound.GelStopVelocity);
-
-                    var dir = child.Vector3_1.sqrMagnitude > 1e-6f
-                        ? child.Vector3_1.normalized
-                        : __instance.Vector3_1.normalized;
-                    child.Vector3_1 = dir * Mathf.Max(vOut, 0.1f);
 
                     // same shot, same body, and a projectile does not un-turn: what it
                     // has already crossed comes off its neck
                     ShotSpread.Inherit(__instance, child, t);
 
+                    // the speed the child was actually born with, not a second opinion
+                    // about it — Speed is the argument the trajectory was built from
                     Overlay.HitFeed.PushHit(bpc.Player as Player,
-                        $"v_out {vOut:0} m/s after {bpc.BodyPartType}");
+                        $"v_out {child.Speed:0} m/s after {bpc.BodyPartType}");
                     return;
                 }
 
