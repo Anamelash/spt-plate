@@ -421,7 +421,9 @@ public class ReferenceBookTests
             }
             else
             {
-                Assert.True(plate.Rating > 0 || plate.Material.Length > 0,
+                // Rating 0 counts: "certified for fragments and nothing else" is a
+                // statement, not an absence
+                Assert.True(plate.Rating is not null || plate.Material.Length > 0,
                     $"{name}: no thickness, no rating and no material");
             }
 
@@ -558,9 +560,10 @@ public class ReferenceBookTests
         var shells = Shipped().HelmetShells;
         var plates = Shipped().ArmorByClass;
 
-        // a sewn package is only ever fabric, and only ever reaches Br1; /0 is the
-        // sub-Br1 tier
-        string[] sewn = ["Aramid/0", "Aramid/1", "UHMWPE/0", "UHMWPE/1"];
+        // a sewn package is only ever fabric; /0 is the sub-Br1 tier, and /2 is the
+        // rung a PASSPORT resolves through — the ceiling itself still stops the
+        // label at Br1 for anything without papers
+        string[] sewn = ["Aramid/0", "Aramid/1", "Aramid/2", "UHMWPE/0", "UHMWPE/1", "UHMWPE/2"];
 
         string[] rigid =
         [
@@ -616,7 +619,9 @@ public class ReferenceBookTests
         foreach (var (key, _) in Shipped().SoftArmor)
         {
             var parts = key.Split('/');
-            Assert.True(int.Parse(parts[1]) <= 1, $"{key}: sewn fabric stops where it stops");
+            // /2 exists for the passport path: a certificate outranks the form ceiling
+            // by design, and its construction has to resolve to something real
+            Assert.True(int.Parse(parts[1]) <= 2, $"{key}: sewn fabric stops where it stops");
         }
 
         foreach (var (key, _) in Shipped().HelmetShells)
@@ -809,6 +814,33 @@ public class ReferenceBookTests
     [InlineData("granit4rs", 5)]
     [InlineData("granit4_5class_front", 5)]
     [InlineData("granit4_5class_back", 5)]
+    // the passport campaign: one representative per family — western IIIA, NIJ
+    // plates, the Russian soft line, passport-only vests, the fragment-only zeros
+    // and the bare carriers whose packages the game invented
+    [InlineData("msa_gallet_tc800", 2)]
+    [InlineData("nfm_hjelm", 2)]
+    [InlineData("ronin", 2)]
+    [InlineData("iotv_gen4_f", 2)]
+    [InlineData("6b23-1", 2)]
+    [InlineData("6b2", 2)]
+    [InlineData("6b3TM", 4)]
+    [InlineData("6b5-15", 4)]
+    [InlineData("korund_6b12", 4)]
+    [InlineData("sapi_6_frontback", 5)]
+    [InlineData("SAPI_GAC_3s15m", 3)]
+    [InlineData("granit4_6b33", 5)]
+    [InlineData("thorcrv", 2)]
+    [InlineData("cqc_mk4a", 2)]
+    [InlineData("module3m", 2)]
+    [InlineData("6b13", 2)]
+    [InlineData("tv110", 1)]
+    [InlineData("paca", 1)]
+    [InlineData("defender2", 1)]
+    [InlineData("shlemofon_tsh_4ml", 0)]
+    [InlineData("item_equipment_facecover_welding_minotaur", 0)]
+    [InlineData("Item_equipment_glasses_oakley", 0)]
+    [InlineData("slick_black", 0)]
+    [InlineData("tactec", 0)]
     public void The_passport_set_is_pinned(string key, int rating)
     {
         var plate = Shipped().ArmorPlates[key];

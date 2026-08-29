@@ -41,9 +41,14 @@ public class ArmorNormalizerTests
     [InlineData("tac_kek_fast_mt_level1_helmet_armor_top", ArmorMaterial.UHMWPE, 1,
         ArmorMaterial.UHMWPE, 0)]
     // the shifted label still lands under the form's ceiling: a sewn aramid package
-    // the game stamps 3 is Br1 at most, whatever 3 − 1 says
-    [InlineData("thorcrv_level3_soft_armor_front", ArmorMaterial.Aramid, 3,
+    // with no papers the game stamps 3 is Br1 at most, whatever 3 − 1 says (the
+    // Gzhel's soft package has no published class)
+    [InlineData("gjel_level3_soft_armor_front", ArmorMaterial.Aramid, 3,
         ArmorMaterial.Aramid, 1)]
+    // ...and a passport lifts a package past that ceiling: the THOR CRV panels are
+    // NIJ IIIA, the Br2 tier
+    [InlineData("thorcrv_level3_soft_armor_front", ArmorMaterial.Aramid, 3,
+        ArmorMaterial.Aramid, 2)]
     // ...and only a passport lifts past the shift: the Zhuk-3 is certified Br3, its
     // vanilla label read Br2 after the shift, and without the book's Rating the
     // downward-only rule had no way back up
@@ -81,17 +86,34 @@ public class ArmorNormalizerTests
 
     /// <summary>
     /// And it earns only DOWNWARD: a lift is a certificate's to make, never the
-    /// model's. The 6B2's titanium panels are 1.25 mm the model reads far too
-    /// optimistically — left symmetric, the engine handed them a rifle class the real
-    /// vest never had.
+    /// model's. The live case that forced the rule — the 6B2's 1.25 mm titanium
+    /// panels, which the engine read a rifle class strong — has since gained its real
+    /// passport, so the guard runs on a crafted twin of that construction: a thin
+    /// titanium entry with no Rating, planted in the test's own copy of the book
+    /// (Load reads the modPath file, and a loaded entry wins over the shipped ones).
     /// </summary>
     [Fact]
     public void The_model_never_lifts_a_class_on_its_own()
     {
-        var (normalizer, item) = Fixture(
-            "6b2_level2_soft_armor_front", ArmorMaterial.Titan, 2);
+        var path = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "plate-tests", "armor-normalizer-lift");
+        Directory.CreateDirectory(path);
+        File.WriteAllText(System.IO.Path.Combine(path, "ammo-reference.jsonc"),
+            """
+            {
+              "ArmorPlates": {
+                "liftbait": { "Prototype": "1.25 mm titanium over a package, no papers",
+                              "Material": "Titan", "ThicknessMm": 1.25, "BackingMm": 7.6,
+                              "Source": "test twin of the 6B2 construction" }
+              },
+              "Version": 9999
+            }
+            """);
 
-        normalizer.Run(new PlateServerConfig(), ModPath());
+        var (normalizer, item) = Fixture(
+            "liftbait_level2_soft_armor_front", ArmorMaterial.Titan, 2);
+
+        normalizer.Run(new PlateServerConfig(), path);
 
         Assert.True((int)(item.Properties!.ArmorClass ?? 0) <= 1,
             "a vanilla class-2 panel may keep Br1 or fall, but the model must not lift it");
