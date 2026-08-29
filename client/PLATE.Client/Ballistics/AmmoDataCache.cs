@@ -133,7 +133,11 @@ namespace PLATE.Client.Ballistics
                     : Default;
             }
 
-            /// <summary>Class U_limit, J/mm² (a class beyond the table gets the last entry).</summary>
+            /// <summary>
+            /// Class U_limit, J/mm². The index IS the class — 0 is the anti-fragment
+            /// tier, 1..6 are Br1..Br6 since the realignment. A class beyond the table
+            /// gets the last entry, which also keeps a stale six-element array sane.
+            /// </summary>
             public double ClassULimit(int armorClass)
             {
                 if (ClassULimitJmm2 == null || ClassULimitJmm2.Length == 0)
@@ -141,7 +145,7 @@ namespace PLATE.Client.Ballistics
                     return double.MaxValue; // no data — impenetrable (obvious in tests)
                 }
 
-                var idx = armorClass - 1;
+                var idx = armorClass;
                 if (idx < 0)
                 {
                     idx = 0;

@@ -622,38 +622,74 @@ v_r = m/(m + m_plug) · √(v² − v_bl²)
 The energy the armor took is no longer a constant to tune. It is `½m(v² − v_r²)`,
 and it falls out of the limit.
 
-### The class an item can hold
+### The class scale: game class = GOST class
+
+An in-game protection class IS a GOST R 50744-95 class. The scale used to run one
+rung high — the game's 2..6 stood for Бр1..Бр5, with class 1 an anti-fragment tier
+below every standard — and the realignment removed the shift: the anti-fragment
+tier is class 0, and each class above it is the Бр of the same number, anchored to
+the specific energy of that class's own certification rounds.
+
+| Class | GOST | Certification rounds (nominal test velocity) | Threshold, J/mm² |
+|---|---|---|---|
+| 0 | — | fragments and spent shot only; stops no pistol bullet | 2.5 |
+| 1 | Бр1 | 9x18 Pst 57-N-181S at 335 m/s | 5.2 |
+| 2 | Бр2 | 9x21 P 7N28 at 390 | 12 |
+| 3 | Бр3 | 9x19 Pst 7N21 at 455 | 40 |
+| 4 | Бр4 | 5.45x39 PP 7N10 at 895 AND 7.62x39 PS 57-N-231 at 720 | 65 |
+| 5 | Бр5 | 7.62x54R PP 7N13 at 830 AND 7.62x54R B-32 at 810 | 90 |
+| 6 | Бр6 | 12.7x108 B-32 at 810 | 165 |
+
+Class 6 is deliberately empty: no man-portable armour holds a 12.7 AP round, so
+nothing earns it — the rung exists to keep the ladder honest, not to be occupied.
+Note what the identity costs: ammunition penetration stays anchored to vanilla
+ratings (see Ammunition normalization), so the folk rule "pen ≥ 10·class beats the
+plate" no longer holds — a Бр4 plate reads class 4 and stops the PS round whose
+vanilla penetration is 35.
+
+### The class an item carries is derived, not trusted
 
 A class is a certificate a construction earned, and the game hands out ratings its
 materials cannot reach: 125 of the aramid packages sewn into vests are stamped
-class 3, which with aramid alone would take on the order of 200 mm of it. That is
-why carriers are sold as Br1 or Br2 and the rifle protection lives in the plates.
+class 3 (vanilla scale), which with aramid alone would take on the order of 200 mm
+of it. Every armour item's label is therefore derived, by three rules in descending
+order of trust — judged at the reference constants, never at player tuning, or a
+config knob would relabel items:
 
-The ceiling is a property of the form, not of the item:
+1. **A published certificate outranks everything**, in both directions. The book
+   carries it as `Rating`, already in Br terms: the Maska-1Sch is old GOST class 2
+   = Бр2 whatever the game stamped on it, the Vulkan-5 really is Бр4, and the
+   SSh-68 is rated for a 1 g fragment and nothing ballistic — class 0, whatever
+   the model thinks 1.8 mm of steel holds.
+2. **A documented construction earns its class** against the standard's own rounds
+   (the `Certification` table in the book): the highest rung whose every
+   certification cartridge the construction stops at test velocity, head-on,
+   undamaged. The passport reading — V50 at the test velocity, not the strict
+   zero-of-five margin — because the strict criterion solves rung thicknesses, and
+   judging items by it would eat documented certificates through the model's
+   recorded shortfalls. The earned class moves the label only DOWNWARD from the
+   shifted vanilla label: a lift is a certificate's to make, never the model's,
+   whose optimistic branches would otherwise hand 1.25 mm of titanium a rifle
+   rating.
+3. **Everything else carries the game's label shifted onto the Br scale**
+   (vanilla − 1, floored at 0), held under the form's ceiling below.
+
+The ceiling is a property of the form, not of the item, in Br terms:
 
 | Form | aramid, UHMWPE | polycarbonate | metal, ceramic |
 |---|---|---|---|
-| sewn package | 2 | — | uncapped |
-| pressed shell, visor, mask | 3 | 2 | uncapped |
+| sewn package | Бр1 | — | uncapped |
+| pressed shell, visor, mask | Бр2 | Бр1 | uncapped |
 | plate | uncapped | — | uncapped |
 
-Pressing the same fibre into a resin-bonded shell buys one rung and no more: past
-that a helmet stops getting thicker and starts getting a metal or ceramic element,
-and that element is a product in its own right. Metal and ceramic are not capped —
-a heavier helmet really is a thicker shell — and neither is a plate, which is where
-rifle protection lives and whose thickness answers for it in the ballistic limit
-directly.
-
-The construction has always been read at the ceiling. What the item carries is now
-read there too, because everything that reads a class rather than a thickness — the
-fragment gate, the fallback threshold below, the item card, other mods — believed
-the label. An aramid package rated 3 was being modelled as the class 2 package it is
-and gated fragments as though it were a class 3 plate.
-
-The material the ceiling reads is the book's, not the game's: the construction is
-identified first, so a shell the game files under Combined caps like the aramid it
-is actually made of. That covers the aventail too — discrete fabric hung off a
-helmet caps as the shell it hangs from, not as a sewn package.
+Pressing the same fibre into a resin-bonded shell buys one rung over the package
+and no more: past that a helmet stops getting thicker and starts getting a metal
+or ceramic element, and that element is a product in its own right. Metal and
+ceramic are not capped — a heavier helmet really is a thicker shell — and neither
+is a plate, which is where rifle protection lives and whose thickness answers for
+it in the ballistic limit directly. The material the ceiling reads is the book's,
+not the game's: the construction is identified first, so a shell the game files
+under Combined caps like the aramid it is actually made of.
 
 The one exemption is a hard element the game files under some other slot, and it is
 data rather than a rule: the Velocity SLAAP is 18 mm of polyethylene against the
@@ -663,7 +699,8 @@ a helmet — so the reference book marks it a plate and its rating stands.
 ### The class threshold, for armor with no construction on file
 
 An item the reference book cannot resolve — an invented plate, a mod's own — still
-falls back to a specific energy against its class:
+falls back to a specific energy against its class (`ClassULimit` is the table
+above, indexed by the class itself, 0..6):
 
 ```
 A_hit   = A · CoreAreaFrac · (1 + ExpansionOnArmor · X)

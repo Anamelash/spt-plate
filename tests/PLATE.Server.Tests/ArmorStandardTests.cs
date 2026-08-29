@@ -39,8 +39,9 @@ public class ArmorStandardTests
     /// these cartridges are not in the game and because a fixture that shares its
     /// inputs with the thing under test proves nothing.
     /// </summary>
-    /// <param name="GameClass">The in-game class this maps to. Class 1 is anti-fragment
-    /// junk below every standard, so GOST Бр1..Бр5 are in-game 2..6.</param>
+    /// <param name="GameClass">The in-game class this maps to. Since the Br realignment
+    /// the game class IS the GOST class — Бр1..Бр6 are in-game 1..6, and the
+    /// anti-fragment tier below every standard is class 0.</param>
     public record Threat(
         string Standard,
         string Class,
@@ -68,26 +69,30 @@ public class ArmorStandardTests
     // centre of the tolerance the standard gives; distance 5 m for pistol classes and
     // 10 m for rifle, measured 3 m from the muzzle.
     //
-    // Бр6 is 12.7x108 B-32 and has no in-game class — the game's table stops at 6.
+    // Бр6 is 12.7x108 B-32, in-game class 6 — a rung nothing wearable earns, and the
+    // top of the scale is deliberately empty for it.
     public static readonly Threat[] Gost =
     [
-        new("GOST", "Бр1", 2, "9x18 Pst 57-N-181S", 5.9, 9.27, 335, 0.30, 1.0, 0, 250,
+        new("GOST", "Бр1", 1, "9x18 Pst 57-N-181S", 5.9, 9.27, 335, 0.30, 1.0, 0, 250,
             "mild steel core in a lead sleeve, APS at 5 m"),
-        new("GOST", "Бр2", 3, "9x21 P 7N28", 7.93, 9.02, 390, 0.35, 1.0, 0, 60,
+        new("GOST", "Бр2", 2, "9x21 P 7N28", 7.93, 9.02, 390, 0.35, 1.0, 0, 60,
             "LEAD core - the heaviest pistol bullet in the standard, and the softest"),
-        new("GOST", "Бр3", 4, "9x19 Pst 7N21", 5.2, 9.00, 455, 0.20, 1.0, 0, 700,
+        new("GOST", "Бр3", 3, "9x19 Pst 7N21", 5.2, 9.00, 455, 0.20, 1.0, 0, 700,
             "hardened steel core; its mass and diameter are not published, so the bullet " +
             "has to be read as solid - only its hardness is known"),
-        new("GOST", "Бр4", 5, "5.45x39 PP 7N10", 3.5, 5.62, 895, 0.15, 0.532, 0.478, 697,
+        new("GOST", "Бр4", 4, "5.45x39 PP 7N10", 3.5, 5.62, 895, 0.15, 0.532, 0.478, 697,
             "hardened steel core 1.72-1.80 g, 4.1 mm, 60 HRC"),
-        new("GOST", "Бр4", 5, "7.62x39 PS 57-N-231", 7.9, 7.92, 720, 0.25, 0.50, 0.468, 697,
+        new("GOST", "Бр4", 4, "7.62x39 PS 57-N-231", 7.9, 7.92, 720, 0.25, 0.50, 0.468, 697,
             "65G core, heat-treated since 1989 under an unchanged index - and the 6B23 " +
             "certificate names the heat-hardened AKM core by that index, so this is what " +
             "Бр4 is actually shot with"),
-        new("GOST", "Бр5", 6, "7.62x54R PP 7N13", 9.4, 7.92, 830, 0.10, 0.673, 0.463, 650,
+        new("GOST", "Бр5", 5, "7.62x54R PP 7N13", 9.4, 7.92, 830, 0.10, 0.673, 0.463, 650,
             "U12A core 70 gr, 6.5 mm, 55-60 HRC"),
-        new("GOST", "Бр5", 6, "7.62x54R B-32 7-BZ-3", 10.4, 7.92, 810, 0.10, 0.60, 0.60, 700,
+        new("GOST", "Бр5", 5, "7.62x54R B-32 7-BZ-3", 10.4, 7.92, 810, 0.10, 0.60, 0.60, 700,
             "armour-piercing incendiary, hardened steel core at 60 HRC"),
+        new("GOST", "Бр6", 6, "12.7x108 B-32 57-BZ-542", 48.2, 12.98, 810, 0.10, 0.69, 0.61, 700,
+            "armour-piercing incendiary, hardened U12A-grade core ~29.5 g; nothing " +
+            "man-portable holds it, which is the point of keeping the rung"),
     ];
 
     // NIJ 0123.00, the threat schedule NIJ 0101.07 refers to. The mapping onto in-game
@@ -96,25 +101,25 @@ public class ArmorStandardTests
     // the rifle end of it is where it shows.
     public static readonly Threat[] Nij =
     [
-        new("NIJ", "HG1", 2, "9mm FMJ RN 124 gr", 8.0, 9.00, 398, 0.30, 1.0, 0, 60, "lead core, jacketed"),
-        new("NIJ", "HG1", 3, ".357 Magnum JSP 158 gr", 10.2, 9.07, 436, 0.70, 1.0, 0, 60, "soft point"),
-        new("NIJ", "HG2", 3, "9mm FMJ RN 124 gr", 8.0, 9.00, 448, 0.30, 1.0, 0, 60, "lead core, jacketed"),
-        new("NIJ", "HG2", 3, ".44 Magnum SJHP 240 gr", 15.6, 10.90, 436, 0.90, 1.0, 0, 60, "semi-jacketed hollow point"),
-        new("NIJ", "RF1", 4, "7.62x51 M80 ball 147 gr", 9.5, 7.85, 847, 0.25, 1.0, 0, 60, "lead alloy core"),
-        new("NIJ", "RF1", 4, "7.62x39 MSC 120.5 gr", 7.9, 7.92, 732, 0.25, 1.0, 0.468, 390, "mild steel core"),
-        new("NIJ", "RF1", 4, "5.56x45 M193 56 gr", 3.6, 5.70, 990, 0.30, 1.0, 0, 60, "lead core"),
-        new("NIJ", "RF2", 5, "5.56x45 M855 62 gr", 4.0, 5.70, 950, 0.25, 1.0, 0.162, 410,
+        new("NIJ", "HG1", 1, "9mm FMJ RN 124 gr", 8.0, 9.00, 398, 0.30, 1.0, 0, 60, "lead core, jacketed"),
+        new("NIJ", "HG1", 2, ".357 Magnum JSP 158 gr", 10.2, 9.07, 436, 0.70, 1.0, 0, 60, "soft point"),
+        new("NIJ", "HG2", 2, "9mm FMJ RN 124 gr", 8.0, 9.00, 448, 0.30, 1.0, 0, 60, "lead core, jacketed"),
+        new("NIJ", "HG2", 2, ".44 Magnum SJHP 240 gr", 15.6, 10.90, 436, 0.90, 1.0, 0, 60, "semi-jacketed hollow point"),
+        new("NIJ", "RF1", 3, "7.62x51 M80 ball 147 gr", 9.5, 7.85, 847, 0.25, 1.0, 0, 60, "lead alloy core"),
+        new("NIJ", "RF1", 3, "7.62x39 MSC 120.5 gr", 7.9, 7.92, 732, 0.25, 1.0, 0.468, 390, "mild steel core"),
+        new("NIJ", "RF1", 3, "5.56x45 M193 56 gr", 3.6, 5.70, 990, 0.30, 1.0, 0, 60, "lead core"),
+        new("NIJ", "RF2", 4, "5.56x45 M855 62 gr", 4.0, 5.70, 950, 0.25, 1.0, 0.162, 410,
             "10 gr steel tip at 40-45 HRC - too soft to concentrate"),
-        new("NIJ", "RF3", 6, ".30-06 M2 AP 165.7 gr", 10.7, 7.82, 878, 0.10, 0.55, 0.55, 730,
+        new("NIJ", "RF3", 5, ".30-06 M2 AP 165.7 gr", 10.7, 7.82, 878, 0.10, 0.55, 0.55, 730,
             "hardened steel core at 60+ HRC; diameter read at the M61's, the same core in the same calibre"),
 
         // NIJ 0101.06, the standard nearly every plate on the market is still certified
         // to. Kept apart from the 0101.07 classes above because they are not the same
         // promise: RF1 added 5.56 M193 at 990 and 7.62x39 MSC to what Level III had to
         // stop. A plate is tested against what it was tested against.
-        new("NIJ", "III", 4, "7.62x51 M80 ball 147 gr", 9.5, 7.85, 847, 0.25, 1.0, 0, 60,
+        new("NIJ", "III", 3, "7.62x51 M80 ball 147 gr", 9.5, 7.85, 847, 0.25, 1.0, 0, 60,
             "0101.06 Level III: M80 ball, six shots, standalone"),
-        new("NIJ", "IV", 6, ".30-06 M2 AP 165.7 gr", 10.7, 7.82, 878, 0.10, 0.55, 0.55, 730,
+        new("NIJ", "IV", 5, ".30-06 M2 AP 165.7 gr", 10.7, 7.82, 878, 0.10, 0.55, 0.55, 730,
             "0101.06 Level IV: one shot of .30-06 AP over a Level III backing"),
     ];
 
@@ -196,7 +201,7 @@ public class ArmorStandardTests
         // NII Stali's ultra-high-strength grade at 2250-2350 UTS and 2000-2100 yield, so
         // its shear is 1035, and the panel now clears zero-of-five on its own with no
         // allowance at all. The constant was never the problem.
-        ["ArmoredSteel/6"] = (0.898,
+        ["ArmoredSteel/5"] = (0.898,
             "the Бр5 steel rung against the B-32, 10% under; the same 44S arithmetic " +
             "one class up, where the hardest core in the standard arrives"),
 
@@ -222,28 +227,28 @@ public class ArmorStandardTests
         ["granit4_5class_front"] = (0.938, "the same plate"),
         ["granit4_5class_back"] = (0.938, "the same plate on the back"),
         ["granit4rs"] = (0.924, "the lightest execution of the line, B-32 7.3% under"),
-        ["UHMWPE/5"] = (0.943,
+        ["UHMWPE/4"] = (0.943,
             "a real 1.3-in Level III standalone PE plate wearing the Бр4 rung; the " +
             "5.45 binds, and fibre is the mode where the ladder and the products " +
             "disagree (3.1)"),
-        ["Combined/5"] = (0.932,
+        ["Combined/4"] = (0.932,
             "the boron-carbide Бр4 rung, bound by the 7.62x39 PS because a brittle " +
             "barrier is not allowed to notice how hard a core is (3.2). It read " +
             "0.777 once, and most of that was never 3.2: the unnamed backing " +
             "material and the laminate-packed screen were carrying the difference, " +
             "and the erosion term's true cost is the 7% that remains"),
-        ["Combined/6"] = (0.964, "the same rung one class up, B-32 binding"),
-        ["Ceramic/6"] = (0.938, "the Бр5 alumina rung, which is the Granit's own reading"),
+        ["Combined/5"] = (0.964, "the same rung one class up, B-32 binding"),
+        ["Ceramic/5"] = (0.938, "the Бр5 alumina rung, which is the Granit's own reading"),
 
         // Titanium: the hardness exponent is derived from a rolled-armour ladder at
         // 320 HV and a 580 HV AR500 plate, and titanium sits at 350 — near the ladder,
         // far from the certificate, and with no ladder of its own beyond a single
         // point. What binds both rungs is a hardened core, which is exactly where an
         // exponent fitted at the two ends of the steel range has the least to say.
-        ["Titan/5"] = (0.913,
+        ["Titan/4"] = (0.913,
             "the Бр4 titanium rung, 9% under - bound by the 7.62x39 PS since its core " +
             "was corrected to the hardened one, where it used to be bound by the 7N10"),
-        ["Titan/6"] = (0.828, "the Бр5 rung against the B-32, 17% under"),
+        ["Titan/5"] = (0.828, "the Бр5 rung against the B-32, 17% under"),
 
         // Western
         ["SAPI_Cult_Locust"] = (0.896,
@@ -663,7 +668,7 @@ public class ArmorStandardTests
     {
         var a = Armor();
         var t = All.Single(x => x.Class == cls && x.Cartridge == cartridge);
-        var limit = a.ClassULimitJmm2[t.GameClass - 1];
+        var limit = a.ClassULimitJmm2[t.GameClass];
         var ratio = t.SpecificEnergy(a.ExpansionOnArmor) / limit;
 
         Assert.True(ratio <= KnownMiss,
@@ -864,7 +869,7 @@ public class ArmorStandardTests
         var a = Armor();
         foreach (var t in Gost.Where(t => t.V < 500))
         {
-            var limit = a.ClassULimitJmm2[t.GameClass - 1];
+            var limit = a.ClassULimitJmm2[t.GameClass];
             Assert.True(t.SpecificEnergy(a.ExpansionOnArmor) <= limit,
                 $"{t.Standard} {t.Class} no longer stops {t.Cartridge}: " +
                 $"{t.SpecificEnergy(a.ExpansionOnArmor):N1} against {limit:N1} J/mm²");
@@ -882,7 +887,7 @@ public class ArmorStandardTests
     {
         var a = Armor();
         var missed = All
-            .Where(t => t.SpecificEnergy(a.ExpansionOnArmor) > a.ClassULimitJmm2[t.GameClass - 1])
+            .Where(t => t.SpecificEnergy(a.ExpansionOnArmor) > a.ClassULimitJmm2[t.GameClass])
             .ToArray();
 
         Assert.NotEmpty(missed); // if this ever fires, stage three has landed

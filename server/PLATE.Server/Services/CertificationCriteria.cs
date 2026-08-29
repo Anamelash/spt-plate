@@ -1,4 +1,4 @@
-namespace PLATE.Server.Tests;
+namespace PLATE.Server.Services;
 
 /// <summary>
 /// What a certificate actually demands of a V50.
@@ -24,6 +24,10 @@ namespace PLATE.Server.Tests;
 ///    at least two from smoothbore) but never states an allowed number of
 ///    penetrations; the class decision belongs to ГОСТ Р 50744. Zero-of-five is our
 ///    working interpretation, not a quotation.
+///
+/// Lives on the server rather than in the test fixture because the armour normalizer
+/// earns item classes with it: an item's class is the highest rung whose every
+/// certification round its construction holds under this very criterion.
 /// </summary>
 public static class CertificationCriteria
 {

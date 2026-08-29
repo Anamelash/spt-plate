@@ -111,16 +111,16 @@ public class ArmorProductTests
     /// back to what the fabric does.
     /// </summary>
     [Theory]
-    // the sewn package: fabric stops at 2 whatever the carrier is sold as
-    [InlineData("thorcrv_level3_soft_armor_front", "Aramid", 2)]
-    [InlineData("iotv_gen4_f_level3_soft_armor_front", "Aramid", 2)]
-    [InlineData("defender2_level3_soft_armor_back", "Aramid", 2)]
-    [InlineData("crye_avs_level3_soft_armor_front", "Aramid", 2)]
+    // the sewn package: fabric stops at Br1 whatever the carrier is sold as
+    [InlineData("thorcrv_level3_soft_armor_front", "Aramid", 1)]
+    [InlineData("iotv_gen4_f_level3_soft_armor_front", "Aramid", 1)]
+    [InlineData("defender2_level3_soft_armor_back", "Aramid", 1)]
+    [InlineData("crye_avs_level3_soft_armor_front", "Aramid", 1)]
     // a pressed shell is one rung better than the fabric it is made of, and no more
-    [InlineData("ratnik_6b47_level3_helmet_armor_top", "Aramid", 3)]
-    [InlineData("item_equipment_facecover_ballistic_mask", "UHMWPE", 3)]
+    [InlineData("ratnik_6b47_level3_helmet_armor_top", "Aramid", 2)]
+    [InlineData("item_equipment_facecover_ballistic_mask", "UHMWPE", 2)]
     // a visor is polycarbonate whatever it is bolted to
-    [InlineData("item_equipment_helmet_vulkan_shield", "Glass", 2)]
+    [InlineData("item_equipment_helmet_vulkan_shield", "Glass", 1)]
     // metal and ceramic are not capped: a heavier helmet really is a thicker shell
     [InlineData("kora_kulon_level3_soft_armor_back", "ArmoredSteel", int.MaxValue)]
     [InlineData("6b5-15_level4_soft_armor_front", "Ceramic", int.MaxValue)]
@@ -145,7 +145,7 @@ public class ArmorProductTests
     {
         var ceiling = ArmorNormalizer.ClassCeiling("balaclava", "UHMWPE");
 
-        Assert.Equal(2, ceiling);
+        Assert.Equal(1, ceiling);
         Assert.True(declared > ceiling);
     }
 

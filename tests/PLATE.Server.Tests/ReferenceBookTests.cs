@@ -425,9 +425,11 @@ public class ReferenceBookTests
                     $"{name}: no thickness, no rating and no material");
             }
 
-            if (plate.Rating > 0)
+            // a stated certificate lives on the Br scale the game classes now share;
+            // 0 is legal and means "certified for fragments, not bullets"
+            if (plate.Rating is { } rating)
             {
-                Assert.InRange(plate.Rating, 1, 6);
+                Assert.InRange(rating, 0, 6);
             }
 
             Assert.False(string.IsNullOrWhiteSpace(plate.Source), $"{name}: no source for the figures");
@@ -488,12 +490,12 @@ public class ReferenceBookTests
 
         string[] shipped =
         [
-            "ArmoredSteel/3", "ArmoredSteel/4", "ArmoredSteel/5", "ArmoredSteel/6",
-            "Ceramic/4", "Ceramic/5", "Ceramic/6",
-            "Combined/3", "Combined/4", "Combined/5", "Combined/6",
-            "Titan/4", "Titan/5", "Titan/6",
-            "UHMWPE/3", "UHMWPE/4", "UHMWPE/5", "UHMWPE/6",
-            "Aluminium/4",
+            "ArmoredSteel/2", "ArmoredSteel/3", "ArmoredSteel/4", "ArmoredSteel/5",
+            "Ceramic/3", "Ceramic/4", "Ceramic/5",
+            "Combined/2", "Combined/3", "Combined/4", "Combined/5",
+            "Titan/3", "Titan/4", "Titan/5",
+            "UHMWPE/2", "UHMWPE/3", "UHMWPE/4", "UHMWPE/5",
+            "Aluminium/3",
         ];
 
         var book = Shipped();
@@ -556,21 +558,22 @@ public class ReferenceBookTests
         var shells = Shipped().HelmetShells;
         var plates = Shipped().ArmorByClass;
 
-        // a sewn package is only ever fabric, and only ever reaches 2
-        string[] sewn = ["Aramid/1", "Aramid/2", "UHMWPE/1", "UHMWPE/2"];
+        // a sewn package is only ever fabric, and only ever reaches Br1; /0 is the
+        // sub-Br1 tier
+        string[] sewn = ["Aramid/0", "Aramid/1", "UHMWPE/0", "UHMWPE/1"];
 
         string[] rigid =
         [
             // pressed laminate buys one rung over the sewn package and stops
-            "Aramid/1", "Aramid/2", "Aramid/3",
-            "UHMWPE/1", "UHMWPE/2", "UHMWPE/3",
-            "Glass/1", "Glass/2",
+            "Aramid/0", "Aramid/1", "Aramid/2",
+            "UHMWPE/0", "UHMWPE/1", "UHMWPE/2",
+            "Glass/0", "Glass/1",
             // metal and ceramic are not capped: a shell really is thicker on a heavier helmet
-            "ArmoredSteel/2", "ArmoredSteel/3", "ArmoredSteel/4", "ArmoredSteel/5", "ArmoredSteel/6",
-            "Titan/2", "Titan/3", "Titan/4", "Titan/5", "Titan/6",
-            "Combined/3", "Combined/4", "Combined/5", "Combined/6",
-            "Ceramic/4", "Ceramic/5", "Ceramic/6",
-            "Aluminium/3", "Aluminium/4",
+            "ArmoredSteel/1", "ArmoredSteel/2", "ArmoredSteel/3", "ArmoredSteel/4", "ArmoredSteel/5",
+            "Titan/1", "Titan/2", "Titan/3", "Titan/4", "Titan/5",
+            "Combined/2", "Combined/3", "Combined/4", "Combined/5",
+            "Ceramic/3", "Ceramic/4", "Ceramic/5",
+            "Aluminium/2", "Aluminium/3",
         ];
 
         foreach (var key in sewn)
@@ -593,18 +596,18 @@ public class ReferenceBookTests
         static double Areal(ReferenceBook.ArmorPlateRef p, double fallback) =>
             p.ThicknessMm * (p.DensityGCm3 > 0 ? p.DensityGCm3 : fallback);
 
-        var sewnPack = Areal(soft["UHMWPE/2"], 0.97);
-        var pressed = Areal(shells["UHMWPE/2"], 0.97);
-        var monolith = Areal(plates["UHMWPE/3"], 0.97);
+        var sewnPack = Areal(soft["UHMWPE/1"], 0.97);
+        var pressed = Areal(shells["UHMWPE/1"], 0.97);
+        var monolith = Areal(plates["UHMWPE/2"], 0.97);
 
         Assert.True(sewnPack < pressed, $"a sewn package ({sewnPack:N1}) must be lighter than a shell ({pressed:N1})");
         Assert.True(pressed < monolith, $"a shell ({pressed:N1}) must be lighter than a plate ({monolith:N1})");
     }
 
     /// <summary>
-    /// Fabric cannot be rated past 2 by being sewn thicker and a visor cannot be rated
-    /// past 2 at all, so neither table may offer a rung above its ceiling — an entry
-    /// there would be applied to something, and would mean a rating had lifted a
+    /// Fabric cannot be rated past Br1 by being sewn thicker and a visor cannot be
+    /// rated past Br1 at all, so neither table may offer a rung above its ceiling — an
+    /// entry there would be applied to something, and would mean a rating had lifted a
     /// ceiling it cannot lift.
     /// </summary>
     [Fact]
@@ -613,7 +616,7 @@ public class ReferenceBookTests
         foreach (var (key, _) in Shipped().SoftArmor)
         {
             var parts = key.Split('/');
-            Assert.True(int.Parse(parts[1]) <= 2, $"{key}: sewn fabric stops where it stops");
+            Assert.True(int.Parse(parts[1]) <= 1, $"{key}: sewn fabric stops where it stops");
         }
 
         foreach (var (key, _) in Shipped().HelmetShells)
@@ -621,9 +624,9 @@ public class ReferenceBookTests
             var parts = key.Split('/');
             var ceiling = parts[0] switch
             {
-                "Aramid" or "UHMWPE" => 3,
-                "Glass" => 2,
-                _ => 6,
+                "Aramid" or "UHMWPE" => 2,
+                "Glass" => 1,
+                _ => 5,
             };
 
             Assert.True(int.Parse(parts[1]) <= ceiling,
@@ -640,13 +643,16 @@ public class ReferenceBookTests
     [InlineData("ratnik_6b47_level3_helmet_armor_top", "Aramid", 3, 8.6)]
     [InlineData("6b43_6a_level3_soft_armor_front", "Aramid", 3, 7.6)]
     [InlineData("ulach_level4_helmet_armor_top", "UHMWPE", 4, 7.3)]
-    [InlineData("item_equipment_facecover_welding_gorilla", "ArmoredSteel", 5, 4.5)]
+    // metals are uncapped, so the class handed in is the one the item ended at — the
+    // realignment took a vanilla-5 welding mask to Br4
+    [InlineData("item_equipment_facecover_welding_gorilla", "ArmoredSteel", 4, 4.5)]
     // a face mask is pressed like a helmet, whatever the game files it under
     [InlineData("item_equipment_facecover_ballistic_mask", "UHMWPE", 3, 7.3)]
     [InlineData("item_equipment_facecover_shatteredmask", "Aramid", 3, 8.6)]
     // and the few pieces of headgear that really are cloth stay cloth
     [InlineData("balaclava", "UHMWPE", 3, 7.0)]
-    [InlineData("item_equipment_head_bomber", "Aramid", 1, 5.5)]
+    // the bomber hat is the sub-Br1 tier itself: class 0, the /0 rung
+    [InlineData("item_equipment_head_bomber", "Aramid", 0, 5.5)]
     public void Pressed_and_sewn_read_off_different_tables(
         string item, string material, int cls, double expected)
     {
@@ -670,7 +676,7 @@ public class ReferenceBookTests
         var slaap = book.ArmorPlates["item_equipment_helmet_gentex_slaap_gray"];
 
         Assert.True(slaap.Plate);
-        Assert.True(slaap.ThicknessMm > book.HelmetShells["UHMWPE/3"].ThicknessMm,
+        Assert.True(slaap.ThicknessMm > book.HelmetShells["UHMWPE/2"].ThicknessMm,
             "an applique the ceiling does not reach has to be visibly not a shell");
 
         // and it is a construction, not a lever: the flag lifts a rating, so an entry
@@ -697,19 +703,20 @@ public class ReferenceBookTests
         // because the next maker who publishes what a thing stops and nothing else will
         // land on it.
         reference.ArmorPlates["a_maker_who_only_says_what_it_stops"] =
-            new ReferenceBook.ArmorPlateRef { Prototype = "stated at Br2", Rating = 2 };
+            new ReferenceBook.ArmorPlateRef { Prototype = "stated at Br1", Rating = 1 };
 
         const string item = "a_maker_who_only_says_what_it_stops_level5_helmet_armor_top";
         var spec = ArmorNormalizer.ProductSpec(
             reference, item, ArmorNormalizer.Product(item), out _);
 
         Assert.Equal(0, spec!.ThicknessMm);
-        Assert.Equal(2, spec.Rating);
+        Assert.Equal(1, spec.Rating!.Value);
 
-        // read at their 2 it is the PASGT shell; read at the game's 5 it would be capped
-        // to 3 and come out as the heaviest aramid shell ever fielded
-        Assert.True(reference.HelmetShells["Aramid/2"].ThicknessMm
-                    < reference.HelmetShells["Aramid/3"].ThicknessMm);
+        // read at their Br1 it is the PASGT-weight shell; read off the game's label it
+        // would sit at the shell ceiling and come out as the heaviest aramid shell
+        // ever fielded
+        Assert.True(reference.HelmetShells["Aramid/1"].ThicknessMm
+                    < reference.HelmetShells["Aramid/2"].ThicknessMm);
     }
 
     /// <summary>
@@ -732,6 +739,68 @@ public class ReferenceBookTests
                 Assert.Fail($"{key}: written off, but the product table has {documented.Prototype}");
             }
         }
+    }
+
+    /// <summary>
+    /// The certification table the normalizer earns classes against, held identical to
+    /// the fixture's own copy. The fixture spells its rounds out on purpose — a fixture
+    /// that shares its inputs with the thing under test proves nothing — and this is
+    /// the cross-check that keeps the two from drifting: a corrected velocity or core
+    /// that reaches only one of them is a silent fork of the standard.
+    /// </summary>
+    [Fact]
+    public void The_certification_table_matches_the_fixtures_reading_of_the_standard()
+    {
+        var certification = Shipped().Certification;
+
+        foreach (var t in ArmorStandardTests.Gost)
+        {
+            Assert.True(certification.TryGetValue(t.Class, out var rounds),
+                $"the book has no {t.Class} rung");
+            var round = rounds!.SingleOrDefault(r => r.Cartridge == t.Cartridge);
+            Assert.True(round != null, $"{t.Class}: the book does not fire {t.Cartridge}");
+
+            Assert.Equal(t.MassG, round!.MassG, 3);
+            Assert.Equal(t.DiaMm, round.DiaMm, 3);
+            Assert.Equal(t.V, round.VelocityMs, 3);
+            Assert.Equal(t.X, round.X, 3);
+            Assert.Equal(t.CoreAreaFrac, round.CoreAreaFrac, 3);
+            Assert.Equal(t.CoreMassFrac, round.CoreMassFrac, 3);
+            Assert.Equal(t.CoreHardnessHv, round.CoreHardnessHv, 3);
+        }
+
+        // and nothing beyond the standard: a rung or round only the book knows would
+        // earn classes the fixture never audits
+        Assert.Equal(ArmorStandardTests.Gost.Select(t => t.Class).Distinct().Count(),
+            certification.Count);
+        foreach (var (cls, rounds) in certification)
+        {
+            Assert.Equal(ArmorStandardTests.Gost.Count(t => t.Class == cls), rounds.Count);
+        }
+    }
+
+    /// <summary>
+    /// The passports the realignment stands on. A Rating lost in a book edit would
+    /// silently hand the item back to the model or the shifted label — the Maska visor
+    /// would drift from its certified Br2, the SSh-68 would earn a bullet rating its
+    /// passport denies — so the core set is pinned the way measured bullet lengths are.
+    /// </summary>
+    [Theory]
+    [InlineData("maska1sha", 2)]
+    [InlineData("item_equipment_helmet_maska_1sh_shield", 2)]
+    [InlineData("altin", 2)]
+    [InlineData("Rys_T", 2)]
+    [InlineData("zsh_1_2m", 2)]
+    [InlineData("adept_neosteel", 2)]
+    [InlineData("lshz5_vulkan5", 4)]
+    [InlineData("ratnik_6b47", 1)]
+    [InlineData("ssh68", 0)]
+    public void The_passport_set_is_pinned(string key, int rating)
+    {
+        var plate = Shipped().ArmorPlates[key];
+
+        Assert.True(plate.Rating.HasValue, $"{key}: the passport is gone");
+        Assert.Equal(rating, plate.Rating!.Value);
     }
 
     /// <summary>

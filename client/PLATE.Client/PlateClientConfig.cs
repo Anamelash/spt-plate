@@ -243,7 +243,7 @@ namespace PLATE.Client
         public static ConfigFile Source => _cfg;
 
         /// <summary>Bump on every change to an existing setting's default.</summary>
-        private const int CurrentConfigVersion = 10;
+        private const int CurrentConfigVersion = 11;
 
         /// <summary>Shown on a key that only exists to be read once by a migration.</summary>
         private const string RetiredNote =
@@ -492,8 +492,10 @@ namespace PLATE.Client
             ArmorMitigationMin = Bind(sBal, "Armor mitigation min", 0.30f,
                 "Lower bound of the mitigation on penetration.",
                 new AcceptableValueRange<float>(0f, 1f), true);
-            ArmorResistPerClass = Bind(sBal, "Armor resist per class", 10f,
-                "Resistance estimate: armor class * this value.",
+            ArmorResistPerClass = Bind(sBal, "Armor resist per class", 12f,
+                "Resistance estimate: armor class * this value. Classes are GOST Br " +
+                "numbers since the realignment (one lower than vanilla's), hence the " +
+                "default sits above the old 10.",
                 new AcceptableValueRange<float>(5f, 20f), true);
             ArmorDurabilityFloor = Bind(sBal, "Armor durability floor", 0.5f,
                 "Share of resistance left at zero armor durability.",
@@ -528,16 +530,17 @@ namespace PLATE.Client
                 "energy/damage (fallback).",
                 new AcceptableValueRange<float>(0f, 0.9f), true);
             FragBlockEnergyJ = Bind(sBal, "Frag block energy, J", 400f,
-                "Fragment impact energy below which class 1 armor blocks it outright; " +
-                "higher classes raise the threshold by the class factor below.",
+                "Fragment impact energy below which class 0 armor — the anti-fragment " +
+                "tier — blocks it outright; higher classes raise the threshold by the " +
+                "class factor below.",
                 new AcceptableValueRange<float>(100f, 1500f), true);
             FragBlockClassFactor = Bind(sBal, "Frag block class factor", 1.45f,
-                "Threshold multiplier per armor class above 1.",
+                "Threshold multiplier per armor class above 0.",
                 new AcceptableValueRange<float>(1f, 3f), true);
             LargeFragShare = Bind(sBal, "Large fragment share (fallback)", 0.02f,
                 "Fallback share of large fragments (base plate/fuze) when the server did " +
                 "not report the exact one (1/grenade fragment count). Only a large fragment " +
-                "is allowed an honest penetration roll — class 1+ armor always stops a medium one.",
+                "is allowed an honest penetration roll — any intact armor stops a medium one.",
                 new AcceptableValueRange<float>(0f, 1f), true);
             LargeFragEnergyMult = Bind(sBal, "Large fragment energy mult", 4f,
                 "How many times more energetic a large fragment is than a medium one " +
@@ -1192,6 +1195,14 @@ namespace PLATE.Client
                 MarkerLabelProjection.Value == Overlay.LabelProjection.Screen)
             {
                 MarkerLabelProjection.Value = Overlay.LabelProjection.Viewport;
+            }
+
+            // v11: the Br realignment took every armor class down about one (game class
+            // = GOST class now), and the vanilla-fallback resistance estimate is
+            // class * this — nudged so the same plate resists roughly what it did.
+            if (ConfigVersion.Value < 11)
+            {
+                Migrate(ArmorResistPerClass, 10f, 12f);
             }
 
             ConfigVersion.Value = CurrentConfigVersion;

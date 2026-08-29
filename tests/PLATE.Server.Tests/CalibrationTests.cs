@@ -49,11 +49,12 @@ public class CalibrationTests
 
             if (key.Contains('/'))
             {
-                // a class rung standing on a real product without a book entry
+                // a class rung standing on a real product without a book entry; the
+                // rung index IS the Br number since the realignment
                 var parts = key.Split('/');
                 (barrier, _) = ArmorFixture.ByClass(parts[0], int.Parse(parts[1]));
                 standard = "GOST";
-                cls = parts[1] switch { "5" => "Бр4", "6" => "Бр5", _ => "Бр3" };
+                cls = $"Бр{parts[1]}";
             }
             else
             {

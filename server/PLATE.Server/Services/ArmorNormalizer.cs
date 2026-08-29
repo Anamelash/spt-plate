@@ -59,6 +59,24 @@ public class ArmorNormalizer(
     private int _reRated;
 
     /// <summary>
+    /// The class each item wore when this normalizer first saw it. The fallback path
+    /// shifts the game's label onto the Br scale, and shifting an already-shifted
+    /// label would walk it down one per pass — this pins the pass to the original,
+    /// keeping Run idempotent the way the rest of the normalizer is.
+    /// </summary>
+    private readonly Dictionary<string, int> _declared = new();
+
+    private int Declared(string itemId, int cls)
+    {
+        if (!_declared.TryGetValue(itemId, out var d))
+        {
+            _declared[itemId] = d = cls;
+        }
+
+        return d;
+    }
+
+    /// <summary>
     /// "6b5-16_level3_soft_armor_front" and "granit4_5class_back" both name a product.
     /// No word boundary after the marker: what follows it is an underscore, which is a
     /// word character, so \b never matches there and the cut silently never happens.
@@ -201,30 +219,57 @@ public class ArmorNormalizer(
                     material, out var known2) ? known2 : p.ArmorMaterial;
             }
 
-            // A class is what a construction earns, not a label it wears. The reference
-            // has always been READ at what the material can reach — the sewn aramid
-            // package the game stamps class 3 has behaved like the class 2 package it is
-            // since the ceiling went in — but the number on the item still said 3, and
-            // everything that reads a class rather than a thickness believed it: the
-            // fragment gate, the fallback threshold, the item card, other mods. The label
-            // now follows the physics. Material comes first, because the ceiling is a
-            // property of the material and the reference book has just corrected it.
-            var ceiling = spec is { Plate: true } ? int.MaxValue : ClassCeiling(itemName, material);
-            var declared = cls;
-            var rating = Math.Min(stated is { Rating: > 0 } ? stated.Rating : cls, ceiling);
+            // A class is a Br number now, and the label is derived rather than trusted:
+            // the game's own scale ran one rung high — its 2..6 stood for Бр1..Бр5,
+            // with class 1 an anti-fragment tier below every standard, and that tier is
+            // class 0 here. Three answers, in descending order of trust. A published
+            // certificate (Rating, already in Br terms) outranks everything, in both
+            // directions — down to 0 (the SSh-68 is rated for fragments whatever the
+            // model thinks its steel holds) and up past the shift (the Vulkan-5 really
+            // is Br4). A documented construction EARNS its class against the standard's
+            // own rounds, at the passport reading (every round of the rung stopped at
+            // its test velocity: the strict zero-of-five margin solves rung
+            // thicknesses, but judging items by it would eat documented certificates
+            // through the model's recorded shortfalls) — and only DOWNWARD from the
+            // shifted label: a lift is a certificate's to make, never the model's,
+            // whose optimistic branches would otherwise hand 1.25 mm of titanium a
+            // rifle rating. Anything else carries the game's label shifted onto the Br
+            // scale, held under the form's ceiling. Player tuning does not enter —
+            // certification is judged at the reference constants, or a config knob
+            // would relabel items.
+            var ceiling = spec is { Plate: true } || stated is { Plate: true }
+                ? int.MaxValue
+                : ClassCeiling(itemName, material);
+            var declared = Declared(item.Id, cls);
+            var shifted = Math.Clamp(declared - 1, 0, Math.Min(ceiling, 6));
 
-            if (cls > ceiling)
+            int earned;
+            if (corrected?.Rating is { } passport)
             {
-                cls = ceiling;
+                earned = passport;
+            }
+            else if (spec != null && TryEarnedClass(reference, material, spec) is { } fromConstruction)
+            {
+                earned = Math.Min(fromConstruction, shifted);
+            }
+            else
+            {
+                earned = shifted;
+            }
+
+            if (cls != earned)
+            {
+                cls = earned;
                 p.ArmorClass = cls;
                 _reRated++;
             }
 
             // a plate the game invented has no product to look up, but there is a real
             // plate of the same rating doing the same job, and that is what it stands in
-            // for. Mass only decides it when even that is missing
+            // for — looked up at the class the item now carries, so the label and the
+            // construction cannot disagree. Mass only decides it when even that is missing
             var byClass = spec == null
-                ? ClassReference(reference, itemName, material, rating)
+                ? ClassReference(reference, itemName, material, cls)
                 : null;
             var derived = spec == null && byClass == null
                 ? DeriveThickness(itemName, p, material, reference)
@@ -248,7 +293,7 @@ public class ArmorNormalizer(
                     MaterialWas = was,
                     Kind = Classify(itemName),
                     Class = cls,
-                    CappedFrom = cls < declared ? declared : 0,
+                    CappedFrom = cls != declared ? declared : 0,
                     Note = Note(reference, itemName, product),
                 };
                 target[rowKey] = row;
@@ -568,20 +613,21 @@ public class ArmorNormalizer(
     }
 
     /// <summary>
-    /// The rating a material can actually reach in that form. A woven package stops at
-    /// 2: getting to Br3 with aramid alone would take around 200 mm of it, which is why
-    /// carriers are sold as Br1 or Br2 and everything above that in a vest is a plate.
-    /// Pressing the same fibre into a resin-bonded shell buys one rung and no more —
-    /// past that a helmet stops getting thicker and starts getting a metal or ceramic
-    /// element, and that element belongs in the product table by name. A visor is
-    /// polycarbonate and laminate whatever it is bolted to. Metal and ceramic are not
-    /// capped at all: a shell really is thicker on a heavier helmet.
+    /// The rating a material can actually reach in that form, in Br terms (= game
+    /// classes). A woven package stops at Br1: getting to Br3 with aramid alone would
+    /// take around 200 mm of it, which is why the rifle protection in a vest lives in
+    /// the plates. Pressing the same fibre into a resin-bonded shell buys one rung —
+    /// Br2 — and no more: past that a helmet stops getting thicker and starts getting
+    /// a metal or ceramic element, and that element belongs in the product table by
+    /// name. A visor is polycarbonate and laminate whatever it is bolted to, Br1 at
+    /// best. Metal and ceramic are not capped at all: a shell really is thicker on a
+    /// heavier helmet.
     /// </summary>
     private static int Ceiling(string material, bool shell)
     {
         if (material.Equals("Glass", StringComparison.OrdinalIgnoreCase))
         {
-            return 2;
+            return 1;
         }
 
         if (!Fibrous.Contains(material, StringComparer.OrdinalIgnoreCase))
@@ -589,7 +635,98 @@ public class ArmorNormalizer(
             return int.MaxValue;
         }
 
-        return shell ? 3 : 2;
+        return shell ? 2 : 1;
+    }
+
+    /// <summary>
+    /// The class a documented construction earns against the standard's own rounds:
+    /// the highest rung whose EVERY certification cartridge it stops at the test
+    /// velocity, head-on and undamaged, at the reference tuning. 0 — it holds not even
+    /// Бр1, the anti-fragment tier. Null — the book cannot judge it (no material
+    /// physics, no thickness, or a stale book with no certification table), and the
+    /// caller falls back to the shifted label.
+    /// </summary>
+    private static int? TryEarnedClass(ReferenceBook.AmmoReference reference, string material,
+        ReferenceBook.ArmorPlateRef entry)
+    {
+        var built = BuildBarrier(reference, material, entry);
+        if (built == null || entry.ThicknessMm <= 0 || reference.Certification.Count == 0)
+        {
+            return null;
+        }
+
+        var barrier = built.Value;
+        var tuning = BallisticLimit.Tuning.Default;
+        for (var cls = 6; cls >= 1; cls--)
+        {
+            if (!reference.Certification.TryGetValue(ReferenceBook.AmmoReference.GostRung(cls),
+                    out var rounds) || rounds == null || rounds.Count == 0)
+            {
+                continue;
+            }
+
+            var holds = rounds.All(r => BallisticLimit.V50(barrier,
+                BallisticLimit.Driving(r.MassG, r.DiaMm, r.CoreAreaFrac, r.CoreMassFrac,
+                    r.CoreHardnessHv, tuning),
+                1.0, r.VelocityMs, tuning) >= r.VelocityMs);
+            if (holds)
+            {
+                return cls;
+            }
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// The barrier a documented product presents to a certification round — the same
+    /// assembly the test fixture and the client's ballistic limit make: the material's
+    /// physics under the product's own thickness, density, alloy grade and backing.
+    /// Null when the material has no physics in the book.
+    /// </summary>
+    private static BallisticLimit.Barrier? BuildBarrier(ReferenceBook.AmmoReference reference,
+        string material, ReferenceBook.ArmorPlateRef entry)
+    {
+        if (string.IsNullOrEmpty(material) ||
+            !reference.ArmorMaterials.TryGetValue(material, out var physics))
+        {
+            return null;
+        }
+
+        // only the fibre in a package does any work, and a sewn one is mostly air; a
+        // product may also carry its own density when the material table is wrong for
+        // it (boron carbide against the table's alumina)
+        var density = entry.DensityGCm3 > 0 ? entry.DensityGCm3 : physics.DensityGCm3;
+        var barrier = new BallisticLimit.Barrier
+        {
+            Class = physics.Class,
+            FailureMode = physics.FailureMode,
+            ThicknessMm = entry.ThicknessMm,
+            ShearMPa = entry.ShearMPa > 0 ? entry.ShearMPa : physics.ShearMPa,
+            YieldMPa = entry.YieldMPa > 0 ? entry.YieldMPa : physics.YieldMPa,
+            CompressiveMPa = physics.CompressiveMPa,
+            FibreTensileMPa = physics.FibreTensileMPa,
+            FailureStrain = physics.FailureStrain,
+            HardnessHv = entry.HardnessHv > 0 ? entry.HardnessHv : physics.HardnessHv,
+            DensityGCm3 = density,
+            PackedFraction = physics.DensityGCm3 > 0 ? density / physics.DensityGCm3 : 1,
+        };
+
+        if (entry.BackingMm > 0 && reference.ArmorMaterials.TryGetValue(
+                string.IsNullOrEmpty(entry.BackingMaterial) ? "Aramid" : entry.BackingMaterial,
+                out var backing))
+        {
+            barrier.BackingMm = entry.BackingMm;
+            barrier.BackingTensileMPa = backing.FibreTensileMPa;
+            barrier.BackingStrain = backing.FailureStrain;
+            // same rule the client applies: a stitched screen is mostly air
+            barrier.BackingPacked = string.IsNullOrEmpty(entry.BackingMaterial) ||
+                                    entry.BackingMaterial == "Aramid"
+                ? BallisticLimit.SewnPacked
+                : 1;
+        }
+
+        return barrier;
     }
 
     /// <summary>Drops the shared prefix so the report reads as plate names.</summary>

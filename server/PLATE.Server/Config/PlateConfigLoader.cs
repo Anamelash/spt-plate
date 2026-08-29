@@ -85,6 +85,12 @@ public class PlateConfigLoader(ISptLogger<PlateConfigLoader> logger)
             // chest of a gelatin manikin, 250 mm, instead of an unlabelled 350 mm
             text = text.Replace("\"BodyDepthMm\": 350", "\"BodyDepthMm\": 250");
 
+            // the Br realignment: the threshold ladder is indexed by class 0..6 now
+            // (class = Br), so the old six-element array — whose first entry was the
+            // anti-fragment tier the game used to call class 1 — gains the Br6 rung
+            text = text.Replace("\"ClassULimitJmm2\": [2.5, 5.2, 12, 40, 65, 90],",
+                "\"ClassULimitJmm2\": [2.5, 5.2, 12, 40, 65, 90, 165],");
+
             if (text != before)
             {
                 await File.WriteAllTextAsync(path, text, ct);
@@ -231,10 +237,12 @@ public class PlateConfigLoader(ISptLogger<PlateConfigLoader> logger)
             "ThresholdBand": 0.12,
             // Slant thickness: U_eff ~ 1/cos of the impact angle, capped at this cosine
             "AngleMinCos": 0.34,
-            // U_limit per class 1..6 (J/mm², zero wear). Class 1 —
-            // anti-fragmentation junk (construction helmets: spent shot/fragments only,
-            // does NOT stop a pistol bullet); class 2 = GOST Br1 (PM, 5.2); above — Br2..Br5
-            "ClassULimitJmm2": [2.5, 5.2, 12, 40, 65, 90],
+            // U_limit per class 0..6 (J/mm², zero wear) — the INDEX is the class.
+            // Game classes are GOST classes since the Br realignment: 0 — the
+            // anti-fragment tier (spent shot/fragments only, does NOT stop a pistol
+            // bullet); 1..6 — Br1..Br6, each at the specific energy of its own test
+            // cartridge (Br1 = PM at 5.2; Br6 = 12.7 B-32, held by nothing worn)
+            "ClassULimitJmm2": [2.5, 5.2, 12, 40, 65, 90, 165],
             // Wear is probabilistic, not a smooth multiplier (3.4): a worn plate is
             // intact where nothing hit it and broken where something did. Chance of
             // striking a damaged spot = missing durability; a struck spot keeps

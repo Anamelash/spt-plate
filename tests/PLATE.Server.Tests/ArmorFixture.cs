@@ -19,10 +19,11 @@ public static class ArmorFixture
         string material, int gameClass)
     {
         // Fibre is the one material that comes both ways, so the item decides and not the
-        // material: an aramid vest package reads out of SoftArmor and is sold as Бр1 or
-        // Бр2, a pressed polyethylene plate reads out of ArmorByClass like any other.
+        // material: an aramid vest package reads out of SoftArmor and tops out at Бр1
+        // (= game class 1 since the realignment), a pressed polyethylene plate reads out
+        // of ArmorByClass like any other.
         var sewn = material == "Aramid";
-        var rung = sewn ? System.Math.Min(gameClass, 2) : gameClass;
+        var rung = sewn ? System.Math.Min(gameClass, 1) : gameClass;
         var entry = sewn
             ? Book.SoftArmor[$"{material}/{rung}"]
             : Book.ResolveByClass($"{material}/{rung}");
@@ -50,7 +51,7 @@ public static class ArmorFixture
     public static bool ClassExists(string material, int gameClass)
     {
         var sewn = material == "Aramid";
-        var rung = sewn ? System.Math.Min(gameClass, 2) : gameClass;
+        var rung = sewn ? System.Math.Min(gameClass, 1) : gameClass;
         return (sewn ? Book.SoftArmor : Book.ArmorByClass).ContainsKey($"{material}/{rung}");
     }
 

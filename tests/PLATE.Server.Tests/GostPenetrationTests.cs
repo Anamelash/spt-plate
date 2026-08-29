@@ -22,16 +22,18 @@ namespace PLATE.Server.Tests;
 public class GostPenetrationTests
 {
     /// <summary>
-    /// In-game class 1 is anti-fragment junk below every standard, so GOST Бр1..Бр5 are
-    /// in-game 2..6 and the rung below Бр1 is in-game 1.
+    /// Since the Br realignment the in-game class IS the GOST class, and the rung below
+    /// Бр1 — the anti-fragment tier — is in-game 0. The switch stays explicit rather
+    /// than parsing the digit out, so a typo in a class name still throws.
     /// </summary>
     private static int GameClass(string cls) => cls switch
     {
-        "Бр1" => 2,
-        "Бр2" => 3,
-        "Бр3" => 4,
-        "Бр4" => 5,
-        "Бр5" => 6,
+        "Бр1" => 1,
+        "Бр2" => 2,
+        "Бр3" => 3,
+        "Бр4" => 4,
+        "Бр5" => 5,
+        "Бр6" => 6,
         _ => throw new ArgumentOutOfRangeException(nameof(cls), cls, "not a GOST class"),
     };
 
@@ -233,8 +235,8 @@ public class GostPenetrationTests
         if (!Exists(material, below))
         {
             // nothing of that class is made at all, which is a stronger statement than
-            // the one being tested — GOST Бр1 is the bottom of the ladder
-            Assert.Equal(1, below);
+            // the one being tested — below GOST Бр1 sits only the anti-fragment tier
+            Assert.Equal(0, below);
             return;
         }
 
@@ -313,11 +315,6 @@ public class GostPenetrationTests
     public void A_certified_russian_plate_is_beaten_by_the_class_above(string bookKey)
     {
         var cert = Cert(bookKey);
-        if (cert.Class == "Бр5")
-        {
-            return; // the top of the ladder the game has a class for
-        }
-
         var above = Above(cert.Class);
         var (barrier, thickness) = ArmorFixture.ByProduct(bookKey);
         var threats = ArmorFixture.Threats("GOST", above);
@@ -360,6 +357,7 @@ public class GostPenetrationTests
         "Бр2" => "Бр3",
         "Бр3" => "Бр4",
         "Бр4" => "Бр5",
+        "Бр5" => "Бр6",
         _ => throw new ArgumentOutOfRangeException(nameof(cls), cls, "nothing above it"),
     };
 
@@ -410,11 +408,11 @@ public class GostPenetrationTests
     /// factor of two either way is physics; a factor of three is a category error.
     /// </summary>
     [Theory]
-    [InlineData("ArmoredSteel", 5)]
-    [InlineData("Ceramic", 5)]
-    [InlineData("Titan", 5)]
-    [InlineData("UHMWPE", 5)]
-    [InlineData("Combined", 5)]
+    [InlineData("ArmoredSteel", 4)]
+    [InlineData("Ceramic", 4)]
+    [InlineData("Titan", 4)]
+    [InlineData("UHMWPE", 4)]
+    [InlineData("Combined", 4)]
     public void Knowing_a_bullets_construction_keeps_it_in_the_same_world(string material,
         int gameClass)
     {
@@ -454,8 +452,8 @@ public class GostPenetrationTests
         var core = CoreOf(t);
         var tuning = BallisticLimit.Tuning.Default;
 
-        var (steel, _) = Plate("ArmoredSteel", 5);
-        var (fibre, _) = Plate("Aramid", 2);
+        var (steel, _) = Plate("ArmoredSteel", 4);
+        var (fibre, _) = Plate("Aramid", 1);
 
         Assert.True(BallisticLimit.PlugMassG(steel, core, 1.0, tuning) > 0.3);
         Assert.Equal(0, BallisticLimit.PlugMassG(fibre, core, 1.0, tuning));
@@ -469,7 +467,7 @@ public class GostPenetrationTests
     public void A_slanted_plate_is_a_thicker_plate()
     {
         var t = ArmorStandardTests.Gost.Single(x => x.Cartridge.Contains("7N10"));
-        var (barrier, _) = Plate("ArmoredSteel", 5);
+        var (barrier, _) = Plate("ArmoredSteel", 4);
         var core = CoreOf(t);
         var tuning = BallisticLimit.Tuning.Default;
 

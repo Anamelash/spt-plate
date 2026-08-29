@@ -1645,7 +1645,9 @@ namespace PLATE.Client.Patches
 
             try
             {
-                if (__instance.ArmorClass < 1 || __instance.Repairable.Durability <= 0f)
+                // class 0 is the anti-fragment tier since the Br realignment — stopping
+                // fragments is the one thing it does, so only broken armor stands aside
+                if (__instance.Repairable.Durability <= 0f)
                 {
                     return true; // broken armor does not stop a fragment
                 }
@@ -1673,9 +1675,11 @@ namespace PLATE.Client.Patches
                     energyJ *= PlateClientConfig.LargeFragEnergyMult.Value;
                 }
 
+                // the base threshold sits on class 0 — the tier whose whole job is
+                // fragments — and each Br class above raises it by the factor
                 var threshold = PlateClientConfig.FragBlockEnergyJ.Value *
                                 Mathf.Pow(PlateClientConfig.FragBlockClassFactor.Value,
-                                    __instance.ArmorClass - 1);
+                                    __instance.ArmorClass);
                 if (energyJ >= threshold)
                 {
                     return true; // large energetic fragment — honest roll

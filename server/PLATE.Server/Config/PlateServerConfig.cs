@@ -99,11 +99,13 @@ public class PlateServerConfig
         /// (slant thickness); below the cap the vanilla ricochet takes over.</summary>
         public double AngleMinCos { get; set; } = 0.34;
 
-        /// <summary>U_limit per in-game class 1..6 at zero wear, J/mm².
-        /// Class 1 — anti-fragmentation junk (construction helmets: spent shot/
-        /// fragments only, does NOT stop a pistol bullet); class 2 = GOST Br1
-        /// (test cartridge PM, 5.2 J/mm²); above — Br2..Br5, estimated.</summary>
-        public double[] ClassULimitJmm2 { get; set; } = { 2.5, 5.2, 12, 40, 65, 90 };
+        /// <summary>U_limit per in-game class 0..6 at zero wear, J/mm² — index IS the
+        /// class. Since the Br realignment the game class is the GOST class: 0 — the
+        /// anti-fragment tier below every standard (spent shot/fragments only, does NOT
+        /// stop a pistol bullet); 1..6 — Br1..Br6, each read at the specific energy of
+        /// its own test cartridge (Br1 = PM at 5.2 J/mm²; Br6 = 12.7 B-32, which no
+        /// man-portable armour holds).</summary>
+        public double[] ClassULimitJmm2 { get; set; } = { 2.5, 5.2, 12, 40, 65, 90, 165 };
 
         // Wear is no longer a smooth multiplier (the old DurabilityFloor/DegradeFloor
         // pair). A worn plate is not uniformly thinner — it is intact where nothing
