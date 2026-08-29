@@ -639,6 +639,44 @@ public class ArmorNormalizer(
     }
 
     /// <summary>
+    /// Fence's plate-existence table (trader.json, chancePlateExistsInArmorPercent) is
+    /// keyed by plate class, and vanilla ships rungs 3..6 — the game's own assumption
+    /// that no plate sits lower. The realignment makes lower-class plates real, and
+    /// FenceService indexes the dictionary directly: a Бр2 plate in an assort crashed
+    /// the trader refresh with a KeyNotFoundException. Every class the scale knows gets
+    /// a rung; each missing one reads the nearest shipped rung's value — no number of
+    /// ours, just the table's own edge extended. Returns the keys it added.
+    /// </summary>
+    public static List<string> ExtendFencePlateChances(Dictionary<string, double> chances)
+    {
+        var added = new List<string>();
+        var known = chances.Keys
+            .Select(k => int.TryParse(k, out var c) ? (int?)c : null)
+            .OfType<int>()
+            .ToList();
+        if (known.Count == 0)
+        {
+            return added;
+        }
+
+        for (var cls = 0; cls <= 6; cls++)
+        {
+            var key = cls.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (chances.ContainsKey(key))
+            {
+                continue;
+            }
+
+            var nearest = known.OrderBy(c => Math.Abs(c - cls)).ThenBy(c => c).First();
+            chances[key] = chances[
+                nearest.ToString(System.Globalization.CultureInfo.InvariantCulture)];
+            added.Add(key);
+        }
+
+        return added;
+    }
+
+    /// <summary>
     /// The class a documented construction earns against the standard's own rounds:
     /// the highest rung whose EVERY certification cartridge it stops at the test
     /// velocity, head-on and undamaged, at the reference tuning. 0 — it holds not even

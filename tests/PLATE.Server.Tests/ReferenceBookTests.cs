@@ -795,6 +795,20 @@ public class ReferenceBookTests
     [InlineData("lshz5_vulkan5", 4)]
     [InlineData("ratnik_6b47", 1)]
     [InlineData("ssh68", 0)]
+    // the certified plates. The Zhuk-3 is the reason they are here: its vanilla label
+    // was 3, the shift read that as Br2, and the downward-only rule could not give the
+    // certificate back — only a passport lifts
+    [InlineData("granit4_zhukBr3_3class_front", 3)]
+    [InlineData("kora_kulon", 3)]
+    [InlineData("korund", 4)]
+    [InlineData("korund_vm", 4)]
+    [InlineData("granitBr4", 4)]
+    [InlineData("korund_back_6b23_2", 4)]
+    [InlineData("granitBr5", 5)]
+    [InlineData("granit", 5)]
+    [InlineData("granit4rs", 5)]
+    [InlineData("granit4_5class_front", 5)]
+    [InlineData("granit4_5class_back", 5)]
     public void The_passport_set_is_pinned(string key, int rating)
     {
         var plate = Shipped().ArmorPlates[key];

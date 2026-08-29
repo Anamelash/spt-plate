@@ -44,6 +44,11 @@ public class ArmorNormalizerTests
     // the game stamps 3 is Br1 at most, whatever 3 − 1 says
     [InlineData("thorcrv_level3_soft_armor_front", ArmorMaterial.Aramid, 3,
         ArmorMaterial.Aramid, 1)]
+    // ...and only a passport lifts past the shift: the Zhuk-3 is certified Br3, its
+    // vanilla label read Br2 after the shift, and without the book's Rating the
+    // downward-only rule had no way back up
+    [InlineData("item_equipment_plate_granit4_zhukBr3_3class_front", ArmorMaterial.UHMWPE, 3,
+        ArmorMaterial.UHMWPE, 3)]
     public void The_class_is_derived_rather_than_trusted(string itemName,
         ArmorMaterial gameMaterial, int gameClass,
         ArmorMaterial expectedMaterial, int expectedClass)
@@ -106,6 +111,35 @@ public class ArmorNormalizerTests
 
         Assert.Equal(ArmorMaterial.Aramid, item.Properties!.ArmorMaterial);
         Assert.Equal(6.43, normalizer.ThicknessByTemplate[item.Id], 3);
+    }
+
+    /// <summary>
+    /// Fence's plate-existence table ships rungs 3..6 and FenceService indexes it by
+    /// the plate's class directly — a Бр2 plate crashed the trader refresh. The
+    /// extension gives every class 0..6 a rung, each missing one reading the nearest
+    /// shipped rung's value, and touches nothing that exists.
+    /// </summary>
+    [Fact]
+    public void The_fence_table_gains_a_rung_for_every_class_the_scale_knows()
+    {
+        var chances = new Dictionary<string, double>
+        {
+            ["3"] = 100, ["4"] = 87, ["5"] = 60, ["6"] = 15,
+        };
+
+        var added = ArmorNormalizer.ExtendFencePlateChances(chances);
+
+        Assert.Equal(["0", "1", "2"], added);
+        Assert.Equal(100, chances["0"]);
+        Assert.Equal(100, chances["1"]);
+        Assert.Equal(100, chances["2"]);
+        Assert.Equal(87, chances["4"]);
+        Assert.Equal(7, chances.Count);
+
+        // and an empty table stays empty: there is no edge to extend
+        var empty = new Dictionary<string, double>();
+        Assert.Empty(ArmorNormalizer.ExtendFencePlateChances(empty));
+        Assert.Empty(empty);
     }
 
     /// <summary>

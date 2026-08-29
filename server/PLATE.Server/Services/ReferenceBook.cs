@@ -1255,7 +1255,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "6b5-15":     { "Prototype": "6B5-15, ADU 14.20.00.000", "Material": "Ceramic", "ThicknessMm": 13, "BackingMm": 7.6, "BackingMaterial": "UHMWPE",
                             "DensityGCm3": 2.52,
                             "Source": "boron carbide 13 mm, 17-20 tiles a side, on a fabric package" },
-            "kora_kulon": { "Prototype": "Kora-Kulon", "Material": "ArmoredSteel", "ThicknessMm": 4.3, "BackingMm": 6,
+            "kora_kulon": { "Prototype": "Kora-Kulon", "Material": "ArmoredSteel", "ThicknessMm": 4.3, "Rating": 3, "BackingMm": 6,
                             "Source": "steel plate, Br3" },
 
             // the 6B3TM-01 is two different vests front and back, and the game splits it
@@ -1285,19 +1285,19 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             // comes out at one areal density per class — Br4 at 3.57, 3.57 and 3.61
             // g/cm² across the three sizes, Br5 at 4.13, 4.10 and 4.10. Over the outer
             // rectangles that agreement falls apart.
-            "granitBr4":                { "Prototype": "Granit Br4 (Granit-5A)", "Material": "Ceramic", "ThicknessMm": 6, "BackingMm": 12, "BackingMaterial": "UHMWPE",
+            "granitBr4":                { "Prototype": "Granit Br4 (Granit-5A)", "Material": "Ceramic", "ThicknessMm": 6, "Rating": 4, "BackingMm": 12, "BackingMaterial": "UHMWPE",
                                           "Source": "2.55 / 2.70 / 3.05 kg over 7.14 / 7.56 / 8.46 dm² rated - 3.6 g/cm² at every size" },
-            "granitBr5":                { "Prototype": "Granit Br5", "Material": "Ceramic", "ThicknessMm": 6.8, "BackingMm": 14, "BackingMaterial": "UHMWPE",
+            "granitBr5":                { "Prototype": "Granit Br5", "Material": "Ceramic", "ThicknessMm": 6.8, "Rating": 5, "BackingMm": 14, "BackingMaterial": "UHMWPE",
                                           "Source": "2.95 / 3.10 / 3.47 kg over 7.14 / 7.56 / 8.46 dm² rated - 4.1 g/cm² at every size" },
-            "granit4_5class_front":     { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 6.8, "BackingMm": 14, "BackingMaterial": "UHMWPE",
+            "granit4_5class_front":     { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 6.8, "Rating": 5, "BackingMm": 14, "BackingMaterial": "UHMWPE",
                                           "Source": "the Br5 of the line, 3.10 kg over 7.56 dm² rated" },
-            "granit4_5class_back":      { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 6.8, "BackingMm": 14, "BackingMaterial": "UHMWPE",
+            "granit4_5class_back":      { "Prototype": "Granit-4, Br5", "Material": "Ceramic", "ThicknessMm": 6.8, "Rating": 5, "BackingMm": 14, "BackingMaterial": "UHMWPE",
                                           "Source": "the Br5 of the line, 3.10 kg over 7.56 dm² rated" },
-            "granit4rs":                { "Prototype": "Granit-4RS", "Material": "Ceramic", "ThicknessMm": 6.8, "BackingMm": 13, "BackingMaterial": "UHMWPE",
+            "granit4rs":                { "Prototype": "Granit-4RS", "Material": "Ceramic", "ThicknessMm": 6.8, "Rating": 5, "BackingMm": 13, "BackingMaterial": "UHMWPE",
                                           "Source": "365x290x20 mm and 3.8 kg outside; at the line's 4.1 g/cm² that is 9.3 dm² rated" },
-            "granit":                   { "Prototype": "Granit Br5, first execution", "Material": "Ceramic", "ThicknessMm": 7.7, "BackingMm": 15, "BackingMaterial": "UHMWPE",
+            "granit":                   { "Prototype": "Granit Br5, first execution", "Material": "Ceramic", "ThicknessMm": 7.7, "Rating": 5, "BackingMm": 15, "BackingMaterial": "UHMWPE",
                                           "Source": "305x263x22 mm, 3.45 kg - the heavy execution, above the rest of the line" },
-            "granit4_zhukBr3_3class_front": { "Prototype": "Zhuk-3", "Material": "UHMWPE", "ThicknessMm": 23,
+            "granit4_zhukBr3_3class_front": { "Prototype": "Zhuk-3", "Material": "UHMWPE", "ThicknessMm": 23, "Rating": 3,
                                           "Source": "300x250 mm SAPI cut, 23 mm, 1.70 kg - all polyethylene, and the mass over that face comes to the 23" },
             // one size only, and KlASS and its owners agree on the rated 6.0 dm²
             "korund_vmk_6class_front":  { "Prototype": "Korund-VM-K", "Material": "Ceramic", "ThicknessMm": 7.2, "BackingMm": 16, "BackingMaterial": "UHMWPE",
@@ -1309,13 +1309,13 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             // the maker puts level with MARS-300 and ARMOX-600 and which is nothing like
             // the AR500 datasheet the material entry carries. Shear is 0.45*UTS by the same
             // through-hardened rule the material uses; hardness 56 HRC -> 613 HV.
-            "korund_back_6b23_2":       { "Prototype": "6B23 steel panel, 44S", "Material": "ArmoredSteel", "ThicknessMm": 6.3,
+            "korund_back_6b23_2":       { "Prototype": "6B23 steel panel, 44S", "Material": "ArmoredSteel", "ThicknessMm": 6.3, "Rating": 4,
                                           "ShearMPa": 1035, "YieldMPa": 2050, "HardnessHv": 613,
                                           "Source": "6.3 mm of 44S steel, rated against the heat-hardened AKM core. The 6B23 certificate names its whole schedule: 57-N-231 heat-hardened core at 10 m, 7N22 and M193/M855 at 25, 7N24 and 57-N-323S at 50" },
-            "korund":                   { "Prototype": "Korund-VM steel panel", "Material": "ArmoredSteel", "ThicknessMm": 6.3,
+            "korund":                   { "Prototype": "Korund-VM steel panel", "Material": "ArmoredSteel", "ThicknessMm": 6.3, "Rating": 4,
                                           "ShearMPa": 1035, "YieldMPa": 2050, "HardnessHv": 613,
                                           "Source": "Br4 steel; 15.9 dm2 of panel at 6.3 mm is 7.9 kg of the vest's 9.8" },
-            "korund_vm":                { "Prototype": "Korund-VM steel panel", "Material": "ArmoredSteel", "ThicknessMm": 6.3,
+            "korund_vm":                { "Prototype": "Korund-VM steel panel", "Material": "ArmoredSteel", "ThicknessMm": 6.3, "Rating": 4,
                                           "ShearMPa": 1035, "YieldMPa": 2050, "HardnessHv": 613,
                                           "Source": "Br4 steel; 15.9 dm2 of panel at 6.3 mm is 7.9 kg of the vest's 9.8" },
             "korund_6b12":              { "Prototype": "6B12 chest plate", "Material": "ArmoredSteel", "ThicknessMm": 6,
@@ -1960,7 +1960,14 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           //    published certificate carry it as "Rating" in the same Br terms - the
           //    passport outranks both the game's label and the model's own estimate,
           //    downward to 0 included (the SSh-68 is rated for fragments, not bullets)
-          "Version": 18
+          // 19: the GOST-certified plates carry their passports too. The realignment's
+          //    downward-only rule ate the Zhuk-3's Br3 - its vanilla label was 3, the
+          //    shift read that as Br2, and with no Rating on the entry nothing could
+          //    lift it back. Eleven certified entries (Kora-Kulon, the Korund family,
+          //    the Granit family, the 6B23 panel, the Zhuk-3) now state the class their
+          //    certificates state, and a new field on an existing entry is a
+          //    correction - the per-entry merge would never reach it
+          "Version": 19
         }
         """;
 }

@@ -4,6 +4,7 @@ using SPTarkov.Common.Models.Logging;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.DI;
 using SPTarkov.Server.Core.Helpers.Server;
+using SPTarkov.Server.Core.Models.Spt.Config;
 
 namespace PLATE.Server;
 
@@ -24,6 +25,7 @@ public class PlateServerMod(
     Services.GrenadePhysics grenadePhysics,
     Services.BloodGlobals bloodGlobals,
     Services.TransfusionItem transfusionItem,
+    TraderConfig traderConfig,
     ISptLogger<PlateServerMod> logger) : IOnLoad
 {
     public async Task OnLoadAsync(CancellationToken cancellationToken)
@@ -44,6 +46,17 @@ public class PlateServerMod(
         if (config.Modules.ArmorNormalizer)
         {
             armorNormalizer.Run(config, modPath); // armour construction from real products
+
+            // Fence indexes its plate-existence table by plate class and vanilla ships
+            // rungs 3..6 only; the Br realignment makes lower-class plates real, and a
+            // missing rung crashes the trader refresh
+            var added = Services.ArmorNormalizer.ExtendFencePlateChances(
+                traderConfig.Fence.ChancePlateExistsInArmorPercent);
+            if (added.Count > 0)
+            {
+                logger.Debug("[PLATE] Fence plate-existence table extended for classes " +
+                             string.Join(", ", added));
+            }
         }
 
         if (config.Modules.GrenadePhysics)
