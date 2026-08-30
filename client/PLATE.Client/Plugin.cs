@@ -12,7 +12,7 @@ namespace PLATE.Client
     {
         public const string Guid = "com.anamelash.plate";
         public const string Name = "P.L.A.T.E.";
-        public const string Version = "1.4.0";
+        public const string Version = "1.4.1";
 
         internal static ManualLogSource Log;
         internal static Harmony HarmonyInstance;
@@ -46,10 +46,16 @@ namespace PLATE.Client
                 RunPatchTargetsSelfTest();
             }
 
+            // EFT treats armorClass == 0 as "not armour" while constructing items and
+            // omits the Armor and Repairable components. In PLATE it is the intentional
+            // anti-fragment rung, so restore those components before the item database is
+            // instantiated. Always applied: the server normalizer has its own switch.
+            ClassZeroArmorPatches.Apply(HarmonyInstance);
+
             // Birth of a projectile: the exit state of a barrier, and the clearing of
             // everything the pooled shot object was carrying from a previous life.
-            // Applied whatever the modules are set to, and FIRST — the clearing is a
-            // wound-model correctness fix as much as a barrier one (a recycled shot
+            // Applied whatever the modules are set to, before every ballistics hook.
+            // The clearing is a wound-model correctness fix as much as a barrier one (a recycled shot
             // inherits the previous bullet's spread draw and its memory of which organs
             // it has already destroyed), and the exit-state half gates itself at runtime.
             ShotLifecyclePatches.Apply(HarmonyInstance);

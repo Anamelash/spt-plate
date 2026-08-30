@@ -560,14 +560,13 @@ public class ReferenceBookTests
         var shells = Shipped().HelmetShells;
         var plates = Shipped().ArmorByClass;
 
-        // a sewn package is only ever fabric; /0 is the sub-Br1 tier, and /2 is the
-        // rung a PASSPORT resolves through — the ceiling itself still stops the
-        // label at Br1 for anything without papers
+        // a sewn package is only ever fabric: /0 is the sub-Br1 tier, /1 is Br1 and
+        // /2 is the Br2/IIIA ceiling
         string[] sewn = ["Aramid/0", "Aramid/1", "Aramid/2", "UHMWPE/0", "UHMWPE/1", "UHMWPE/2"];
 
         string[] rigid =
         [
-            // pressed laminate buys one rung over the sewn package and stops
+            // pressed laminate has its own construction even where the ceiling matches
             "Aramid/0", "Aramid/1", "Aramid/2",
             "UHMWPE/0", "UHMWPE/1", "UHMWPE/2",
             "Glass/0", "Glass/1",
@@ -608,7 +607,27 @@ public class ReferenceBookTests
     }
 
     /// <summary>
-    /// Fabric cannot be rated past Br1 by being sewn thicker and a visor cannot be
+    /// The Br realignment moved the keys once; the constructions must stay anchored to
+    /// the class now written on those keys instead of following another mechanical
+    /// shift. Every inferred figure carries its provenance beside it.
+    /// </summary>
+    [Theory]
+    [InlineData("Aramid/0", 3.0)]
+    [InlineData("Aramid/1", 5.5)]
+    [InlineData("Aramid/2", 7.6)]
+    [InlineData("UHMWPE/0", 2.7)]
+    [InlineData("UHMWPE/1", 5.0)]
+    [InlineData("UHMWPE/2", 7.0)]
+    public void Soft_armour_rungs_stay_anchored_to_their_classes(string key, double thickness)
+    {
+        var rung = Shipped().SoftArmor[key];
+
+        Assert.Equal(thickness, rung.ThicknessMm, 1);
+        Assert.False(string.IsNullOrWhiteSpace(rung.Source), $"{key}: the figure has no source");
+    }
+
+    /// <summary>
+    /// Fabric cannot be rated past Br2 by being sewn thicker and a visor cannot be
     /// rated past Br1 at all, so neither table may offer a rung above its ceiling — an
     /// entry there would be applied to something, and would mean a rating had lifted a
     /// ceiling it cannot lift.
@@ -619,8 +638,6 @@ public class ReferenceBookTests
         foreach (var (key, _) in Shipped().SoftArmor)
         {
             var parts = key.Split('/');
-            // /2 exists for the passport path: a certificate outranks the form ceiling
-            // by design, and its construction has to resolve to something real
             Assert.True(int.Parse(parts[1]) <= 2, $"{key}: sewn fabric stops where it stops");
         }
 
@@ -657,7 +674,7 @@ public class ReferenceBookTests
     // and the few pieces of headgear that really are cloth stay cloth
     [InlineData("balaclava", "UHMWPE", 3, 7.0)]
     // the bomber hat is the sub-Br1 tier itself: class 0, the /0 rung
-    [InlineData("item_equipment_head_bomber", "Aramid", 0, 5.5)]
+    [InlineData("item_equipment_head_bomber", "Aramid", 0, 3.0)]
     public void Pressed_and_sewn_read_off_different_tables(
         string item, string material, int cls, double expected)
     {
@@ -836,6 +853,8 @@ public class ReferenceBookTests
     [InlineData("tv110", 1)]
     [InlineData("paca", 1)]
     [InlineData("defender2", 1)]
+    [InlineData("zhuk3", 1)]
+    [InlineData("zhuk6", 1)]
     [InlineData("shlemofon_tsh_4ml", 0)]
     [InlineData("item_equipment_facecover_welding_minotaur", 0)]
     [InlineData("Item_equipment_glasses_oakley", 0)]

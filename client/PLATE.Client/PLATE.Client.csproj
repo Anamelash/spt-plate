@@ -69,6 +69,10 @@
       <HintPath>$(SptGameDir)\EscapeFromTarkov_Data\Managed\ItemComponent.Types.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="ItemTemplate.Types">
+      <HintPath>$(SptGameDir)\EscapeFromTarkov_Data\Managed\ItemTemplate.Types.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Sirenix.Serialization">
       <HintPath>$(SptGameDir)\EscapeFromTarkov_Data\Managed\Sirenix.Serialization.dll</HintPath>
       <Private>false</Private>

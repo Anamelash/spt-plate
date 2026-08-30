@@ -177,25 +177,19 @@ the projectile has to defeat it with specific energy:
   particular core, and not by a rating. Every cartridge GOST R 50744-95 names is
   fired at a plate of its own class in the test suite and must be stopped, and at
   the plate one class down, where it must get through.
-- **A class is what a construction earns, not a label it wears.** Aramid stops
-  where aramid stops. A package sewn out of it cannot be rated past class 2 whatever
-  the carrier is sold as — getting to class 4 with fabric alone would take around
-  200 mm of it — and pressing the same fibre into a helmet shell buys exactly one
-  rung more. Vanilla stamps class 3 on 125 of the aramid packages built into vests
-  (the Fort Redut-M and Redut-T, the Fort Defender 2, the NFM THOR, the IOTV Gen4,
-  the HighCom Trooper, the 6B13 and 6B43, the Gzhel, the Crye carriers and most of
-  the rest), class 4 on polycarbonate visors, and class 10 on a development
-  balaclava — 141 items in all. They now carry the class their construction holds.
-  How they stop a bullet does not change — the model was
-  already reading them as the packages they are — but the number on the card stops
-  promising rifle protection that was never in the vest, and the anti-fragment
-  threshold, which scales with the class, stops being computed off a rating the
-  fabric does not have. Nothing hard is touched: plates keep their class, and so do
-  appliques that are rifle-rated in their own right, like the Gentex SLAAP.
+- **A class is what a construction earns, not a label it wears.** Game class
+  `N` now means GOST `BrN`, with class 0 reserved for sub-Br1 fragment protection.
+  Sewn aramid and pressed fibre shells both top out at Br2: forming the same fibres
+  into a helmet does not conjure another ballistic rung. Published certificates
+  and passports win over model names and vanilla labels in either direction, so a
+  Level IIIA Crye AirFrame is no longer classed with construction helmets while a
+  Zhuk carrier's built-in package remains Br1 regardless of which plates or skin
+  are fitted to it.
 - **Protection classes are anchored to the real GOST protection standard,** and
-  are the fallback for armor nothing is known about. Bottom-tier "class 1" junk
-  headwear (construction helmets and the like) is fragment protection only — it
-  will not stop a pistol bullet.
+  are the fallback for armor nothing is known about. Class 6 is deliberately left
+  empty for the standard's 12.7 mm AP threat. Ordinary hats, caps and bandanas have
+  no protected zones and remain clothing rather than acquiring class 0 and a
+  fictitious UHMWPE liner.
 - **Hardness decides who wins — by deciding what happens to the core.** A
   quenched core arrives intact and the contest is between it and the plate's
   strength. A softer core is crushed on the face when the impact is fast enough —
@@ -680,6 +674,38 @@ break, but an object nobody has looked at is priced as the average of its kind
 rather than as itself.
 
 ## Release history
+
+### 1.4.1
+
+Armor cards now say what their paperwork says, and class 0 finally works as an
+actual anti-fragment rung instead of a UI trap. This release also corrects the
+soft-armor ladder that was one step too low during the Br conversion.
+
+- **The number on the card is the Br number.** Class 1 is Br1, class 2 is Br2,
+  and so on; class 0 is the sub-Br1 anti-fragment tier. Certificates and passports
+  override Tarkov's labels in both directions. That fixes entries such as the
+  Level IIIA Crye AirFrame and keeps both Zhuk carrier skins at the same Br1 soft
+  package even though their fitted plates differ. Class 6 remains intentionally
+  empty: that rung belongs to the 12.7 mm AP threat in the amended standard.
+- **Soft armor has its missing rung back.** Sewn aramid and UHMWPE packages now
+  use 3.0/5.5/7.6 mm and 2.7/5.0/7.0 mm for classes 0/1/2 respectively. Br2 is the
+  ceiling for both sewn packages and pressed fibre shells; pressing a helmet shell
+  does not buy a fictional extra class. Zhuk-3 and Zhuk-6 built-in packages use
+  their passport value of Br1 and 5.5 mm aramid, while the plates still distinguish
+  the variants.
+- **Class-zero armor can be inspected and can stop fragments.** EFT normally
+  skips the repair, buff and armor components when an item's class is zero. PLATE
+  restores those components only for durable items that actually declare protected
+  zones. Galvion Caiman Hybrid, Tac-Kek, PSh-97 and other class-zero helmets no
+  longer open a blank `blablabla` inspection window, and their armor enters the hit
+  pipeline normally.
+- **Your cap is not secretly Dyneema.** Hats, caps and bandanas share EFT's armor
+  template type but declare no protected zones. They are now left alone instead of
+  receiving class 0, UHMWPE and armor components. The SSh-68's anti-fragment shell
+  is likewise pinned to its actual 1.8 mm steel construction rather than borrowing
+  a nonexistent generic class-zero steel rung.
+- **Small data fixes:** Fence now accepts plates below class 3, and the shower
+  locker is treated as thin sheet metal rather than concrete.
 
 ### 1.3.2
 

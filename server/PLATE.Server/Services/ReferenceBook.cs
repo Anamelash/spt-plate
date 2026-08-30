@@ -1619,6 +1619,10 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                               "Source": "the maker's mass ladder starts the L size at 3.0 kg = GOST I (old class 1); heavier configurations buy higher classes by added mass the game item does not carry" },
             "korundvm":     { "Prototype": "Korund-VM soft perimeter", "Rating": 1,
                               "Source": "the aramid sewn around the vest's full perimeter is rated Br1, separate from its Br4 steel panels (which are their own items)" },
+            "zhuk3":        { "Prototype": "Zhuk series aramid modules", "Rating": 1,
+                              "Source": "the Zhuk series catalog states that the removable aramid modules protect the whole garment at old GOST class 1; the 2/3/5a/6a configurations differ in their added polyethylene or ceramic panels, not in the fabric package - https://detsys.ru/catalog/bronezhilety/seriya_zhuk/" },
+            "zhuk6":        { "Prototype": "Zhuk series aramid modules", "Rating": 1,
+                              "Source": "the same class-1 fabric modules; the Zhuk-6a rating belongs to its boron/silicon-carbide panels, not to the garment beneath them - https://detsys.ru/catalog/bronezhilety/seriya_zhuk/" },
             "module3m":     { "Prototype": "Modul-3M, BNTI", "Rating": 2,
                               "Source": "a soft-only vest at old GOST class 2 = Br2" },
             "redut_m":      { "Prototype": "Fort Redut-M", "Rating": 2,
@@ -1853,11 +1857,12 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // a given rating is nothing like a monolithic plate of it, and separate from
           // the shell table because pressed laminate is not fabric.
           //
-          // A woven package has a ceiling no rating can lift, so anything the game rates
-          // above Br1 is read as Br1 — the fabric is the same fabric. Reaching Br3 with
-          // aramid alone would take about 200 mm of it, which is why the rifle
-          // protection lives in the plates. The /0 rung is the sub-Br1 tier: a package
-          // light enough that it stops fragments and nothing the standard fires.
+          // A woven package tops out at Br2, the IIIA-weight pistol tier. Br3 introduces
+          // a hardened core; reaching it with aramid alone would take about 200 mm of
+          // fabric, which is why the rifle protection lives in the plates. The three
+          // rungs are anchored to what their labels mean: /0 stops fragments but not the
+          // Br1 round, /1 is the measured class-1 package, and /2 is the IOTV panel that
+          // meets the Br2 test velocity.
           //
           // DENSITY. A sewn pack is loose plies with air between them, and reading it at
           // the fibre's 1.44 makes it weigh twice what it does. The US Army's IOTV
@@ -1866,25 +1871,24 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // 35-layer package patent at 120-160 g/m2 a layer comes to 4.9 kg/m2, and
           // owner measurements of 14-24 layer class-1 packs give 3.12-3.57.
           "SoftArmor": {
-            "Aramid/0":       { "Prototype": "18-layer aramid package", "ThicknessMm": 5.5,
+            "Aramid/0":       { "Prototype": "10-layer anti-fragment aramid package", "ThicknessMm": 3.0,
                                 "DensityGCm3": 0.63,
-                                "Source": "3.5 kg/m2 - the middle of the measured 14-24 layer band" },
-            "Aramid/1":       { "Prototype": "IOTV-weight aramid package", "ThicknessMm": 7.6,
+                                "Source": "inferred anti-fragment rung: ten layers at 0.184 kg/m2 per layer give 1.84 kg/m2; divided by the measured 0.63 g/cm3 package density gives 2.9 mm, rounded to 3.0" },
+            "Aramid/1":       { "Prototype": "18-layer class-1 aramid package", "ThicknessMm": 5.5,
                                 "DensityGCm3": 0.63,
-                                "Source": "IOTV base panel, 7.6 mm at 4.79 kg/m2, purchase description FQ/PD 07-05G" },
-            // the Br2 rung serves the passport-only vests: a package certified at Br2
-            // with no published thickness reads the IOTV's construction, the documented
-            // IIIA panel of the same tier
+                                "Source": "3.5 kg/m2 - the middle of the measured 14-24 layer class-1 band" },
             "Aramid/2":       { "Prototype": "IIIA-weight aramid package", "ThicknessMm": 7.6,
                                 "DensityGCm3": 0.63,
-                                "Source": "the IOTV base panel again - the documented package of the Br2/IIIA tier" },
+                                "Source": "IOTV base panel, 7.6 mm at 4.79 kg/m2, purchase description FQ/PD 07-05G - the documented package of the Br2/IIIA tier" },
 
             // polyethylene fibre is lighter than aramid in the same weave, in the ratio
             // of the two fibre densities
-            "UHMWPE/0":       { "Prototype": "light UHMWPE package",   "ThicknessMm": 5.0,
-                                "DensityGCm3": 0.45 },
-            "UHMWPE/1":       { "Prototype": "UHMWPE package",         "ThicknessMm": 7.0,
-                                "DensityGCm3": 0.45 },
+            "UHMWPE/0":       { "Prototype": "anti-fragment UHMWPE package", "ThicknessMm": 2.7,
+                                "DensityGCm3": 0.45,
+                                "Source": "the aramid sub-Br1 rung scaled by the fibre densities, as the whole column is" },
+            "UHMWPE/1":       { "Prototype": "class-1 UHMWPE package", "ThicknessMm": 5.0,
+                                "DensityGCm3": 0.45,
+                                "Source": "the aramid Br1 rung scaled by the fibre densities, as the whole column is" },
             "UHMWPE/2":       { "Prototype": "IIIA-weight UHMWPE package", "ThicknessMm": 7.0,
                                 "DensityGCm3": 0.45,
                                 "Source": "the aramid Br2 rung scaled by the fibre densities, as the whole column is" }
@@ -2098,7 +2102,12 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           //    the tanker headset), and the bare plate carriers whose sewn-in packages
           //    the game invented. The SoftArmor table gained the Br2 rung those
           //    passports resolve their construction through
-          "Version": 20
+          // 21: the sewn-package rungs were still parked one Br class above their keys
+          //    after the Br realignment: /1 duplicated the Br2 IOTV panel, while /0
+          //    carried the measured Br1 package. The rungs are re-anchored to 3.0/5.5/
+          //    7.6 mm for sub-Br1/Br1/Br2, and the woven-fibre ceiling now admits the
+          //    Br2 construction it was calibrated against
+          "Version": 21
         }
         """;
 }

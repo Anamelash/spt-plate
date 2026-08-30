@@ -40,15 +40,22 @@ public class ArmorNormalizerTests
     // airsoft FAST replica the game calls class 1 is the anti-fragment tier, class 0
     [InlineData("tac_kek_fast_mt_level1_helmet_armor_top", ArmorMaterial.UHMWPE, 1,
         ArmorMaterial.UHMWPE, 0)]
-    // the shifted label still lands under the form's ceiling: a sewn aramid package
-    // with no papers the game stamps 3 is Br1 at most, whatever 3 − 1 says (the
-    // Gzhel's soft package has no published class)
+    // a sewn package with no papers keeps the shifted Br2 its own construction holds
+    // (the Gzhel's soft package has no published class)
     [InlineData("gjel_level3_soft_armor_front", ArmorMaterial.Aramid, 3,
-        ArmorMaterial.Aramid, 1)]
-    // ...and a passport lifts a package past that ceiling: the THOR CRV panels are
-    // NIJ IIIA, the Br2 tier
+        ArmorMaterial.Aramid, 2)]
+    // the ceiling still guards the next rung: an unknown class-4 sewn package shifts
+    // to Br3, but fabric stops at Br2
+    [InlineData("unlisted_level4_soft_armor_front", ArmorMaterial.Aramid, 4,
+        ArmorMaterial.Aramid, 2)]
+    // ...and a passport independently fixes the THOR CRV panels at their NIJ IIIA /
+    // Br2 rating
     [InlineData("thorcrv_level3_soft_armor_front", ArmorMaterial.Aramid, 3,
         ArmorMaterial.Aramid, 2)]
+    // every Zhuk configuration uses the same Br1 fabric package; the 6a rating belongs
+    // to its removable hard panels, not to the garment beneath them
+    [InlineData("zhuk6_level3_soft_armor_front", ArmorMaterial.Aramid, 3,
+        ArmorMaterial.Aramid, 1)]
     // ...and only a passport lifts past the shift: the Zhuk-3 is certified Br3, its
     // vanilla label read Br2 after the shift, and without the book's Rating the
     // downward-only rule had no way back up
@@ -133,6 +140,23 @@ public class ArmorNormalizerTests
 
         Assert.Equal(ArmorMaterial.Aramid, item.Properties!.ArmorMaterial);
         Assert.Equal(6.43, normalizer.ThicknessByTemplate[item.Id], 3);
+    }
+
+    /// <summary>
+    /// Zhuk-6a differs from the press vest in its hard panels, not in the aramid cover.
+    /// Its passport therefore has to select the Br1 package even though the game stamps
+    /// the built-in zones class 3.
+    /// </summary>
+    [Fact]
+    public void Every_Zhuk_configuration_uses_the_same_class_one_fabric_package()
+    {
+        var (normalizer, item) = Fixture(
+            "zhuk6_level3_soft_armor_front", ArmorMaterial.Aramid, 3);
+
+        normalizer.Run(new PlateServerConfig(), ModPath());
+
+        Assert.Equal(1, (int)(item.Properties!.ArmorClass ?? 0));
+        Assert.Equal(5.5, normalizer.ThicknessByTemplate[item.Id], 1);
     }
 
     /// <summary>

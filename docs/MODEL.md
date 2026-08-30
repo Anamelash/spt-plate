@@ -640,6 +640,16 @@ the specific energy of that class's own certification rounds.
 | 5 | Бр5 | 7.62x54R PP 7N13 at 830 AND 7.62x54R B-32 at 810 | 90 |
 | 6 | Бр6 | 12.7x108 B-32 at 810 | 165 |
 
+Class 0 still has an armour component. EFT normally constructs `Repairable`, `Buff`
+and `Armor` only when `armorClass > 0`; that would make the anti-fragment rung vanish
+from the hit pipeline and leaves `ArmorPlate.Prefab` dereferencing a missing component
+when an inspect window builds a helmet's locked panels. The always-on client bootstrap
+creates the same three components for a durable class-0 template that names at least
+one protected body or plate collider. EFT stores ordinary hats in the same equipment
+template with dummy class, material and durability fields but empty protection arrays;
+those remain componentless. The bootstrap does not relabel armour as Бр1, and
+zero-durability equipment remains componentless.
+
 Class 6 is deliberately empty: no man-portable armour holds a 12.7 AP round, so
 nothing earns it — the rung exists to keep the ladder honest, not to be occupied.
 Note what the identity costs: ammunition penetration stays anchored to vanilla
@@ -649,12 +659,12 @@ vanilla penetration is 35.
 
 ### The class an item carries is derived, not trusted
 
-A class is a certificate a construction earned, and the game hands out ratings its
-materials cannot reach: 125 of the aramid packages sewn into vests are stamped
-class 3 (vanilla scale), which with aramid alone would take on the order of 200 mm
-of it. Every armour item's label is therefore derived, by three rules in descending
-order of trust — judged at the reference constants, never at player tuning, or a
-config knob would relabel items:
+A class is a certificate a construction earned, and the game hands out ratings
+without regard to the form that has to earn them: polycarbonate visors are stamped
+class 4 and a development balaclava class 10, while some bare carriers are credited
+with a ballistic package they do not have. Every armour item's label is therefore
+derived, by three rules in descending order of trust — judged at the reference
+constants, never at player tuning, or a config knob would relabel items:
 
 1. **A published certificate outranks everything**, in both directions. The book
    carries it as `Rating`, already in Br terms: the Maska-1Sch is old GOST class 2
@@ -678,16 +688,20 @@ The ceiling is a property of the form, not of the item, in Br terms:
 
 | Form | aramid, UHMWPE | polycarbonate | metal, ceramic |
 |---|---|---|---|
-| sewn package | Бр1 | — | uncapped |
+| sewn package | Бр2 | — | uncapped |
 | pressed shell, visor, mask | Бр2 | Бр1 | uncapped |
 | plate | uncapped | — | uncapped |
 
-Pressing the same fibre into a resin-bonded shell buys one rung over the package
-and no more: past that a helmet stops getting thicker and starts getting a metal
-or ceramic element, and that element is a product in its own right. Metal and
-ceramic are not capped — a heavier helmet really is a thicker shell — and neither
-is a plate, which is where rifle protection lives and whose thickness answers for
-it in the ballistic limit directly. The material the ceiling reads is the book's,
+Both sewn fibre packages and resin-bonded fibre shells top out at Бр2. Their
+constructions remain separate — loose plies are not pressed laminate — but Бр2 is
+still a pistol tier; Бр3 introduces the hardened-core threat at which fibre alone
+ceases to be the fielded answer. Past that a helmet gains a metal or ceramic element,
+and a vest gains a plate, each a product in its own right. Metal and ceramic are not
+capped — a heavier helmet really is a thicker shell — and neither is a plate, whose
+thickness answers for it in the ballistic limit directly. The sewn aramid ladder is
+3.0 mm below Бр1, 5.5 mm at Бр1, and the published 7.6 mm IOTV panel at Бр2; the
+UHMWPE column follows the same density scaling at 2.7, 5.0, and 7.0 mm. The material
+the ceiling reads is the book's,
 not the game's: the construction is identified first, so a shell the game files
 under Combined caps like the aramid it is actually made of.
 

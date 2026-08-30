@@ -29,6 +29,9 @@ namespace PLATE.Client
         /// the virtuals below, so a patch here never reaches a body.</summary>
         public static Type BallisticCollider => FindType("EFT.Ballistics.BallisticCollider");
         public static Type ArmorComponent => FindType("EFT.InventoryLogic.ArmorComponent");
+        public static Type ArmoredEquipment => FindType("EFT.InventoryLogic.ArmoredEquipment");
+        public static Type ArmoredEquipmentTemplate =>
+            FindType("EFT.InventoryLogic.ArmoredEquipmentTemplate");
         public static Type ArmorResistanceData => FindType("ArmorResistanceData");
         public static Type DamageInfo => FindType("EFT.Ballistics.DamageInfo");
         public static Type Ammo => FindType("EFT.InventoryLogic.Ammo");
@@ -76,6 +79,17 @@ namespace PLATE.Client
         public static MethodBase Armor_ApplyDamage => Method(ArmorComponent, "ApplyDamage");
         /// <summary>Penetration chance curve.</summary>
         public static MethodBase Armor_GetPenetrationChance => Method(ArmorResistanceData, "GetPenetrationChance");
+
+        /// <summary>
+        /// Base constructor for every armour item. EFT only creates Armor and Repairable
+        /// components when armorClass is greater than zero, although class zero is a real
+        /// anti-fragment rung in PLATE.
+        /// </summary>
+        public static MethodBase ArmoredEquipment_Ctor =>
+            ArmoredEquipment == null || ArmoredEquipmentTemplate == null
+                ? null
+                : AccessTools.Constructor(ArmoredEquipment,
+                    new[] { typeof(string), ArmoredEquipmentTemplate });
 
         /// <summary>DamageInfo constructor from a bullet — the energy-transfer hook for the body part.</summary>
         public static MethodBase DamageInfo_CtorFromShot =>
@@ -247,6 +261,8 @@ namespace PLATE.Client
             { nameof(BodyPartCollider), () => BodyPartCollider },
             { nameof(BallisticCollider), () => BallisticCollider },
             { nameof(ArmorComponent), () => ArmorComponent },
+            { nameof(ArmoredEquipment), () => ArmoredEquipment },
+            { nameof(ArmoredEquipmentTemplate), () => ArmoredEquipmentTemplate },
             { nameof(ArmorResistanceData), () => ArmorResistanceData },
             { nameof(DamageInfo), () => DamageInfo },
             { nameof(Ammo), () => Ammo },
@@ -262,6 +278,7 @@ namespace PLATE.Client
             { nameof(Armor_SetPenetrationStatus), () => Armor_SetPenetrationStatus },
             { nameof(Armor_ApplyDamage), () => Armor_ApplyDamage },
             { nameof(Armor_GetPenetrationChance), () => Armor_GetPenetrationChance },
+            { nameof(ArmoredEquipment_Ctor), () => ArmoredEquipment_Ctor },
             { nameof(DamageInfo_CtorFromShot), () => DamageInfo_CtorFromShot },
             { nameof(ActiveHealthController), () => ActiveHealthController },
             { nameof(EffectBase), () => EffectBase },

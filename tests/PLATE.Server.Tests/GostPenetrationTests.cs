@@ -78,6 +78,32 @@ public class GostPenetrationTests
     }
 
     /// <summary>
+    /// The sewn aramid ladder is keyed by the class each construction earns, not by
+    /// the game's old shifted labels. This guards both sides of every boundary: /0 is
+    /// below Br1, /1 holds Br1 but not Br2, and /2 reaches Br2.
+    /// </summary>
+    [Fact]
+    public void Sewn_aramid_rungs_earn_the_class_on_their_keys()
+    {
+        var br1 = ArmorStandardTests.Gost.Single(t => t.Class == "Бр1");
+        var br2 = ArmorStandardTests.Gost.Single(t => t.Class == "Бр2");
+
+        var rung0AgainstBr1 = V50("Aramid", 0, br1);
+        var rung1AgainstBr1 = V50("Aramid", 1, br1);
+        var rung1AgainstBr2 = V50("Aramid", 1, br2);
+        var rung2AgainstBr2 = V50("Aramid", 2, br2);
+
+        Assert.True(rung0AgainstBr1 < br1.V,
+            $"sub-Br1 package reaches {rung0AgainstBr1:N0} m/s against a {br1.V:N0} m/s test");
+        Assert.True(rung1AgainstBr1 >= br1.V,
+            $"Br1 package reaches only {rung1AgainstBr1:N0} m/s against a {br1.V:N0} m/s test");
+        Assert.True(rung1AgainstBr2 < br2.V,
+            $"Br1 package reaches {rung1AgainstBr2:N0} m/s against a {br2.V:N0} m/s Br2 test");
+        Assert.True(rung2AgainstBr2 >= br2.V,
+            $"Br2 package reaches only {rung2AgainstBr2:N0} m/s against a {br2.V:N0} m/s test");
+    }
+
+    /// <summary>
     /// Strict, the way a certificate is strict: zero penetrations out of five shots,
     /// which puts the required V50 about 9% above the test velocity rather than at it
     /// — a plate whose V50 equals the test velocity fails a real protocol half the

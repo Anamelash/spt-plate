@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using BepInEx.Configuration;
@@ -71,6 +72,42 @@ namespace PLATE.Tests
         }
 
         private Harmony _applied;
+        private Harmony _classZeroApplied;
+
+        /// <summary>
+        /// Applies only the item-construction compatibility patch. The functional
+        /// class-zero tests need it before creating an ArmorPlate, but applying every
+        /// ballistics detour that early can race unrelated arithmetic tests under the
+        /// desktop CLR, whose Unity ECall stubs are not executable outside the game.
+        /// </summary>
+        public Harmony ApplyClassZeroArmorPatchOnce()
+        {
+            if (_classZeroApplied != null)
+            {
+                return _classZeroApplied;
+            }
+
+            _classZeroApplied = new Harmony("plate.tests.apply");
+
+            // A real protected collider makes ArmorComponent localize its zone names
+            // while the constructor is still adding item attributes. Localization's
+            // font cache uses KeyValuePair.Deconstruct, which Unity supplies but the
+            // desktop net471 host does not. Keep the real component constructor and
+            // replace only its localized display list in tests.
+            var localizedZones = AccessTools.Method(typeof(EFT.InventoryLogic.ArmorComponent),
+                nameof(EFT.InventoryLogic.ArmorComponent.UniqueLocalizedZones));
+            _classZeroApplied.Patch(localizedZones,
+                prefix: new HarmonyMethod(typeof(GameFixture), nameof(SkipLocalizedZones)));
+
+            ClassZeroArmorPatches.Apply(_classZeroApplied);
+            return _classZeroApplied;
+        }
+
+        private static bool SkipLocalizedZones(ref IEnumerable<string> __result)
+        {
+            __result = Array.Empty<string>();
+            return false;
+        }
 
         /// <summary>
         /// Applies the same patch set the plugin applies at startup, in the same order,
@@ -88,7 +125,7 @@ namespace PLATE.Tests
                 return _applied;
             }
 
-            var harmony = new Harmony("plate.tests.apply");
+            var harmony = ApplyClassZeroArmorPatchOnce();
 
             // GrenadePatches is deliberately absent: it is a transpiler, and MonoMod
             // cannot prepare one outside the Unity runtime (its detour path reaches for

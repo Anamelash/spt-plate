@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using EFT.Ballistics;
+using EFT.InventoryLogic;
 using HarmonyLib;
 using PLATE.Client;
 using Xunit;
@@ -264,6 +265,108 @@ namespace PLATE.Tests
         }
 
         /// <summary>
+        /// PLATE uses class zero for the anti-fragment rung, but EFT's constructor
+        /// normally omits all armour components at that value. A mandatory helmet panel
+        /// then crashes its Prefab getter during inspection, and no ArmorComponent exists
+        /// for the hit pipeline either. The always-on bootstrap must make class zero an
+        /// ordinary durable armour item without lying about its class.
+        /// </summary>
+        [Fact]
+        public void Durable_class_zero_armour_keeps_its_engine_components()
+        {
+            if (Skip) return;
+
+            _game.ApplyClassZeroArmorPatchOnce();
+            var plate = NewArmorPlate(0, 12);
+
+            Assert.NotNull(plate.Repairable);
+            Assert.NotNull(plate.Buff);
+            Assert.NotNull(plate.Armor);
+            Assert.Equal(0, plate.Armor.ArmorClass);
+            Assert.Equal(12f, plate.Repairable.Durability);
+            Assert.Single(plate.Components.OfType<RepairableComponent>());
+            Assert.Single(plate.Components.OfType<BuffComponent>());
+            Assert.Single(plate.Components.OfType<ArmorComponent>());
+
+            // ArmorPlate.Prefab is the exact inspect-window path that dereferenced
+            // Armor.Repairable when the class-zero component was absent.
+            var exception = Record.Exception(() => { var unused = plate.Prefab; });
+            Assert.Null(exception);
+        }
+
+        /// <summary>Vanilla classes already have the three components. The postfix is a
+        /// repair for zero, not a second constructor pass over every armour item.</summary>
+        [Theory]
+        [InlineData(1)]
+        [InlineData(4)]
+        public void Positive_armour_classes_do_not_receive_duplicate_components(int armorClass)
+        {
+            if (Skip) return;
+
+            _game.ApplyClassZeroArmorPatchOnce();
+            var plate = NewArmorPlate(armorClass, 12);
+
+            Assert.Single(plate.Components.OfType<RepairableComponent>());
+            Assert.Single(plate.Components.OfType<BuffComponent>());
+            Assert.Single(plate.Components.OfType<ArmorComponent>());
+            Assert.Equal(armorClass, plate.Armor.ArmorClass);
+        }
+
+        /// <summary>Class zero also labels ordinary non-armour equipment containers.
+        /// Zero durability is the engine's distinction; those items stay componentless.</summary>
+        [Fact]
+        public void Non_durable_class_zero_equipment_stays_componentless()
+        {
+            if (Skip) return;
+
+            _game.ApplyClassZeroArmorPatchOnce();
+            var plate = NewArmorPlate(0, 0);
+
+            Assert.Null(plate.Repairable);
+            Assert.Null(plate.Buff);
+            Assert.Null(plate.Armor);
+            Assert.Empty(plate.Components.OfType<ArmorComponent>());
+        }
+
+        /// <summary>
+        /// EFT stores ordinary hats in ArmoredEquipment templates too. Their dummy
+        /// class, material and durability fields do not make them armour: an empty pair
+        /// of protection arrays is the functional distinction.
+        /// </summary>
+        [Fact]
+        public void Durable_class_zero_without_protection_areas_stays_componentless()
+        {
+            if (Skip) return;
+
+            _game.ApplyClassZeroArmorPatchOnce();
+            var plate = NewArmorPlate(0, 100, protectsBody: false);
+
+            Assert.Null(plate.Repairable);
+            Assert.Null(plate.Buff);
+            Assert.Null(plate.Armor);
+            Assert.Empty(plate.Components.OfType<ArmorComponent>());
+        }
+
+        /// <summary>
+        /// Some armour names plate zones rather than body colliders. Either metadata
+        /// path is sufficient; requiring only armorColliders would trade the hat bug for
+        /// another missing-component inspect crash.
+        /// </summary>
+        [Fact]
+        public void Durable_class_zero_with_a_plate_area_keeps_its_engine_components()
+        {
+            if (Skip) return;
+
+            _game.ApplyClassZeroArmorPatchOnce();
+            var plate = NewArmorPlate(0, 12, protectsBody: false, protectsPlateZone: true);
+
+            Assert.NotNull(plate.Repairable);
+            Assert.NotNull(plate.Buff);
+            Assert.NotNull(plate.Armor);
+            Assert.Single(plate.Components.OfType<ArmorComponent>());
+        }
+
+        /// <summary>
         /// The 0.9.2 regression: hook telemetry attached a second Harmony patch to
         /// every target. Observing something must never modify it.
         /// </summary>
@@ -399,6 +502,24 @@ namespace PLATE.Tests
 
         private static void Dummy()
         {
+        }
+
+        private static ArmorPlate NewArmorPlate(int armorClass, int durability,
+            bool protectsBody = true, bool protectsPlateZone = false)
+        {
+            var template = new ArmoredEquipmentTemplate
+            {
+                armorClass = armorClass,
+                Durability = durability,
+                MaxDurability = durability,
+                armorColliders = protectsBody
+                    ? new[] { EBodyPartColliderType.ParietalHead }
+                    : Array.Empty<EBodyPartColliderType>(),
+                armorPlateColliders = protectsPlateZone
+                    ? new[] { EArmorPlateCollider.Plate_Granit_SAPI_chest }
+                    : Array.Empty<EArmorPlateCollider>(),
+            };
+            return new ArmorPlate("a00000000000000000000000", template);
         }
 
         private static int CountAllPatches() =>

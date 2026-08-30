@@ -16,7 +16,7 @@ the result.
 The mod is limited to ballistics, armor and trauma. It does not alter AI,
 spawns, quests, progression, loot or graphics.
 
-**Current release:** P.L.A.T.E. 1.4.0
+**Current release:** P.L.A.T.E. 1.4.1
 
 **Supported game:** SPT 4.1.x, including 4.1.3 / EFT 0.16.9.40087
 
@@ -239,7 +239,7 @@ For a complete player-facing comparison, see
 
 | Component | Required version |
 |---|---|
-| P.L.A.T.E. | 1.4.0 |
+| P.L.A.T.E. | 1.4.1 |
 | SPT | 4.1.x, including 4.1.3 |
 | EFT client | 0.16.9.40087 |
 | .NET SDK | 10, only when building from source |

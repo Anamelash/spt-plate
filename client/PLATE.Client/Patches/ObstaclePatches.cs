@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using EFT.Ballistics;
 using HarmonyLib;
 using PLATE.Client.Ballistics;
@@ -605,6 +606,7 @@ namespace PLATE.Client.Patches
         /// both run inside one HandleCollision, so requiring the frame as well bounds
         /// the staleness to nothing at all.
         /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static bool Claims(Shot stash, int frame, Shot shot)
         {
             return ReferenceEquals(stash, shot) && frame == Time.frameCount;

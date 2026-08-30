@@ -105,18 +105,17 @@ public class ArmorProductTests
     }
 
     /// <summary>
-    /// A class is what a construction earns. The game hands out ratings its materials
-    /// cannot reach — 125 of the aramid packages sewn into vests are stamped class 3,
-    /// which would take around 200 mm of aramid — and the ceiling is what takes them
-    /// back to what the fabric does.
+    /// A class is what a construction earns. The game hands out ratings without regard
+    /// to form — up to class 10 on fibre and class 4 on polycarbonate — and the ceiling
+    /// takes those labels back to what the construction can hold.
     /// </summary>
     [Theory]
-    // the sewn package: fabric stops at Br1 whatever the carrier is sold as
-    [InlineData("thorcrv_level3_soft_armor_front", "Aramid", 1)]
-    [InlineData("iotv_gen4_f_level3_soft_armor_front", "Aramid", 1)]
-    [InlineData("defender2_level3_soft_armor_back", "Aramid", 1)]
-    [InlineData("crye_avs_level3_soft_armor_front", "Aramid", 1)]
-    // a pressed shell is one rung better than the fabric it is made of, and no more
+    // sewn packages and pressed fibre shells both stop at Br2; their constructions
+    // still come from different reference tables
+    [InlineData("thorcrv_level3_soft_armor_front", "Aramid", 2)]
+    [InlineData("iotv_gen4_f_level3_soft_armor_front", "Aramid", 2)]
+    [InlineData("defender2_level3_soft_armor_back", "Aramid", 2)]
+    [InlineData("crye_avs_level3_soft_armor_front", "Aramid", 2)]
     [InlineData("ratnik_6b47_level3_helmet_armor_top", "Aramid", 2)]
     [InlineData("item_equipment_facecover_ballistic_mask", "UHMWPE", 2)]
     // a visor is polycarbonate whatever it is bolted to
@@ -145,7 +144,7 @@ public class ArmorProductTests
     {
         var ceiling = ArmorNormalizer.ClassCeiling("balaclava", "UHMWPE");
 
-        Assert.Equal(1, ceiling);
+        Assert.Equal(2, ceiling);
         Assert.True(declared > ceiling);
     }
 

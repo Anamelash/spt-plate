@@ -609,21 +609,20 @@ public class ArmorNormalizer(
     {
         return Classify(itemName) == Kind.Plate
             ? int.MaxValue
-            : Ceiling(material, IsRigid(itemName, material));
+            : Ceiling(material);
     }
 
     /// <summary>
     /// The rating a material can actually reach in that form, in Br terms (= game
-    /// classes). A woven package stops at Br1: getting to Br3 with aramid alone would
-    /// take around 200 mm of it, which is why the rifle protection in a vest lives in
-    /// the plates. Pressing the same fibre into a resin-bonded shell buys one rung —
-    /// Br2 — and no more: past that a helmet stops getting thicker and starts getting
-    /// a metal or ceramic element, and that element belongs in the product table by
-    /// name. A visor is polycarbonate and laminate whatever it is bolted to, Br1 at
-    /// best. Metal and ceramic are not capped at all: a shell really is thicker on a
-    /// heavier helmet.
+    /// classes). Both a woven package and a resin-bonded fibre shell stop at Br2. Br2
+    /// is the IIIA-weight pistol tier that a sewn package can reach; Br3 introduces a
+    /// hardened core, and getting there with aramid alone would take around 200 mm of
+    /// it. That is why rifle protection in a vest lives in the plates, and why a helmet
+    /// past Br2 gains a metal or ceramic element instead of more fibre. A visor is
+    /// polycarbonate and laminate whatever it is bolted to, Br1 at best. Metal and
+    /// ceramic are not capped at all: a shell really is thicker on a heavier helmet.
     /// </summary>
-    private static int Ceiling(string material, bool shell)
+    private static int Ceiling(string material)
     {
         if (material.Equals("Glass", StringComparison.OrdinalIgnoreCase))
         {
@@ -635,7 +634,7 @@ public class ArmorNormalizer(
             return int.MaxValue;
         }
 
-        return shell ? 2 : 1;
+        return 2;
     }
 
     /// <summary>
