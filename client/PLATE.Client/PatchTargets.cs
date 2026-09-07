@@ -35,6 +35,7 @@ namespace PLATE.Client
         public static Type ArmorResistanceData => FindType("ArmorResistanceData");
         public static Type DamageInfo => FindType("EFT.Ballistics.DamageInfo");
         public static Type Ammo => FindType("EFT.InventoryLogic.Ammo");
+        public static Type Player => FindType("EFT.Player");
 
         /// <summary>Body overpenetration: spawns a "child" bullet with damage × k
         /// (a deviated fragment — the child carries EBulletState.DeviationHit).</summary>
@@ -97,6 +98,53 @@ namespace PLATE.Client
                 ? null
                 : AccessTools.Constructor(DamageInfo,
                     new[] { FindType("EFT.EDamageType"), Shot });
+
+        /// <summary>
+        /// Boundary after every matching armor component has restored/mitigated the
+        /// residual wound and before ApplyShot performs absorbed-damage accounting.
+        /// </summary>
+        public static MethodBase Player_ProceedDamageThroughArmor =>
+            Player == null || DamageInfo == null
+                ? null
+                : AccessTools.Method(Player, "ProceedDamageThroughArmor", new[]
+                {
+                    DamageInfo.MakeByRefType(),
+                    FindType("EBodyPartColliderType"),
+                    FindType("EArmorPlateCollider"),
+                    typeof(bool),
+                });
+
+        /// <summary>
+        /// The single authoritative health delivery after absorbed-damage accounting.
+        /// BABT adds its body-coupled injury to the value argument in a prefix here.
+        /// </summary>
+        public static MethodBase Player_ApplyDamageInfo =>
+            Player == null || DamageInfo == null
+                ? null
+                : AccessTools.Method(Player, "ApplyDamageInfo", new[]
+                {
+                    DamageInfo,
+                    FindType("EBodyPart"),
+                    FindType("EBodyPartColliderType"),
+                    typeof(float),
+                });
+
+        /// <summary>
+        /// Synchronous owner of the armor traversal and final health delivery. Its
+        /// finalizer retires a constructor token even when ApplyShot exits by exception.
+        /// </summary>
+        public static MethodBase Player_ApplyShot => Player == null || DamageInfo == null
+            ? null
+            : Player.GetMethods(AccessTools.all | BindingFlags.DeclaredOnly)
+                .FirstOrDefault(m =>
+                {
+                    if (m.Name != "ApplyShot") return false;
+                    var p = m.GetParameters();
+                    return p.Length == 5 && p[0].ParameterType == DamageInfo &&
+                           p[1].ParameterType == FindType("EBodyPart") &&
+                           p[2].ParameterType == FindType("EBodyPartColliderType") &&
+                           p[3].ParameterType == FindType("EArmorPlateCollider");
+                });
 
         // --- Grenades ---
         /// <summary>Static explosion helper: gathers targets with a sphere and creates fragments.</summary>
@@ -266,6 +314,7 @@ namespace PLATE.Client
             { nameof(ArmorResistanceData), () => ArmorResistanceData },
             { nameof(DamageInfo), () => DamageInfo },
             { nameof(Ammo), () => Ammo },
+            { nameof(Player), () => Player },
             { nameof(Bullet_Overpenetrate), () => Bullet_Overpenetrate },
             { nameof(Bullet_Fragment), () => Bullet_Fragment },
             { nameof(Bullet_ShouldFragment), () => Bullet_ShouldFragment },
@@ -280,6 +329,9 @@ namespace PLATE.Client
             { nameof(Armor_GetPenetrationChance), () => Armor_GetPenetrationChance },
             { nameof(ArmoredEquipment_Ctor), () => ArmoredEquipment_Ctor },
             { nameof(DamageInfo_CtorFromShot), () => DamageInfo_CtorFromShot },
+            { nameof(Player_ProceedDamageThroughArmor), () => Player_ProceedDamageThroughArmor },
+            { nameof(Player_ApplyDamageInfo), () => Player_ApplyDamageInfo },
+            { nameof(Player_ApplyShot), () => Player_ApplyShot },
             { nameof(ActiveHealthController), () => ActiveHealthController },
             { nameof(EffectBase), () => EffectBase },
             { nameof(BleedingBase), () => BleedingBase },

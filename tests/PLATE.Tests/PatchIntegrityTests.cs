@@ -449,6 +449,15 @@ namespace PLATE.Tests
                 "overlay:HealthApplyDamagePostfix",
             };
 
+            // The production path still attempts all three Player hooks. The desktop
+            // test host may report one only when raw PrepareMethod independently
+            // failed on that exact target with Assembly-CSharp's invalid-for-CLR
+            // DeltaTimeDelegate metadata before Harmony saw a PLATE patch method.
+            foreach (var playerHostFailure in TestHostLimitations.PlayerBabtFailures.Keys)
+            {
+                onApplyDamage.Add(playerHostFailure);
+            }
+
             var actual = new HashSet<string>(PatchStats.FailedLabels());
 
             Assert.True(actual.SetEquals(onApplyDamage),
@@ -458,6 +467,89 @@ namespace PLATE.Tests
                 "; total failures: " + actual.Count + " (" + string.Join(", ", actual) + ")" +
                 Environment.NewLine +
                 string.Join(Environment.NewLine, PatchStats.Report()));
+        }
+
+        [Fact]
+        public void Player_babt_hooks_match_the_live_method_contracts()
+        {
+            if (Skip) return;
+
+            var flags = BindingFlags.Static | BindingFlags.NonPublic;
+            var patchType = typeof(PLATE.Client.Patches.BallisticsPatches);
+            var proceed = patchType.GetMethod("ProceedDamageThroughArmorPostfix", flags);
+            var applyPrefix = patchType.GetMethod("ApplyDamageInfoPrefix", flags);
+            var applyPostfix = patchType.GetMethod("ApplyDamageInfoPostfix", flags);
+            var shotPrefix = patchType.GetMethod("ApplyShotBabtPrefix", flags);
+            var shotFinalizer = patchType.GetMethod("ApplyShotBabtFinalizer", flags);
+
+            Assert.NotNull(proceed);
+            Assert.NotNull(applyPrefix);
+            Assert.NotNull(applyPostfix);
+            Assert.NotNull(shotPrefix);
+            Assert.NotNull(shotFinalizer);
+
+            var proceedOriginal = PatchTargets.Player_ProceedDamageThroughArmor;
+            var proceedOriginalParameters = proceedOriginal.GetParameters();
+            var proceedPatchParameters = proceed.GetParameters();
+            Assert.Equal(PatchTargets.Player, proceedPatchParameters[0].ParameterType);
+            Assert.Equal(typeof(DamageInfo).MakeByRefType(),
+                proceedPatchParameters[1].ParameterType);
+            Assert.Equal(proceedOriginalParameters[1].ParameterType,
+                proceedPatchParameters[2].ParameterType);
+            Assert.Equal(proceedOriginalParameters[2].ParameterType,
+                proceedPatchParameters[3].ParameterType);
+            Assert.Equal(proceedOriginalParameters[3].ParameterType,
+                proceedPatchParameters[4].ParameterType);
+            Assert.Equal(((MethodInfo)proceedOriginal).ReturnType,
+                proceedPatchParameters[5].ParameterType);
+
+            var damageOriginalParameters =
+                PatchTargets.Player_ApplyDamageInfo.GetParameters();
+            var damagePatchParameters = applyPrefix.GetParameters();
+            Assert.Equal(PatchTargets.Player, damagePatchParameters[0].ParameterType);
+            Assert.Equal(typeof(DamageInfo).MakeByRefType(),
+                damagePatchParameters[1].ParameterType);
+            Assert.Equal(damageOriginalParameters[1].ParameterType,
+                damagePatchParameters[2].ParameterType);
+            Assert.Equal(damageOriginalParameters[2].ParameterType,
+                damagePatchParameters[3].ParameterType);
+            Assert.Empty(applyPostfix.GetParameters());
+
+            var shotOriginalParameters = PatchTargets.Player_ApplyShot.GetParameters();
+            var shotPrefixParameters = shotPrefix.GetParameters();
+            var finalizerParameters = shotFinalizer.GetParameters();
+            Assert.Equal(PatchTargets.Player, shotPrefixParameters[0].ParameterType);
+            Assert.Equal(shotOriginalParameters[0].ParameterType,
+                shotPrefixParameters[1].ParameterType);
+            Assert.True(shotPrefixParameters[2].IsOut);
+            Assert.Equal(shotPrefixParameters[2].ParameterType.GetElementType(),
+                finalizerParameters[1].ParameterType);
+            Assert.Equal(typeof(Exception), finalizerParameters[0].ParameterType);
+            Assert.Equal(typeof(Exception), shotFinalizer.ReturnType);
+        }
+
+        [Fact]
+        public void Isolated_framework_host_reports_the_raw_player_prepare_failure()
+        {
+            if (Skip) return;
+
+            // On a future host which can prepare these methods, there is no additional
+            // expected patch failure. On the current net471 test host, pin every
+            // conditional expectation to the exact CLR rejection observed before any
+            // PLATE patch method is compiled. This proves metadata compatibility only;
+            // the three live Unity/Mono attachments still require a raid check.
+            var evidence = TestHostLimitations.PlayerBabtFailures;
+            if (evidence.Count == 0)
+            {
+                return;
+            }
+
+            Assert.Equal(3, evidence.Count);
+            foreach (var failure in evidence)
+            {
+                Assert.Contains("System.TypeLoadException", failure.Value);
+                Assert.Contains("DeltaTimeDelegate", failure.Value);
+            }
         }
 
         /// <summary>

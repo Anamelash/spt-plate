@@ -253,10 +253,15 @@ the projectile has to defeat it with specific energy:
   full-power rifle stops, 5–10 intermediate, 10–20 pistol — the same windows
   ESAPI's three-shots-per-threat protocol and destructive tests put real
   plates in.
-- **Blocked hits still hurt.** Behind-armor blunt trauma follows the published
-  Sturdivan blunt criterion: energy through the panel produces pain, contusion
-  and, at high transfer, internal bleeding and winded breathing — spread over
-  the panel area for steel, focused for soft armor.
+- **Armor hits still hurt.** The Simple BABT path uses the established Sturdivan
+  Blunt Criterion approximation for a projectile the armor stopped:
+  assumed energy through the panel produces pain, internal bleeding and winded
+  breathing — spread over the panel area for steel and focused for soft armor.
+  The default Extended path instead follows the resolved energy and momentum
+  before and after every armor layer, drives a reduced armor/body response once,
+  and can add blunt injury to both stopped and penetrating torso hits. Its
+  construction and body inputs are explicitly provisional; unsupported cases use
+  a bounded, labeled fallback rather than a fictional measured deformation.
 
 *What this is based on:* protection classes are anchored to the GOST body-armor
 standard — each class threshold is derived from the specific energy of the round
@@ -264,14 +269,14 @@ that class is certified against, which is why a class stops what it is rated to
 stop and not a tier more. Material behavior follows documented armor engineering
 rather than a per-item fudge factor: ceramic's high threshold paired with its
 multi-hit fragility, steel's locality of damage, the ease with which a
-sharp-nosed core slips through fibrous soft armor. Behind-armor trauma uses the
-Blunt Criterion of Sturdivan, Viano and Champion, whose published injury-risk
-curves link impact energy, body mass, chest-wall thickness and impactor diameter
-to the probability of real chest injury; it was validated in blunt ballistic
-impact research at Wayne State, and the symptom spectrum reproduced in game —
-from bruising to lung and heart contusion with internal bleeding — follows the
-clinical literature on behind-armor blunt trauma and the backface-deformation
-limits used in armor certification.
+sharp-nosed core slips through fibrous soft armor. Simple BABT uses the Blunt
+Criterion of Sturdivan, Viano and Champion, whose published injury-risk curves
+link impact energy, body mass, chest-wall thickness and impactor diameter to
+chest-injury risk. Extended BABT instead closes an explicit energy-and-impulse
+ledger and uses sourced but provisional reduced models of armor construction and
+the thorax/abdomen. Neither path is a product-specific back-face-deformation test
+or a clinically calibrated injury predictor; those limits are kept visible in
+the model documentation.
 
 ## Environment: cover is a barrier, not a threshold
 
@@ -645,11 +650,11 @@ which is what makes a tourniquet applied late still worth applying.
   and seeing what is made of what.
 - **Optional 3D markers show where your bullets actually went** (off by default): a
   cross at each impact with a ray back along the line of arrival and a label —
-  damage and behind-armour trauma on a body, the material and the thickness it was
-  charged for on an obstacle, with the verdict in the colour: through, stopped, or
-  bounced. Markers on a body hang off the bone, so they follow the
-  target and stay put where he falls, which is the whole point of walking up
-  afterwards to see where you hit him.
+  actual wound HP (`F`), blunt HP (`B`) and armor durability lost (`A`) on a body,
+  the material and the thickness charged on an obstacle, with the verdict in the
+  colour: through, stopped, or bounced. Markers on a body hang off the bone, so
+  they follow the target and stay put where he falls, which is the whole point of
+  walking up afterwards to see where you hit him.
 - **Two field aids sit in the debug section for anyone auditing the model**
   (both off, both neutral at their defaults): a ghost mode where bots neither see
   nor hear you and groups already hunting you forget you within a couple of seconds,
@@ -674,6 +679,47 @@ break, but an object nobody has looked at is priced as the average of its kind
 rather than as itself.
 
 ## Release history
+
+### 1.5.0
+
+Behind-armor trauma now defaults to an Extended path that follows the resolved
+armor hit instead of assigning a fixed injury tier from the incoming round.
+Simple remains available as a compatibility choice for the established
+stopped-round response.
+
+- **Extended BABT accounts for the hit that actually happened.** It consumes the
+  incoming and outgoing projectile state from every armor component, including
+  retained and ejected mass, local wear, construction and impact angle. One
+  aggregate energy-and-impulse ledger drives one armor/body response, so a stack
+  cannot spend the same impact once per layer. Both stops and penetrations can
+  transfer blunt injury to the chest or abdomen.
+- **The new response is physically bounded and honest about its limits.** Plate,
+  laminate, soft-armor and ceramic/backing reductions carry explicit evidence
+  status. Unsupported or incomplete torso chains use a labeled estimate bounded
+  by the resolved projectile-energy loss; other body regions keep the established
+  behavior. Missing geometry, uncertain outgoing material and incomplete
+  numerical horizons are reported rather than passed off as validated back-face
+  deformation.
+- **The old injury scale remains available unchanged.** The new regular F12
+  `BABT model` choice defaults to `Extended`. Selecting `Simple` restores its
+  2 HP plateau and 40 HP maximum. `Extended` has no fixed HP limits for hits it
+  can resolve or safely estimate. The existing BABT enable switch still controls
+  both modes.
+- **Body markers now show the complete hit account.** `F` is wound HP, `B` is
+  blunt HP and `A` is the armor durability lost across the matching hit's layers.
+  Wound and blunt values are allocated from the actual health loss, including
+  overflow and health multipliers, instead of displaying requested damage as if
+  it had necessarily been applied.
+- **The armor reference book now carries versioned BABT inputs.** Version 22 adds
+  material stiffness and damping, construction form and geometry, provisional
+  thorax/abdomen body profiles and numerical acceptance limits without changing
+  the established penetration thicknesses or protection classes. Existing user
+  books are backed up and refreshed by the normal versioned migration.
+
+The Extended path is an engineering reduction, not a claim of experimentally
+validated back-face deformation for every armor product. Its equations, sources,
+fallbacks, numerical checks and remaining live applicability gaps are recorded in
+[`docs/BABT.md`](docs/BABT.md).
 
 ### 1.4.1
 

@@ -5,6 +5,7 @@ using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 using SPTarkov.Server.Core.Models.Enums;
 using SPTarkov.Server.Core.Models.Spt.Tables;
+using System.Text.Json;
 using Xunit;
 
 namespace PLATE.Server.Tests;
@@ -203,6 +204,57 @@ public class ArmorNormalizerTests
         normalizer.Run(new PlateServerConfig(), ModPath());
 
         Assert.Equal(after, (int)(item.Properties!.ArmorClass ?? 0));
+    }
+
+    [Fact]
+    public void Armor_wire_reuses_plate_geometry_and_adds_only_babt_form_span_and_provenance()
+    {
+        var (normalizer, item) = Fixture(
+            "item_equipment_plate_SAPI_AR500_legacy", ArmorMaterial.ArmoredSteel, 4);
+        item.Properties!.Width = 2;
+        item.Properties.Height = 3;
+
+        normalizer.Run(new PlateServerConfig(), ModPath());
+
+        using var json = JsonDocument.Parse(PLATE.Server.Routes.PlateArmorData.Json);
+        var plate = json.RootElement.GetProperty("Plates").GetProperty(ItemId.ToString());
+        Assert.Equal(6.35, plate.GetProperty("T").GetDouble(), 3);
+        Assert.Equal("ArmoredSteel", plate.GetProperty("M").GetString());
+        Assert.Equal("IsotropicPlate", plate.GetProperty("BabtForm").GetString());
+        Assert.Equal(254, plate.GetProperty("BabtWidthMm").GetDouble());
+        Assert.Equal(318, plate.GetProperty("BabtHeightMm").GetDouble());
+        Assert.Equal("Estimated", plate.GetProperty("BabtGeometryStatus").GetString());
+        Assert.Equal("Product", plate.GetProperty("ConstructionOrigin").GetString());
+
+        var material = json.RootElement.GetProperty("Materials")
+            .GetProperty("ArmoredSteel");
+        Assert.Equal(1250, material.GetProperty("YieldMPa").GetDouble());
+        Assert.Equal(210, material.GetProperty("YoungModulusGPa")
+            .GetProperty("Value").GetDouble());
+        Assert.Equal("Estimated", material.GetProperty("YoungModulusGPa")
+            .GetProperty("Status").GetString());
+        var numerics = json.RootElement.GetProperty("BabtNumerics");
+        Assert.Equal(0.00002, numerics.GetProperty("TimeStepS")
+            .GetProperty("Value").GetDouble());
+        Assert.Equal("Estimated", numerics.GetProperty("MaximumRelativeEnergyError")
+            .GetProperty("Status").GetString());
+    }
+
+    [Fact]
+    public void Integrated_soft_wire_keeps_the_existing_package_density_and_form()
+    {
+        var (normalizer, item) = Fixture(
+            "iotv_gen4_a_level3_soft_armor_front", ArmorMaterial.Aramid, 3);
+
+        normalizer.Run(new PlateServerConfig(), ModPath());
+
+        using var json = JsonDocument.Parse(PLATE.Server.Routes.PlateArmorData.Json);
+        var plate = json.RootElement.GetProperty("Plates").GetProperty(ItemId.ToString());
+        Assert.Equal(7.6, plate.GetProperty("T").GetDouble(), 3);
+        Assert.Equal("SoftWoven", plate.GetProperty("BabtForm").GetString());
+        Assert.Equal(0.4375, plate.GetProperty("P").GetDouble(), 4);
+        Assert.Equal(254, plate.GetProperty("BabtWidthMm").GetDouble());
+        Assert.Equal(305, plate.GetProperty("BabtHeightMm").GetDouble());
     }
 
     private static readonly MongoId ItemId = new("6f0000000000000000000001");

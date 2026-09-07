@@ -884,23 +884,63 @@ there is no thickness to take half of.
 
 ## Behind-armor blunt trauma
 
-A panel that stops a bullet still delivers momentum. The severity predictor is the
-Blunt Criterion:
+F12 exposes **BABT model** in the regular Ballistics section: **Extended** is the
+default mechanical model; **Simple** keeps the established stopped-round behavior.
+
+A panel can transmit a blunt load whether it stops the projectile or is
+perforated. The **Extended** branch consumes the existing armor decision's actual
+incoming/outgoing projectile states. Successive armor contacts form one ordered
+energy ledger; the final residual projectile continues into the wound model.
+BABT does not subtract penetration work from it again.
+
+```
+E_deposited = E_in - E_out_primary - E_out_secondary
+J_normal = p_in_normal - p_out_primary_normal - p_out_secondary_normal
+```
+
+An estimated reduced armor/body model separates the coherent motion excited by
+that impulse from unresolved armor/projectile dissipation. Net work at the body
+surface drives blunt injury. Returned elastic energy reduces that work, and
+energy retained in armor, damaged projectile material or outgoing ejecta is not
+automatically converted to trauma. Material/construction inputs reuse the
+existing `Plates` and `Materials` data, extended with mechanical properties and
+explicit engineering estimates.
+
+The health adapter uses the same `E / EnergyCapPerHp` conversion as the existing
+low-velocity contact-bruise branch of the wound model, supplied with **body work**
+instead of incoming projectile energy. This game-health scale is not clinical
+calibration. It has neither a fixed 2 HP floor nor a fixed 40 HP ceiling. For a
+penetrating hit its blunt HP is added once to the residual projectile's wound at
+the health call, after vanilla absorbed-damage accounting. Existing trauma,
+winded and blood systems handle the effects.
+
+The **Simple** branch retains the previous Blunt Criterion approximation:
 
 ```
 BC = ln( E_bfd / ( W^(1/3) · T_wall · D ) )
 ```
 
-with `E_bfd` the energy reaching the body, `W` body mass, `T_wall` chest wall
-thickness and `D` the effective distribution diameter — small for soft armor,
-large for a steel plate, which is why the same energy behind steel is a bruise and
-behind a soft panel is a broken rib.
+with `E_bfd = E_impact * BluntThroughput * energyScale`, `W` the configured body
+mass, `T_wall` the configured chest wall thickness and `D` a fixed material spread
+diameter, floored at the projectile caliber. `E_bfd` is an assumed transfer, not
+measured rear-face deformation or calculated work on the body. These inputs do
+not establish that a particular stopped round causes a particular injury.
 
-The response is piecewise: a plateau at low `BC` (the plate held, it hurt, nothing
-more), a rising branch where the probability of internal bleeding follows a
-logistic in `BC`, and a severe branch with lung or heart contusion, guaranteed
-internal bleeding and a long stamina penalty. Vanilla blunt damage is disabled
-when this is active — otherwise the same hit is paid for twice.
+The response is piecewise: below `BC1 = 1.8`, damage is a fixed `2 HP`; between
+`BC1` and `BC2 = 3.4` it interpolates linearly to `40 HP`; above `BC2` it remains
+`40 HP`. The internal-bleeding roll likewise rises linearly through the band,
+not logistically. It is subject to the blood system's eligibility and
+survivability gates. The severe branch adds a stamina penalty; it does not
+calculate a distinct heart or lung lesion. This replaces vanilla blunt damage
+when BABT is enabled and a shot context is available.
+
+An explicit reference solver with authored contact profiles remains separate from
+the active transfer path. Unsupported geometry, body regions or inconsistent
+physical budgets are reported and follow the documented fallback; an unknown
+profile is not silently represented as a measured product. Neither numerical
+conservation tests nor successful integration establish real-product deflection
+or clinical injury accuracy. Equations, provenance, runtime limitations and
+validation are recorded in [BABT.md](BABT.md).
 
 ## Environment barriers
 
@@ -2412,6 +2452,15 @@ severities from the AIS tables (how much a given tissue minds being stretched:
 third, separate knob.
 
 ## What is deliberately not modelled
+
+- **A product-validated mechanical replacement for BABT injury.** Extended BABT
+  is the default reduced mechanical calculation with explicit applicability limits;
+  Simple remains available and retains the established 2/40 HP plateaus. Full
+  brittle crushing, delamination, propagating fabric deformation, real carrier
+  support and a calibrated regional injury mapping remain outside Extended's
+  verified scope. Unsupported torso/abdomen inputs use a labeled, energy-bounded
+  estimate or retain the exact established stopped-round result instead of being
+  presented as a complete mechanical solution; see [BABT.md](BABT.md).
 
 - **The survivability overrides are not part of the model at all.** Four switches
   let a player be harder to kill than the physics says: a floor of 1 HP under their

@@ -16,7 +16,7 @@ the result.
 The mod is limited to ballistics, armor and trauma. It does not alter AI,
 spawns, quests, progression, loot or graphics.
 
-**Current release:** P.L.A.T.E. 1.4.1
+**Current release:** P.L.A.T.E. 1.5.0
 
 **Supported game:** SPT 4.1.x, including 4.1.3 / EFT 0.16.9.40087
 
@@ -101,6 +101,15 @@ penetrating projectile loses energy and may also lose mass or stability. A
 stopped projectile can still cause behind-armor blunt trauma. Details are in
 the [armor model](docs/MODEL.md#armor) and
 [blunt-trauma model](docs/MODEL.md#behind-armor-blunt-trauma).
+
+The F12 **BABT model** setting now offers two paths. **Extended** is the default
+engineering model for chest and abdomen hits: it follows the resolved
+projectile state through every armor layer, conserves the energy and impulse
+ledger, and can apply blunt injury on both stopped and penetrating hits. Inputs
+without a supported construction or body response use an explicit bounded
+fallback. **Simple** preserves the established stopped-round response and remains
+available as the compatibility choice. The model, its evidence and its
+applicability limits are documented in [BABT mechanical model](docs/BABT.md).
 
 ### Armor Wear Is Local and Material-Specific
 
@@ -239,7 +248,7 @@ For a complete player-facing comparison, see
 
 | Component | Required version |
 |---|---|
-| P.L.A.T.E. | 1.4.1 |
+| P.L.A.T.E. | 1.5.0 |
 | SPT | 4.1.x, including 4.1.3 |
 | EFT client | 0.16.9.40087 |
 | .NET SDK | 10, only when building from source |

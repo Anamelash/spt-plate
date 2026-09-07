@@ -28,6 +28,16 @@ namespace PLATE.Client
         Aggregated,
     }
 
+    /// <summary>
+    /// Player-facing BABT choice. Simple retains the established stopped-round
+    /// model; Extended applies the armor/body transfer calculation.
+    /// </summary>
+    public enum BabtRuntimeMode
+    {
+        Simple,
+        Extended,
+    }
+
     internal sealed class ConfigurationManagerAttributes
     {
         public bool? IsAdvanced;
@@ -57,6 +67,7 @@ namespace PLATE.Client
         public static ConfigEntry<float> ArmorResistPerClass;
         public static ConfigEntry<float> ArmorDurabilityFloor;
         public static ConfigEntry<bool> BabtEnabled;
+        public static ConfigEntry<BabtRuntimeMode> BabtMode;
         public static ConfigEntry<float> BabtBc1;
         public static ConfigEntry<float> BabtBc2;
         public static ConfigEntry<float> BabtPlateauDamage;
@@ -334,9 +345,12 @@ namespace PLATE.Client
 
             // ===== 2. Ballistics (regular) =====
             BabtEnabled = Bind(sBal, "BABT enabled", true,
-                "Behind-armor blunt trauma per the Sturdivan Blunt Criterion instead of " +
-                "vanilla blunt damage: a stopped bullet hurts the body through the armor " +
-                "depending on energy and material.");
+                "Enable behind-armor blunt trauma using the selected BABT model.");
+            BabtMode = Bind(sBal, "BABT model", BabtRuntimeMode.Extended,
+                "Simple: the established stopped-round BABT model with its 2 HP plateau and " +
+                "40 HP maximum at default settings. Extended: estimated armor/body mechanics " +
+                "for the chest and abdomen, including additional blunt trauma on penetration; " +
+                "no fixed 2/40 HP limits. Unsupported constructions use a fallback.");
             FragRescale = Bind(sBal, "Fragment energy budget", true,
                 "Bullet fragments split a real share of the energy (total damage never " +
                 "exceeds the bullet's budget) instead of vanilla's bonus damage out of thin air.");
@@ -501,24 +515,27 @@ namespace PLATE.Client
                 "Share of resistance left at zero armor durability.",
                 new AcceptableValueRange<float>(0f, 1f), true);
             BabtBc1 = Bind(sBal, "BABT BC1 plateau end", 1.8f,
-                "Below this BC — plateau: small fixed damage, Pain + a short concussion, " +
-                "no internal bleeding.", new AcceptableValueRange<float>(0f, 5f), true);
+                "BC threshold for BABT effects and internal bleeding. Also ends the fixed " +
+                "damage plateau in Simple mode; Extended HP follows body work.",
+                new AcceptableValueRange<float>(0f, 5f), true);
             BabtBc2 = Bind(sBal, "BABT BC2 severe", 3.4f,
-                "From this BC on — severe BABT: max damage, guaranteed internal bleeding, " +
-                "disrupted breathing.", new AcceptableValueRange<float>(1f, 6f), true);
+                "Severe BABT effects threshold: guaranteed internal bleeding and disrupted " +
+                "breathing. Sets maximum HP only in Simple mode.",
+                new AcceptableValueRange<float>(1f, 6f), true);
             BabtPlateauDamage = Bind(sBal, "BABT plateau damage", 2f,
-                "Body part damage on the plateau (a bruise under the plate).",
+                "Simple body part damage on the plateau. Extended does not use this floor.",
                 new AcceptableValueRange<float>(0f, 15f), true);
             BabtMaxDamage = Bind(sBal, "BABT max damage", 40f,
-                "Body part damage at BC2+ (broken ribs, organ contusion).",
+                "Simple body part damage at BC2+. Extended does not use this ceiling.",
                 new AcceptableValueRange<float>(5f, 120f), true);
             BabtBodyMassKg = Bind(sBal, "BABT body mass, kg", 80f,
                 "W in the Sturdivan formula.", new AcceptableValueRange<float>(50f, 120f), true);
             BabtWallCm = Bind(sBal, "BABT body wall, cm", 3.5f,
-                "T in the Sturdivan formula (chest wall thickness).",
+                "Estimated body-wall depth for BC effects and the Extended abdomen tissue mass.",
                 new AcceptableValueRange<float>(1f, 6f), true);
             BabtEnergyScale = Bind(sBal, "BABT energy scale", 1f,
-                "Behind-armor energy multiplier: E_bfd = impact energy * BluntThroughput * this.",
+                "Throughput energy multiplier for legacy injury and estimated Extended fallback. " +
+                "The full mechanical Extended response uses its conserved energy budget directly.",
                 new AcceptableValueRange<float>(0.1f, 3f), true);
             BabtInternalBleedRate = Bind(sBal, "BABT internal bleed, ml per s", 2.5f,
                 "Internal bleed rate from BABT; probability grows from BC1 to BC2.",
@@ -787,8 +804,9 @@ namespace PLATE.Client
                 new AcceptableValueRange<float>(50f, 1000f), true);
             MarkersEnabled = Bind(sOverlay, "World hit markers", false,
                 "Draw a cross at every impact point YOUR shots make, with a ray back " +
-                "along the line of arrival and a label: damage and behind-armor trauma " +
-                "on a body; on an obstacle, the material and the thickness it was " +
+                "along the line of arrival and a label: F = wound HP, B = blunt HP " +
+                "(split proportionally from actual health loss), A = armor durability lost " +
+                "across the hit's layers. On an obstacle, the material and the thickness it was " +
                 "charged for, with the verdict in the colour — green through, red " +
                 "stopped, yellow bounced, blue an exit already paid for on the way in " +
                 "(labelled F, and carrying no thickness because none was charged). The " +

@@ -5,6 +5,8 @@ using System.Linq;
 using BepInEx.Configuration;
 using PLATE.Client;
 using PLATE.Client.Blood;
+using PLATE.Client.Patches;
+using EFT;
 using Xunit;
 
 namespace PLATE.Tests
@@ -263,6 +265,36 @@ namespace PLATE.Tests
             {
                 Assert.StartsWith("7.", entry.Definition.Section);
             }
+        }
+
+        [Fact]
+        public void Babt_model_is_a_regular_F12_choice_with_extended_as_default()
+        {
+            if (Skip) return;
+
+            Assert.Equal(BabtRuntimeMode.Extended, PlateClientConfig.BabtMode.Value);
+            Assert.Equal("BABT model", PlateClientConfig.BabtMode.Definition.Key);
+            Assert.Equal(new[] { "Simple", "Extended" },
+                System.Enum.GetNames(typeof(BabtRuntimeMode)));
+            Assert.False(PlateClientConfig.BabtMode.Description.Tags
+                .OfType<ConfigurationManagerAttributes>().Single().IsAdvanced ?? false);
+        }
+
+        [Fact]
+        public void Babt_regions_do_not_reuse_the_thorax_profile_for_other_anatomy()
+        {
+            if (Skip) return;
+
+            Assert.Equal("Thorax", BallisticsPatches.BabtBodyRegion(
+                EBodyPartColliderType.RibcageUp));
+            Assert.Equal("Head", BallisticsPatches.BabtBodyRegion(
+                EBodyPartColliderType.HeadCommon));
+            Assert.Equal("Abdomen", BallisticsPatches.BabtBodyRegion(
+                EBodyPartColliderType.Pelvis));
+            Assert.Equal("Neck", BallisticsPatches.BabtBodyRegion(
+                EBodyPartColliderType.NeckFront));
+            Assert.Equal("Limb", BallisticsPatches.BabtBodyRegion(
+                EBodyPartColliderType.LeftForearm));
         }
 
         /// <summary>

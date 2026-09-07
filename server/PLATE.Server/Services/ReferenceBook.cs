@@ -246,6 +246,29 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         /// </summary>
         public double HardMassFraction { get; set; } = 1.0;
 
+        /// <summary>
+        /// Isotropic elastic inputs used by the reduced BABT plate mode. They carry
+        /// their own evidence because the penetration strengths above do not determine
+        /// elastic stiffness.
+        /// </summary>
+        public BabtParameterRef YoungModulusGPa { get; set; } = new();
+
+        public BabtParameterRef PoissonRatio { get; set; } = new();
+
+        /// <summary>
+        /// Effective in-plane modulus of a consolidated ballistic laminate. This is a
+        /// package property; a bare-yarn modulus must not be put here.
+        /// </summary>
+        public BabtParameterRef RigidLaminateModulusGPa { get; set; } = new();
+
+        public BabtParameterRef RigidLaminatePoissonRatio { get; set; } = new();
+
+        /// <summary>
+        /// Modal damping ratio used to reduce c = 2*zeta*sqrt(K*mu). It is deliberately
+        /// separate from elastic stiffness and must identify estimates as such.
+        /// </summary>
+        public BabtParameterRef StructuralDampingRatio { get; set; } = new();
+
         public string Source { get; set; } = "";
     }
 
@@ -326,6 +349,23 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         public double DensityGCm3 { get; set; }
 
         /// <summary>
+        /// Optional BABT form override for an assembly whose form cannot be recovered
+        /// from its item kind and material. Empty keeps the normalizer's form resolver.
+        /// </summary>
+        public string BabtForm { get; set; } = "";
+
+        /// <summary>
+        /// Optional effective flat-mode spans. These are additional mechanical geometry,
+        /// not replacement thicknesses. Zero lets the normalizer use a plate footprint
+        /// or its explicit soft-panel reduction.
+        /// </summary>
+        public double BabtWidthMm { get; set; }
+
+        public double BabtHeightMm { get; set; }
+
+        public string BabtGeometrySource { get; set; } = "";
+
+        /// <summary>
         /// For ArmorByClass rungs only: the key of the REAL product in ArmorPlates
         /// whose construction this rung borrows. A class rung used to be a thickness
         /// solved from the class threshold — a number the model owed to itself. Where
@@ -336,6 +376,157 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         /// </summary>
         public string SameAs { get; set; } = "";
 
+        public string Source { get; set; } = "";
+    }
+
+    /// <summary>
+    /// A numeric input to the BABT construction model together with the quality of
+    /// the evidence behind it. Zero is a valid measurement for some inputs, so a
+    /// nullable value and an explicit status are used instead of a sentinel.
+    /// </summary>
+    public class BabtParameterRef
+    {
+        public double? Value { get; set; }
+
+        /// <summary>Measured | Estimated | Missing.</summary>
+        public string Status { get; set; } = "Missing";
+
+        public string Source { get; set; } = "";
+
+        /// <summary>Why an input is absent or why an estimate was necessary.</summary>
+        public string Reason { get; set; } = "";
+    }
+
+    /// <summary>
+    /// One physical layer. Form selects the constitutive family; Material is only
+    /// its substance and must never be used to guess the form.
+    /// </summary>
+    public class BabtLayerRef
+    {
+        /// <summary>
+        /// IsotropicPlate | BondedLaminate | SoftWoven | SoftUd | BrittleFace |
+        /// GlassPly | PolymerInterlayer.
+        /// </summary>
+        public string Form { get; set; } = "";
+
+        public string Material { get; set; } = "";
+        public BabtParameterRef ThicknessMm { get; set; } = new();
+        public BabtParameterRef DensityKgM3 { get; set; } = new();
+        public BabtParameterRef YoungModulusGPa { get; set; } = new();
+        public BabtParameterRef PoissonRatio { get; set; } = new();
+        public BabtParameterRef ShearModulusGPa { get; set; } = new();
+        public BabtParameterRef TensileModulusGPa { get; set; } = new();
+        public BabtParameterRef TensileStrengthMPa { get; set; } = new();
+        public BabtParameterRef FailureStrain { get; set; } = new();
+        public BabtParameterRef CompressiveStrengthMPa { get; set; } = new();
+        public BabtParameterRef ExtensionalStiffnessNPerM { get; set; } = new();
+        public BabtParameterRef FlexuralRigidityNm { get; set; } = new();
+        public BabtParameterRef MembraneStiffnessNPerM { get; set; } = new();
+        public BabtParameterRef YieldStrengthMPa { get; set; } = new();
+        public bool BondedToPrevious { get; set; }
+        public string Source { get; set; } = "";
+    }
+
+    /// <summary>
+    /// A real assembly rather than a game material. An entry may deliberately be
+    /// incomplete: the client reports the missing inputs and leaves the established
+    /// penetration/BABT fallback in charge instead of fabricating a deflection.
+    /// </summary>
+    public class BabtConstructionRef
+    {
+        /// <summary>
+        /// MetalPlate | BondedFibreLaminate | SoftIntegrated | CeramicComposite |
+        /// LayerStack | GlassLaminate.
+        /// </summary>
+        public string Kind { get; set; } = "";
+
+        public List<BabtLayerRef> Layers { get; set; } = new();
+        public BabtParameterRef WidthMm { get; set; } = new();
+        public BabtParameterRef HeightMm { get; set; } = new();
+        public BabtParameterRef CurvatureRadiusMm { get; set; } = new();
+        public BabtParameterRef LocalEffectiveMassKg { get; set; } = new();
+        public BabtParameterRef RigidEffectiveMassKg { get; set; } = new();
+        public BabtParameterRef FlexuralDampingNsPerM { get; set; } = new();
+
+        /// <summary>SimplySupported | Missing. Other conditions require a new model.</summary>
+        public string Support { get; set; } = "Missing";
+
+        /// <summary>Exact liner/pad stack key used to select an applicable body profile.</summary>
+        public string PadKey { get; set; } = "";
+
+        public BabtParameterRef EdgeStiffnessNPerM { get; set; } = new();
+        public BabtParameterRef EdgeDampingNsPerM { get; set; } = new();
+        public BabtParameterRef PadThicknessMm { get; set; } = new();
+        public BabtParameterRef PadModulusMPa { get; set; } = new();
+        public string Source { get; set; } = "";
+        public string Notes { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Contact solver inputs for one validated impact family. The applicability
+    /// envelope is mandatory: contact stiffness is not transferable from a pistol
+    /// bullet to a rifle penetrator or a .50 projectile.
+    /// </summary>
+    public class BabtImpactProfileRef
+    {
+        public string[] ConstructionKeys { get; set; } = [];
+        public string[] AmmoKeys { get; set; } = [];
+        public BabtParameterRef MinProjectileMassG { get; set; } = new();
+        public BabtParameterRef MaxProjectileMassG { get; set; } = new();
+        public BabtParameterRef MinProjectileDiameterMm { get; set; } = new();
+        public BabtParameterRef MaxProjectileDiameterMm { get; set; } = new();
+        public BabtParameterRef MinNormalVelocityMps { get; set; } = new();
+        public BabtParameterRef MaxNormalVelocityMps { get; set; } = new();
+        public BabtParameterRef ProjectileContactStiffnessNPerM { get; set; } = new();
+        public BabtParameterRef ProjectileContactDampingNsPerM { get; set; } = new();
+        public BabtParameterRef TimeStepS { get; set; } = new();
+        public BabtParameterRef SimulationDurationS { get; set; } = new();
+        public BabtParameterRef MaximumIntegrationSteps { get; set; } = new();
+        public BabtParameterRef MinimumStepsPerPeriod { get; set; } = new();
+        public BabtParameterRef MaximumRelativeEnergyError { get; set; } = new();
+        public BabtParameterRef SettledVelocityToleranceMps { get; set; } = new();
+        public BabtParameterRef SettledForceToleranceN { get; set; } = new();
+        public string Source { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Lumped mechanical target for one anatomical region. It is separate from armour:
+    /// a helmet and a vest cannot share the old whole-body mass/chest-wall constants.
+    /// </summary>
+    public class BabtBodyProfileRef
+    {
+        /// <summary>Exact BABT construction keys for which the contact reduction was validated.</summary>
+        public string[] ConstructionKeys { get; set; } = [];
+
+        /// <summary>Named pad/liner stacks; empty means applicability is not established.</summary>
+        public string[] PadKeys { get; set; } = [];
+        public BabtParameterRef EffectiveMassKg { get; set; } = new();
+        public BabtParameterRef ContactStiffnessNPerM { get; set; } = new();
+        public BabtParameterRef ContactDampingNsPerM { get; set; } = new();
+        public BabtParameterRef FoundationStiffnessNPerM { get; set; } = new();
+        public BabtParameterRef FoundationDampingNsPerM { get; set; } = new();
+        public BabtParameterRef InitialGapMm { get; set; } = new();
+        public BabtParameterRef EffectiveContactAreaM2 { get; set; } = new();
+        /// <summary>Fixed | TissueSlab. TissueSlab resolves mass as rho*A*depth.</summary>
+        public string MassModel { get; set; } = "Fixed";
+        public BabtParameterRef TissueDensityKgM3 { get; set; } = new();
+        public string Source { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Numerical acceptance policy for the reduced BABT integration. These values
+    /// control resolution, convergence and rejection; they are not material or body
+    /// calibration constants.
+    /// </summary>
+    public class BabtNumericsRef
+    {
+        public BabtParameterRef TimeStepS { get; set; } = new();
+        public BabtParameterRef SimulationDurationS { get; set; } = new();
+        public BabtParameterRef MaximumIntegrationSteps { get; set; } = new();
+        public BabtParameterRef MinimumStepsPerPeriod { get; set; } = new();
+        public BabtParameterRef MaximumRelativeEnergyError { get; set; } = new();
+        public BabtParameterRef SettledVelocityToleranceMps { get; set; } = new();
+        public BabtParameterRef SettledForceToleranceN { get; set; } = new();
         public string Source { get; set; } = "";
     }
 
@@ -433,6 +624,23 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         /// table with its own figures.
         /// </summary>
         public Dictionary<string, ArmorPlateRef> HelmetShells { get; set; } = new();
+
+        /// <summary>
+        /// Optional, versioned BABT construction profiles. Keys use the same exact
+        /// item-name/product-name lookup as ArmorPlates, but the tables are separate:
+        /// a penetration thickness is not evidence for rear-face deflection.
+        /// </summary>
+        public Dictionary<string, BabtConstructionRef> BabtConstructions { get; set; } = new();
+
+        /// <summary>Schema version for BabtConstructions; independent of Version.</summary>
+        public int BabtSchemaVersion { get; set; }
+
+        public Dictionary<string, BabtImpactProfileRef> BabtImpactProfiles { get; set; } = new();
+
+        /// <summary>Thorax | Head | Abdomen and other explicitly authored regions.</summary>
+        public Dictionary<string, BabtBodyProfileRef> BabtBodyProfiles { get; set; } = new();
+
+        public BabtNumericsRef BabtNumerics { get; set; } = new();
 
         /// <summary>
         /// Key — the GOST class, "Бр1".."Бр6"; value — every cartridge the standard
@@ -587,6 +795,13 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
     /// </summary>
     public static List<string> MergeShippedDefaults(AmmoReference loaded)
     {
+        // Optional user-authored blocks can explicitly contain null. Treat that as an
+        // empty block so a malformed diagnostic section cannot disable penetration data.
+        loaded.BabtConstructions ??= new();
+        loaded.BabtBodyProfiles ??= new();
+        loaded.BabtImpactProfiles ??= new();
+        loaded.BabtNumerics ??= new();
+
         AmmoReference? shipped = null;
         AmmoReference Shipped() => shipped ??= Parse(DefaultReferenceJsonc) ?? new AmmoReference();
 
@@ -613,14 +828,91 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         Fill(nameof(loaded.Weapons), loaded.Weapons, s => s.Weapons);
         Fill(nameof(loaded.IntegratedBarrels), loaded.IntegratedBarrels, s => s.IntegratedBarrels);
         Fill(nameof(loaded.ArmorMaterials), loaded.ArmorMaterials, s => s.ArmorMaterials);
+        foreach (var (key, material) in loaded.ArmorMaterials)
+        {
+            if (!Shipped().ArmorMaterials.TryGetValue(key, out var fallback))
+            {
+                continue;
+            }
+
+            FillMechanical(material, fallback);
+        }
         Fill(nameof(loaded.ArmorPlates), loaded.ArmorPlates, s => s.ArmorPlates);
         Fill(nameof(loaded.ArmorByClass), loaded.ArmorByClass, s => s.ArmorByClass);
         Fill(nameof(loaded.SoftArmor), loaded.SoftArmor, s => s.SoftArmor);
         Fill(nameof(loaded.HelmetShells), loaded.HelmetShells, s => s.HelmetShells);
+        Fill(nameof(loaded.BabtConstructions), loaded.BabtConstructions, s => s.BabtConstructions);
+        Fill(nameof(loaded.BabtBodyProfiles), loaded.BabtBodyProfiles, s => s.BabtBodyProfiles);
         Fill(nameof(loaded.Certification), loaded.Certification, s => s.Certification);
         Fill(nameof(loaded.NoRealSpecs), loaded.NoRealSpecs, s => s.NoRealSpecs);
 
+        if (loaded.BabtSchemaVersion <= 0)
+        {
+            loaded.BabtSchemaVersion = Shipped().BabtSchemaVersion;
+            if (loaded.BabtSchemaVersion > 0)
+            {
+                filled.Add(nameof(loaded.BabtSchemaVersion));
+            }
+        }
+
+        Fill(nameof(loaded.BabtImpactProfiles), loaded.BabtImpactProfiles,
+            s => s.BabtImpactProfiles);
+        FillNumerics(loaded.BabtNumerics, Shipped().BabtNumerics);
+
         return filled;
+
+        void FillMechanical(ArmorMaterialRef into, ArmorMaterialRef from)
+        {
+            into.YoungModulusGPa = FillParameter(nameof(ArmorMaterialRef.YoungModulusGPa),
+                into.YoungModulusGPa, from.YoungModulusGPa);
+            into.PoissonRatio = FillParameter(nameof(ArmorMaterialRef.PoissonRatio),
+                into.PoissonRatio, from.PoissonRatio);
+            into.RigidLaminateModulusGPa = FillParameter(
+                nameof(ArmorMaterialRef.RigidLaminateModulusGPa),
+                into.RigidLaminateModulusGPa, from.RigidLaminateModulusGPa);
+            into.RigidLaminatePoissonRatio = FillParameter(
+                nameof(ArmorMaterialRef.RigidLaminatePoissonRatio),
+                into.RigidLaminatePoissonRatio, from.RigidLaminatePoissonRatio);
+            into.StructuralDampingRatio = FillParameter(
+                nameof(ArmorMaterialRef.StructuralDampingRatio),
+                into.StructuralDampingRatio, from.StructuralDampingRatio);
+        }
+
+        void FillNumerics(BabtNumericsRef into, BabtNumericsRef from)
+        {
+            into.TimeStepS = FillParameter(nameof(BabtNumericsRef.TimeStepS),
+                into.TimeStepS, from.TimeStepS, nameof(loaded.BabtNumerics));
+            into.SimulationDurationS = FillParameter(nameof(BabtNumericsRef.SimulationDurationS),
+                into.SimulationDurationS, from.SimulationDurationS, nameof(loaded.BabtNumerics));
+            into.MaximumIntegrationSteps = FillParameter(nameof(BabtNumericsRef.MaximumIntegrationSteps),
+                into.MaximumIntegrationSteps, from.MaximumIntegrationSteps, nameof(loaded.BabtNumerics));
+            into.MinimumStepsPerPeriod = FillParameter(nameof(BabtNumericsRef.MinimumStepsPerPeriod),
+                into.MinimumStepsPerPeriod, from.MinimumStepsPerPeriod, nameof(loaded.BabtNumerics));
+            into.MaximumRelativeEnergyError = FillParameter(nameof(BabtNumericsRef.MaximumRelativeEnergyError),
+                into.MaximumRelativeEnergyError, from.MaximumRelativeEnergyError, nameof(loaded.BabtNumerics));
+            into.SettledVelocityToleranceMps = FillParameter(nameof(BabtNumericsRef.SettledVelocityToleranceMps),
+                into.SettledVelocityToleranceMps, from.SettledVelocityToleranceMps, nameof(loaded.BabtNumerics));
+            into.SettledForceToleranceN = FillParameter(nameof(BabtNumericsRef.SettledForceToleranceN),
+                into.SettledForceToleranceN, from.SettledForceToleranceN, nameof(loaded.BabtNumerics));
+            if (string.IsNullOrWhiteSpace(into.Source))
+            {
+                into.Source = from.Source;
+            }
+        }
+
+        BabtParameterRef FillParameter(string field, BabtParameterRef into,
+            BabtParameterRef from, string section = "ArmorMaterials mechanics")
+        {
+            if (from?.Value == null || into is { Value: not null } ||
+                !string.IsNullOrWhiteSpace(into?.Reason) ||
+                !string.IsNullOrWhiteSpace(into?.Source))
+            {
+                return into ?? new BabtParameterRef();
+            }
+
+            filled.Add($"{section} {field}");
+            return from;
+        }
     }
 
     /// <summary>
@@ -1170,25 +1462,47 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // forbids: the free constants live in the mode constants, never here.
           "ArmorMaterials": {
             "ArmoredSteel": { "Class": "Ductile", "DensityGCm3": 7.85, "YieldMPa": 1250, "ShearMPa": 750,
-                              "HardnessHv": 580,
+                              "HardnessHv": 580, "FailureStrain": 0.08,
+                              "YoungModulusGPa": { "Value": 210, "Status": "Estimated", "Source": "JRC Eurocode steel workshop: E=210 GPa; https://eurocodes.jrc.ec.europa.eu/sites/default/files/2022-06/10_Eurocodes_Steel_Workshop_VILA_REAL.pdf" },
+                              "PoissonRatio": { "Value": 0.30, "Status": "Estimated", "Source": "JRC Eurocode steel workshop: nu=0.30; https://eurocodes.jrc.ec.europa.eu/sites/default/files/2022-06/10_Eurocodes_Steel_Workshop_VILA_REAL.pdf" },
+                              "StructuralDampingRatio": { "Value": 0.005, "Status": "Estimated", "Source": "low-damping bare-metal plate estimate; material damping near 0.5% reported in Damping Estimation of Plates for Statistical Energy Analysis; assembly joints and carrier contact are excluded" },
                               "Source": "AR500-grade armour steel per maker datasheets (SSAB 500-class): ~550 HB -> 580 HV, yield 1250 MPa, UTS ~1650; shear 750 = 0.45·UTS, the through-hardened-steel rule. Rolled homogeneous armour is softer - 300 HB, UTS ~1000, shear 450 = 0.45·UTS, 320 HV - and the V50 ladder in the fixture is RHA, not this" },
             "Titan":        { "Class": "Ductile", "DensityGCm3": 4.43, "YieldMPa": 880,  "ShearMPa": 550,
-                              "HardnessHv": 350,
+                              "HardnessHv": 350, "FailureStrain": 0.10,
+                              "YoungModulusGPa": { "Value": 110, "Status": "Estimated", "Source": "NASA SNP Material Handbook, Ti-6Al-4V tensile modulus near 110 GPa at 300 K, adapted from MMPDS-13; https://ntrs.nasa.gov/api/citations/20240004217/downloads/SNP-HDBK-0008_SNP-Material-Handbook.pdf" },
+                              "PoissonRatio": { "Value": 0.34, "Status": "Estimated", "Source": "NASA Materials Data Handbook, Titanium 6Al-4V; https://ntrs.nasa.gov/archive/nasa/casi.ntrs.nasa.gov/19730000372.pdf" },
+                              "StructuralDampingRatio": { "Value": 0.005, "Status": "Estimated", "Source": "low-damping bare-metal plate reduction; exact helmet/plate support loss is not measured" },
                               "Source": "Ti-6Al-4V per ASM handbook / MMPDS: yield 880 MPa, UTS 950, ultimate shear 550 as tabulated (=0.58·UTS - titanium shears higher than steel's 0.45 rule), 334 HB -> 350 HV" },
             "Aluminium":    { "Class": "Ductile", "DensityGCm3": 2.70, "YieldMPa": 300,  "ShearMPa": 190,
-                              "HardnessHv": 120,
+                              "HardnessHv": 120, "FailureStrain": 0.12,
+                              "YoungModulusGPa": { "Value": 70, "Status": "Estimated", "Source": "NASA Aluminum 5083 materials handbook elastic-property table; https://ntrs.nasa.gov/api/citations/19720022807/downloads/19720022807.pdf" },
+                              "PoissonRatio": { "Value": 0.33, "Status": "Estimated", "Source": "NASA Aluminum 5083 materials handbook elastic-property table; https://ntrs.nasa.gov/api/citations/19720022807/downloads/19720022807.pdf" },
+                              "StructuralDampingRatio": { "Value": 0.005, "Status": "Estimated", "Source": "low-damping bare-aluminium plate estimate; exact support and acoustic radiation losses are not measured" },
                               "Source": "5083-H131 armour plate (MIL-DTL-46027): yield ~300 MPa, UTS ~317, shear 190 = 0.6·UTS, the aluminium rule; 120 HV is the 7039 (MIL-DTL-46063) end of the pair" },
             "Ceramic":      { "Class": "Brittle", "DensityGCm3": 3.90, "CompressiveMPa": 2500,
-                              "HardnessHv": 1500, "HardMassFraction": 0.65,
+                              "HardnessHv": 1500, "HardMassFraction": 0.65, "FailureStrain": 0.00081,
+                              "YoungModulusGPa": { "Value": 370, "Status": "Estimated", "Source": "CoorsTek AD-995 alumina, ASTM C848 elastic modulus 370 GPa; https://www.coorstek.com/media/4235/advanced-alumina.pdf" },
+                              "PoissonRatio": { "Value": 0.22, "Status": "Estimated", "Source": "CoorsTek AD-995 alumina, ASTM C848 Poisson ratio 0.22; https://www.coorstek.com/media/4235/advanced-alumina.pdf" },
+                              "StructuralDampingRatio": { "Value": 0.01, "Status": "Estimated", "Source": "provisional brittle-face modal damping; no product assembly decay measurement is available" },
                               "Source": "94-96% alumina per CoorsTek AD-series datasheets: compressive 2000-2600 MPa, 1400-1600 HV; 2500/1500 read mid-band. Al2O3 on a fibre backer; the hardness is why it beats a carbide core" },
             "Combined":     { "Class": "Brittle", "DensityGCm3": 3.20, "CompressiveMPa": 2600,
-                              "HardnessHv": 1600, "HardMassFraction": 0.60,
+                              "HardnessHv": 1600, "HardMassFraction": 0.60, "FailureStrain": 0.0008,
                               "Source": "ceramic face on composite backing; face read one grade above the Ceramic entry, at 99%-alumina figures (CoorsTek AD-995 class): compressive ~2600 MPa, ~1600 HV" },
             "Glass":        { "Class": "Brittle", "DensityGCm3": 2.50, "CompressiveMPa": 1000,
-                              "HardnessHv": 550, "Source": "laminated soda-lime float glass: compressive 1000 MPa per Saint-Gobain float-glass data, Vickers ~5.4 GPa -> 550 HV (Ashby, Engineering Materials)" },
+                              "HardnessHv": 550, "FailureStrain": 0.00057,
+                              "YoungModulusGPa": { "Value": 70, "Status": "Estimated", "Source": "Saint-Gobain float glass: E=70 GPa; https://www.saint-gobain-glass.it/blog-post/proprieta-meccaniche-del-vetro" },
+                              "PoissonRatio": { "Value": 0.20, "Status": "Estimated", "Source": "Saint-Gobain float glass: nu=0.20; https://www.saint-gobain-glass.ro/en/node/726" },
+                              "StructuralDampingRatio": { "Value": 0.01, "Status": "Estimated", "Source": "provisional laminated-glazing modal damping; actual glass/polycarbonate/interlayer layup is required for product resolution" },
+                              "Source": "laminated soda-lime float glass: compressive 1000 MPa per Saint-Gobain float-glass data, Vickers ~5.4 GPa -> 550 HV (Ashby, Engineering Materials)" },
             "Aramid":       { "Class": "Fibrous", "DensityGCm3": 1.44, "FibreTensileMPa": 2900, "FailureStrain": 0.034,
+                              "RigidLaminateModulusGPa": { "Value": 10.06, "Status": "Estimated", "Source": "Kevlar 29/epoxy laminate effective in-plane modulus reported by Scazzosi et al.; DOI 10.1016/j.prostr.2020.02.008; this is not bare-yarn modulus" },
+                              "RigidLaminatePoissonRatio": { "Value": 0.25, "Status": "Estimated", "Source": "Kevlar 29/epoxy laminate model reported by Scazzosi et al.; DOI 10.1016/j.prostr.2020.02.008" },
+                              "StructuralDampingRatio": { "Value": 0.02, "Status": "Estimated", "Source": "provisional woven/composite modal damping reduction; exact resin, weave and support are product dependent" },
                               "Source": "DuPont Kevlar 29 datasheet: 2920 MPa tensile, 3.6% break elongation; strain read just under single-fibre break because a woven pack fails at the weave. TSVM-DZh is the Russian equivalent. No hardness - a woven pack has none worth the name" },
             "UHMWPE":       { "Class": "Fibrous", "DensityGCm3": 0.97, "FibreTensileMPa": 3400, "FailureStrain": 0.035,
+                              "RigidLaminateModulusGPa": { "Value": 45.2, "Status": "Estimated", "Source": "Dyneema HB26 cross-ply laminate in-plane modulus used against an experimental database; DOI 10.1016/j.dt.2025.10.001; not a fibre modulus" },
+                              "RigidLaminatePoissonRatio": { "Value": 0.013, "Status": "Estimated", "Source": "Dyneema HB26 cross-ply reduced laminate coupling from the same published material model; DOI 10.1016/j.dt.2025.10.001" },
+                              "StructuralDampingRatio": { "Value": 0.02, "Status": "Estimated", "Source": "provisional consolidated-polymer laminate modal damping reduction; exact resin and support are product dependent" },
                               "Source": "DSM Dyneema SK-grade fibre datasheet: 3400-3700 MPa tensile, 3-4% break strain; read at the bottom of the band for the pressed HB laminates" }
           },
 
@@ -2019,6 +2333,62 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                        "Source": "armour-piercing incendiary, hardened U12A-grade core ~29.5 g; velocity is the standard's nominal centre" } ]
           },
 
+          // ===== BABT construction schema =====
+          // Ordinary construction reuses ArmorPlates, SoftArmor, ArmorByClass and the
+          // material table above. BabtConstructions is only an optional measured or
+          // experimental assembly override. A protection class never supplies stiffness.
+          "BabtSchemaVersion": 1,
+          "BabtImpactProfiles": {},
+          "BabtNumerics": {
+            "TimeStepS":                    { "Value": 0.00002, "Status": "Estimated", "Source": "BABT numerical verification policy: maximum integration step; the solver reduces it from the conservative tangent-stiffness frequency and damping bound" },
+            "SimulationDurationS":          { "Value": 0.05, "Status": "Estimated", "Source": "BABT numerical verification policy: finite diagnostic horizon, with unsettled responses rejected" },
+            "MaximumIntegrationSteps":      { "Value": 100000, "Status": "Estimated", "Source": "BABT numerical verification policy: caller-owned workload ceiling" },
+            "MinimumStepsPerPeriod":        { "Value": 160, "Status": "Estimated", "Source": "BABT numerical verification policy: explicit minimum resolution of the shortest conservative tangent-stiffness period; 160 preserves the verified trajectory without a hidden solver multiplier" },
+            "MaximumRelativeEnergyError":   { "Value": 0.01, "Status": "Estimated", "Source": "BABT numerical verification policy: maximum accepted relative ledger error" },
+            "SettledVelocityToleranceMps":  { "Value": 0.01, "Status": "Estimated", "Source": "BABT numerical verification policy: injury-coupling convergence tolerance" },
+            "SettledForceToleranceN":       { "Value": 1, "Status": "Estimated", "Source": "BABT numerical verification policy: inactive-contact force tolerance" },
+            "Source": "engineering integration and acceptance policy reviewed with the reduced BABT solver; these controls are not measured armour or tissue properties"
+          },
+          "BabtBodyProfiles": {
+            "Thorax": {
+              "MassModel": "Fixed",
+              "EffectiveMassKg":           { "Value": 0.45, "Status": "Estimated", "Source": "anterior sternum/rib mass m2 reproduced in Melvin et al., Biomechanical Impact Response and Injury in the Automotive Environment, DOT HS 806 921 (1985), https://www.autosafetyresearch.org/Thor/AATD%20Phase%201%20Task%20B%20Report%20%2C%20Melvin%2C%20Biomechanical%20Impact%20Response%20%26%20Injury%20in%20the%20Auto%20Envronment%2C%20Mar%201985.pdf; original Lobdell et al. DOI 10.1007/978-1-4757-1502-6_11; BABT use is a low-speed short-pulse extrapolation" },
+              "ContactStiffnessNPerM":      { "Value": 2630000, "Status": "Estimated", "Source": "numerical penalty contact K=100*26.3 kN/m, adding 0.99% series compliance; it is not a measured carrier/pad stiffness" },
+              "ContactDampingNsPerM":       { "Value": 0, "Status": "Estimated", "Source": "undamped numerical penalty contact; the Lobdell damping remains in the thorax foundation branch" },
+              "FoundationStiffnessNPerM":   { "Value": 26300, "Status": "Estimated", "Source": "initial k23 reproduced in Schneider et al., Advanced Anthropomorphic Test Device Thorax Design Requirements and Specifications (1989), https://www.autosafetyresearch.org/Thor/Advanced%20ATD%20Thorax%20Interim%20Report%2C%20Schneider%2C%20Design%20Requirements%20%26%20Specifications%2C%20November%201989.pdf; original Lobdell et al. DOI 10.1007/978-1-4757-1502-6_11; BABT use is a low-speed short-pulse extrapolation" },
+              "FoundationDampingNsPerM":    { "Value": 525, "Status": "Estimated", "Source": "compression c23=5.25 N s/cm reproduced in Melvin et al., DOT HS 806 921 (1985), https://www.autosafetyresearch.org/Thor/AATD%20Phase%201%20Task%20B%20Report%20%2C%20Melvin%2C%20Biomechanical%20Impact%20Response%20%26%20Injury%20in%20the%20Auto%20Envronment%2C%20Mar%201985.pdf; original Lobdell et al. DOI 10.1007/978-1-4757-1502-6_11; BABT use is a low-speed short-pulse extrapolation" },
+              "InitialGapMm":               { "Value": 0, "Status": "Estimated", "Source": "contacting armour/body reduction; carrier fit and pad gaps are unresolved" },
+              "EffectiveContactAreaM2":     { "Status": "Missing", "Reason": "resolved per construction as an explicit upper-spread footprint estimate" },
+              "Source": "provisional one-mass reduction: anterior m2 moves against a fixed spine-side foundation; secondary Lobdell/Viano parameter reproduction, low-speed short-pulse extrapolation; bilinear and viscoelastic branches are outside this profile"
+            },
+            "Abdomen": {
+              "MassModel": "TissueSlab",
+              "EffectiveMassKg":           { "Status": "Missing", "Reason": "computed as tissue density times resolved area times runtime participating depth" },
+              "TissueDensityKgM3":          { "Value": 1000, "Status": "Estimated", "Source": "water-density soft-tissue engineering approximation; exact abdominal composition is not resolved" },
+              "ContactStiffnessNPerM":      { "Value": 1290000, "Status": "Estimated", "Source": "numerical penalty contact K=100*12.9 kN/m, adding 0.99% series compliance; it is not a measured carrier/pad stiffness" },
+              "ContactDampingNsPerM":       { "Value": 0, "Status": "Estimated", "Source": "undamped numerical penalty contact; abdominal damping remains in the foundation branch" },
+              "FoundationStiffnessNPerM":   { "Value": 12900, "Status": "Estimated", "Source": "Trosseille et al., Abdominal Response to High-Speed Seatbelt Loading, Stapp 46 (2002), DOI 10.4271/2002-22-0004, abstract https://pubmed.ncbi.nlm.nih.gov/17096219/; use under a plate footprint is an engineering extrapolation from belt loading" },
+              "FoundationDampingNsPerM":    { "Value": 765, "Status": "Estimated", "Source": "Trosseille et al., Abdominal Response to High-Speed Seatbelt Loading, Stapp 46 (2002), DOI 10.4271/2002-22-0004, abstract https://pubmed.ncbi.nlm.nih.gov/17096219/; use under a plate footprint is an engineering extrapolation from belt loading" },
+              "InitialGapMm":               { "Value": 0, "Status": "Estimated", "Source": "contacting armour/body reduction; carrier fit and pad gaps are unresolved" },
+              "EffectiveContactAreaM2":     { "Status": "Missing", "Reason": "resolved per construction as an explicit upper-spread footprint estimate" },
+              "Source": "provisional tissue-slab mass plus Trosseille spring-damper abdomen reduction"
+            },
+            "Head": {
+              "EffectiveMassKg":           { "Status": "Missing", "Reason": "a thorax or whole-body mass cannot be applied to a helmet" },
+              "ContactStiffnessNPerM":      { "Status": "Missing", "Reason": "no validated helmet-pad-head force/deflection curve" },
+              "ContactDampingNsPerM":       { "Status": "Missing", "Reason": "no validated helmet-pad-head force/deflection curve" },
+              "FoundationStiffnessNPerM":   { "Status": "Missing", "Reason": "no validated head-neck support reduction" },
+              "FoundationDampingNsPerM":    { "Status": "Missing", "Reason": "no validated head-neck support reduction" },
+              "InitialGapMm":               { "Status": "Missing", "Reason": "depends on the suspension and pad stack" },
+              "EffectiveContactAreaM2":     { "Status": "Missing", "Reason": "must come from the liner pressure field" },
+              "Source": "diagnostic gap register"
+            }
+          },
+          // Optional measured or experimental assembly overrides only. Ordinary BABT
+          // construction is resolved from ArmorPlates/SoftArmor/ArmorByClass plus the
+          // material mechanics above, so product thickness and backing are not copied.
+          "BabtConstructions": {},
+
           // Blast anchor: Strength_i = Strength_anchor * (TntG_i / TntG_anchor)^(1/3)
           "BlastAnchor": { "Name": "RGD-5", "Strength": 100, "TntG": 110 },
 
@@ -2107,7 +2477,11 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           //    carried the measured Br1 package. The rungs are re-anchored to 3.0/5.5/
           //    7.6 mm for sub-Br1/Br1/Br2, and the woven-fibre ceiling now admits the
           //    Br2 construction it was calibrated against
-          "Version": 21
+          // 22: BABT construction now reuses the armour material/product/class tables
+          //    instead of copying six incomplete product profiles. Material mechanics
+          //    and provisional thorax/abdomen impedance reductions gained explicit
+          //    Estimated provenance; penetration thicknesses and strengths are unchanged
+          "Version": 22
         }
         """;
 }

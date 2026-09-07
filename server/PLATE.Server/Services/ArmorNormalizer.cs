@@ -55,6 +55,24 @@ public class ArmorNormalizer(
     /// </summary>
     private readonly Dictionary<string, (double Shear, double Yield, double Hv)> _grade = new();
 
+    private sealed record BabtMetadata(string Form, string BackingForm, double WidthMm,
+        double HeightMm, string GeometryStatus, string GeometrySource,
+        string ConstructionOrigin, string ConstructionSource, string Kind);
+
+    /// <summary>
+    /// Per-item bridge from the established penetration construction to BABT. It adds
+    /// form and reduced spans, while thickness, density, backing and grade remain in
+    /// their existing tables.
+    /// </summary>
+    private readonly Dictionary<string, BabtMetadata> _babtMetadata = new();
+
+    /// <summary>
+    /// Explicit BABT assemblies per item. This table is deliberately independent of
+    /// _thickness: a value inferred for penetration from mass or class is not evidence
+    /// for plate dimensions, support, laminate coupling or rear-face deflection.
+    /// </summary>
+    private readonly Dictionary<string, (string Key, ReferenceBook.BabtConstructionRef Profile)> _babt = new();
+
     /// <summary>How many items carried a class their construction cannot hold.</summary>
     private int _reRated;
 
@@ -157,6 +175,12 @@ public class ArmorNormalizer(
 
     public void Run(PlateServerConfig cfg, string modPath)
     {
+        _thickness.Clear();
+        _density.Clear();
+        _backing.Clear();
+        _grade.Clear();
+        _babt.Clear();
+        _babtMetadata.Clear();
         var items = templateTable.Items;
         if (items == null)
         {
@@ -195,6 +219,11 @@ public class ArmorNormalizer(
 
             var product = Product(itemName);
             var spec = ProductSpec(reference, itemName, product, out var specKey);
+            var babt = BabtSpec(reference, itemName, product);
+            if (babt != null)
+            {
+                _babt[item.Id] = babt.Value;
+            }
             var cls = (int)(p.ArmorClass ?? 0);
 
             // an entry with no thickness is not a documented product — the maker says
@@ -330,6 +359,12 @@ public class ArmorNormalizer(
                     _thickness[item.Id] = derived;
                 }
 
+                if (byClass != null || derived > 0)
+                {
+                    RememberBabtMetadata(item.Id, itemName, p, material, reference,
+                        byClass?.Ref, row.From, row.Source);
+                }
+
                 continue;
             }
 
@@ -348,6 +383,9 @@ public class ArmorNormalizer(
             {
                 _grade[item.Id] = (spec.ShearMPa, spec.YieldMPa, spec.HardnessHv);
             }
+
+            RememberBabtMetadata(item.Id, itemName, p, material, reference,
+                spec, Origin.Product, spec.Source);
         }
 
         WriteReport(modPath, reference, known, unknown);
@@ -387,6 +425,7 @@ public class ArmorNormalizer(
 
             var backing = _backing.TryGetValue(id, out var bk) ? bk : (Mm: 0.0, Material: "");
             var grade = _grade.TryGetValue(id, out var g) ? g : (Shear: 0.0, Yield: 0.0, Hv: 0.0);
+            _babtMetadata.TryGetValue(id, out var babtMetadata);
 
             plates[id.ToString()] = new
             {
@@ -399,14 +438,29 @@ public class ArmorNormalizer(
                 Y = Math.Round(grade.Yield, 1),
                 H = Math.Round(grade.Hv, 1),
 
-                // how much of this entry is actually the material and how much is the air
-                // between its layers; 1 for anything solid
+                // effective item density divided by the game's broad material-row
+                // density: sewn-package packing or a product-specific solid density
+                // (for example B4C carried under the game's generic Ceramic enum)
                 P = own > 0 && fibre > 0 ? Math.Round(Math.Min(own / fibre, 1), 4) : 1,
 
                 // the fibre panel behind the face; empty material means aramid, the
                 // dominant case for Russian packages and helmet liners
                 B = Math.Round(backing.Mm, 3),
                 BM = backing.Material ?? "",
+                BP = BackingPackedFraction(backing.Material ?? "", backing.Mm),
+
+                // BABT reuses T/M/P/B/BM/S/Y/H above. These fields only describe
+                // construction form, reduced span and provenance that penetration does
+                // not need. Descriptive names keep external/older readers harmless.
+                BabtForm = babtMetadata?.Form ?? "",
+                BabtBackingForm = babtMetadata?.BackingForm ?? "",
+                BabtWidthMm = babtMetadata?.WidthMm ?? 0,
+                BabtHeightMm = babtMetadata?.HeightMm ?? 0,
+                BabtGeometryStatus = babtMetadata?.GeometryStatus ?? "Missing",
+                BabtGeometrySource = babtMetadata?.GeometrySource ?? "",
+                ConstructionOrigin = babtMetadata?.ConstructionOrigin ?? "",
+                ConstructionSource = babtMetadata?.ConstructionSource ?? "",
+                ItemKind = babtMetadata?.Kind ?? "",
             };
         }
 
@@ -423,9 +477,177 @@ public class ArmorNormalizer(
                 kv.Value.FibreTensileMPa,
                 kv.Value.FailureStrain,
                 kv.Value.HardnessHv,
+                kv.Value.Source,
+                kv.Value.YoungModulusGPa,
+                kv.Value.PoissonRatio,
+                kv.Value.RigidLaminateModulusGPa,
+                kv.Value.RigidLaminatePoissonRatio,
+                kv.Value.StructuralDampingRatio,
             });
 
-        return System.Text.Json.JsonSerializer.Serialize(new { Plates = plates, Materials = materials });
+        var constructions = _babt.ToDictionary(kv => kv.Key, kv => (object)new
+        {
+            ProfileKey = kv.Value.Key,
+            Profile = kv.Value.Profile,
+        });
+
+        return System.Text.Json.JsonSerializer.Serialize(new
+        {
+            Plates = plates,
+            Materials = materials,
+            BabtSchemaVersion = reference.BabtSchemaVersion,
+            BabtConstructions = constructions,
+            BabtImpactProfiles = reference.BabtImpactProfiles ?? new(),
+            BabtBodyProfiles = reference.BabtBodyProfiles ?? new(),
+            BabtNumerics = reference.BabtNumerics ?? new(),
+        });
+    }
+
+    private static double BackingPackedFraction(string material, double thicknessMm)
+    {
+        if (thicknessMm <= 0)
+        {
+            return 0;
+        }
+
+        var key = string.IsNullOrEmpty(material) ? "Aramid" : material;
+        return key.Equals("Aramid", StringComparison.OrdinalIgnoreCase)
+            ? BallisticLimit.SewnPacked
+            : 1;
+    }
+
+    private void RememberBabtMetadata(string itemId, string itemName, TemplateItemProperties p,
+        string material, ReferenceBook.AmmoReference reference,
+        ReferenceBook.ArmorPlateRef? construction, Origin origin, string constructionSource)
+    {
+        var kind = Classify(itemName);
+        var form = !string.IsNullOrWhiteSpace(construction?.BabtForm)
+            ? construction.BabtForm
+            : ResolveBabtForm(reference, itemName, material, kind);
+        var backingMaterial = construction is { BackingMm: > 0 }
+            ? construction.BackingMaterial
+            : _backing.TryGetValue(itemId, out var backing) ? backing.Material : "";
+        var backingForm = string.IsNullOrEmpty(backingMaterial)
+            ? (_backing.ContainsKey(itemId) ? "SoftWoven" : "")
+            : backingMaterial.Equals("UHMWPE", StringComparison.OrdinalIgnoreCase)
+                ? "BondedLaminate"
+                : backingMaterial.Equals("Aramid", StringComparison.OrdinalIgnoreCase)
+                    ? "SoftWoven"
+                    : "Unsupported";
+
+        var width = construction?.BabtWidthMm ?? 0;
+        var height = construction?.BabtHeightMm ?? 0;
+        var geometryStatus = "Missing";
+        var geometrySource = construction?.BabtGeometrySource ?? "";
+        if (width > 0 && height > 0 && !string.IsNullOrWhiteSpace(geometrySource))
+        {
+            geometryStatus = "Measured";
+        }
+        else if (kind == Kind.Plate && TryPlateDimensions(p, out width, out height))
+        {
+            geometryStatus = "Estimated";
+            geometrySource = $"inventory footprint {p.Width}x{p.Height} mapped to the existing nominal plate-size convention";
+        }
+        else if (kind == Kind.VestComponent && form == "SoftWoven")
+        {
+            SoftPanelDimensions(itemName, out width, out height);
+            geometryStatus = "Estimated";
+            geometrySource = "rectangular equivalent soft-panel span; 254 x 305 mm torso-panel baseline with smaller side/groin/arm reductions; actual carrier cut and edge stitching are unavailable";
+        }
+        else
+        {
+            width = 0;
+            height = 0;
+            geometrySource = kind == Kind.Helmet
+                ? "curved helmet shells have no supported flat rectangular span"
+                : "no physical flexural span is available for this item form";
+        }
+
+        _babtMetadata[itemId] = new BabtMetadata(form, backingForm, width, height,
+            geometryStatus, geometrySource, origin.ToString(), constructionSource ?? "",
+            kind.ToString());
+    }
+
+    private static string ResolveBabtForm(ReferenceBook.AmmoReference reference,
+        string itemName, string material, Kind kind)
+    {
+        if (!reference.ArmorMaterials.TryGetValue(material, out var physics))
+        {
+            return "Unsupported";
+        }
+
+        if (material.Equals("Combined", StringComparison.OrdinalIgnoreCase))
+        {
+            return "UnsupportedLayerStack";
+        }
+
+        return physics.Class switch
+        {
+            "Ductile" => "IsotropicPlate",
+            "Brittle" => "BrittleFace",
+            "Fibrous" when kind is Kind.Plate or Kind.Helmet => "BondedLaminate",
+            "Fibrous" when kind == Kind.VestComponent => "SoftWoven",
+            "Fibrous" => IsRigid(itemName, material) ? "BondedLaminate" : "SoftWoven",
+            _ => "Unsupported",
+        };
+    }
+
+    private static bool TryPlateDimensions(TemplateItemProperties p,
+        out double widthMm, out double heightMm)
+    {
+        var footprint = $"{p.Width}x{p.Height}";
+        switch (footprint)
+        {
+            case "1x1": widthMm = 152; heightMm = 152; return true;
+            case "2x1": widthMm = 203; heightMm = 152; return true;
+            case "2x2": widthMm = 254; heightMm = 254; return true;
+            case "2x3": widthMm = 254; heightMm = 318; return true;
+            default: widthMm = 0; heightMm = 0; return false;
+        }
+    }
+
+    private static void SoftPanelDimensions(string itemName,
+        out double widthMm, out double heightMm)
+    {
+        var tokens = itemName.Split(['_', '-', ' '],
+            StringSplitOptions.RemoveEmptyEntries);
+        bool Has(string token) => tokens.Any(part =>
+            part.Equals(token, StringComparison.OrdinalIgnoreCase));
+        if (Has("side") || Has("groin") || Has("arm") || Has("shoulder"))
+        {
+            widthMm = 203;
+            heightMm = 152;
+            return;
+        }
+        if (Has("collar") || Has("neck") || Has("throat"))
+        {
+            widthMm = 152;
+            heightMm = 152;
+            return;
+        }
+
+        widthMm = 254;
+        heightMm = 305;
+    }
+
+    /// <summary>
+    /// BABT profiles use the same exact-name-before-product lookup as armour products,
+    /// but never borrow ArmorByClass/SoftArmor/HelmetShells. Those are penetration
+    /// representatives; treating one as a deformation test would make class predict BFD.
+    /// </summary>
+    private static (string Key, ReferenceBook.BabtConstructionRef Profile)? BabtSpec(
+        ReferenceBook.AmmoReference reference, string itemName, string product)
+    {
+        if (reference.BabtConstructions != null &&
+            reference.BabtConstructions.TryGetValue(itemName, out var exact) && exact != null)
+        {
+            return (itemName, exact);
+        }
+
+        return reference.BabtConstructions != null &&
+               reference.BabtConstructions.TryGetValue(product, out var byProduct) && byProduct != null
+            ? (product, byProduct)
+            : null;
     }
 
     /// <summary>

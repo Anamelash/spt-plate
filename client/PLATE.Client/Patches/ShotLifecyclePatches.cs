@@ -194,6 +194,24 @@ namespace PLATE.Client.Patches
             {
                 LogError(nameof(ForgetPooledStatePostfix), ex);
             }
+
+            try
+            {
+                BabtHitContext.Forget(__result);
+            }
+            catch (Exception ex)
+            {
+                // BABT cleanup is isolated so it cannot suppress the established
+                // projectile-state reset, and vice versa.
+                try
+                {
+                    LogError(nameof(BabtHitContext) + ".Forget", ex);
+                }
+                catch
+                {
+                    // Diagnostics must not interrupt Shot.Create.
+                }
+            }
         }
 
         private static float _lastErrorLogged;

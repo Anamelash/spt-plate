@@ -132,6 +132,10 @@ namespace PLATE.Tests
             // BCL members net471's mscorlib does not have). Everything else detours
             // fine here, which is what makes this test worth running at all.
             ShotLifecyclePatches.Apply(harmony);
+            // Capture raw CLR preparation of each Player target before Harmony tries
+            // the real production patch set. The integrity test conditionally accepts
+            // only the exact independently reproduced desktop-host failures.
+            TestHostLimitations.CapturePlayerBabtEvidence();
             BallisticsPatches.Apply(harmony);
             ObstaclePatches.Apply(harmony);
             BloodPatches.Apply(harmony);

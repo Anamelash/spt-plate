@@ -261,9 +261,17 @@ namespace PLATE.Client.Patches
                     return;
                 }
 
-                var applied = __result > 0f ? __result : damage;
+                // The return value is actual total health loss. Zero is a real
+                // result (e.g. rejected damage), not a missing-value sentinel.
+                var applied = Mathf.Max(0f, __result);
                 var blocked = damageInfo.BlockedBy.HasValue;
                 var tag = blocked ? "BLUNT" : dtName;
+                var hasBabtBreakdown = BallisticsPatches.TryGetActiveBabtBreakdown(
+                    victim as Player, damageInfo, out var woundHp, out var babtHp);
+                if (hasBabtBreakdown)
+                {
+                    tag += " BABT";
+                }
 
                 var extra = "";
                 if (HitFeed.TryConsumeImpact(victim.ProfileId, out var imp))
@@ -302,9 +310,9 @@ namespace PLATE.Client.Patches
                 // the player's own shots, and its filter must not move when someone
                 // turns off "Only my fights" to watch a bot fight.
                 //
-                // F is what the flesh took, B is what came through the armour as blunt
-                // trauma — in PLATE a blocked hit IS the BABT, so the two are exclusive
-                // and the pair reads as "which of the two happened, and how much".
+                // F/B share the actual health loss in proportion to their input
+                // contributions. Extended can supply both on a penetrating hit.
+                // A is separate: actual durability loss across the armor stack.
                 if (PlateClientConfig.MarkersEnabled.Value &&
                     LocalPlayerRef.IsShooter(aggressorId))
                 {
@@ -314,7 +322,9 @@ namespace PLATE.Client.Patches
                     // ballistics side — the damage event knows the victim and the number
                     // but not where on the rig it landed.
                     HitMarkers.Add(damageInfo.HitPoint, damageInfo.Direction,
-                        blocked ? $"F:0 B:{applied:0.#}" : $"F:{applied:0.#} B:0",
+                        HitMarkerDamage.Label(applied, blocked, hasBabtBreakdown,
+                            woundHp, babtHp, HitMarkerDamage.ConsumeArmor(victim,
+                                damageInfo.HittedBallisticCollider)),
                         blocked ? HitMarkers.BodyBlocked : HitMarkers.BodyPenetrated,
                         BallisticsPatches.HitBoneThisFrame);
                 }
@@ -327,13 +337,25 @@ namespace PLATE.Client.Patches
 
         // --- Armor: how much it shaved off, penetrated or not ---
 
-        private static void ArmorApplyDamagePrefix(ref DamageInfo damageInfo, out float __state)
+        private struct ArmorOverlayState
         {
-            __state = damageInfo.Damage;
+            public float Damage;
+            public float Durability;
         }
 
+        private static void ArmorApplyDamagePrefix(ArmorComponent __instance,
+            ref DamageInfo damageInfo, out ArmorOverlayState __state)
+        {
+            __state = new ArmorOverlayState
+            {
+                Damage = damageInfo.Damage,
+                Durability = __instance.Repairable.Durability,
+            };
+        }
+
+        [HarmonyPriority(Priority.Last)]
         private static void ArmorApplyDamagePostfix(ArmorComponent __instance,
-            ref DamageInfo damageInfo, float __state, float __result)
+            ref DamageInfo damageInfo, ArmorOverlayState __state, float __result)
         {
             PatchStats.Hit($"overlay:{nameof(ArmorApplyDamagePostfix)}");
             if (Off)
@@ -343,6 +365,9 @@ namespace PLATE.Client.Patches
 
             try
             {
+                // Runs after physical durability correction, not the vanilla loss.
+                HitMarkerDamage.RecordArmor(damageInfo.HittedBallisticCollider,
+                    __state.Durability, __instance.Repairable.Durability);
                 var aggressorId = damageInfo.Player?.iPlayer?.ProfileId;
                 if (!OverlayHud.PassesFightFilter(null, aggressorId))
                 {
@@ -351,7 +376,7 @@ namespace PLATE.Client.Patches
 
                 var status = damageInfo.BlockedBy.HasValue ? "BLOCK" : "PEN";
                 HitFeed.PushPanel(
-                    $"  armor c{__instance.ArmorClass} [{status}] dmg {__state:0.#} -> {damageInfo.Damage:0.#} " +
+                    $"  armor c{__instance.ArmorClass} [{status}] dmg {__state.Damage:0.#} -> {damageInfo.Damage:0.#} " +
                     $"(ret {__result:0.#}) dura {__instance.Repairable.Durability:0.#}/" +
                     $"{__instance.Repairable.MaxDurability:0.#}");
             }

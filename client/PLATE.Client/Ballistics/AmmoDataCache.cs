@@ -168,7 +168,11 @@ namespace PLATE.Client.Ballistics
             /// <summary>Material key into the materials table.</summary>
             public string M { get; set; }
 
-            /// <summary>Fraction of the entry that is actually the material; 1 = solid.</summary>
+            /// <summary>
+            /// Effective item density / broad material-row density. It is a packing
+            /// fraction for fabric and carries product-specific density for a solid
+            /// hidden behind a generic game material enum.
+            /// </summary>
             public double P { get; set; } = 1;
 
             /// <summary>Fibre backing behind the face, mm; 0 = single layer.</summary>
@@ -188,6 +192,19 @@ namespace PLATE.Client.Ballistics
             public double Y { get; set; }
 
             public double H { get; set; }
+
+            /// <summary>Backing package packing fraction; zero means an older payload.</summary>
+            public double BP { get; set; }
+
+            public string BabtForm { get; set; }
+            public string BabtBackingForm { get; set; }
+            public double BabtWidthMm { get; set; }
+            public double BabtHeightMm { get; set; }
+            public string BabtGeometryStatus { get; set; }
+            public string BabtGeometrySource { get; set; }
+            public string ConstructionOrigin { get; set; }
+            public string ConstructionSource { get; set; }
+            public string ItemKind { get; set; }
         }
 
         /// <summary>How a material fails and how strongly, from the reference book.</summary>
@@ -204,6 +221,113 @@ namespace PLATE.Client.Ballistics
             public double FibreTensileMPa { get; set; }
             public double FailureStrain { get; set; }
             public double HardnessHv { get; set; }
+            public string Source { get; set; }
+            public BabtParameter YoungModulusGPa { get; set; }
+            public BabtParameter PoissonRatio { get; set; }
+            public BabtParameter RigidLaminateModulusGPa { get; set; }
+            public BabtParameter RigidLaminatePoissonRatio { get; set; }
+            public BabtParameter StructuralDampingRatio { get; set; }
+        }
+
+        internal class BabtParameter
+        {
+            public double? Value { get; set; }
+            public string Status { get; set; } = "Missing";
+            public string Source { get; set; } = "";
+            public string Reason { get; set; } = "";
+        }
+
+        internal class BabtLayerProfile
+        {
+            public string Form { get; set; }
+            public string Material { get; set; }
+            public BabtParameter ThicknessMm { get; set; }
+            public BabtParameter DensityKgM3 { get; set; }
+            public BabtParameter YoungModulusGPa { get; set; }
+            public BabtParameter PoissonRatio { get; set; }
+            public BabtParameter ExtensionalStiffnessNPerM { get; set; }
+            public BabtParameter FlexuralRigidityNm { get; set; }
+            public BabtParameter MembraneStiffnessNPerM { get; set; }
+            public BabtParameter YieldStrengthMPa { get; set; }
+            public BabtParameter FailureStrain { get; set; }
+            public bool BondedToPrevious { get; set; }
+            public string Source { get; set; }
+        }
+
+        internal class BabtConstructionProfile
+        {
+            public string Kind { get; set; }
+            public List<BabtLayerProfile> Layers { get; set; }
+            public BabtParameter WidthMm { get; set; }
+            public BabtParameter HeightMm { get; set; }
+            public BabtParameter LocalEffectiveMassKg { get; set; }
+            public BabtParameter RigidEffectiveMassKg { get; set; }
+            public BabtParameter FlexuralDampingNsPerM { get; set; }
+            public BabtParameter CurvatureRadiusMm { get; set; }
+            public string Support { get; set; }
+            public string PadKey { get; set; }
+            public BabtParameter EdgeStiffnessNPerM { get; set; }
+            public BabtParameter EdgeDampingNsPerM { get; set; }
+            public BabtParameter PadThicknessMm { get; set; }
+            public BabtParameter PadModulusMPa { get; set; }
+            public string Source { get; set; }
+            public string Notes { get; set; }
+        }
+
+        internal class BabtConstructionEnvelope
+        {
+            public string ProfileKey { get; set; }
+            public BabtConstructionProfile Profile { get; set; }
+        }
+
+        internal class BabtImpactProfile
+        {
+            public string[] ConstructionKeys { get; set; }
+            public string[] AmmoKeys { get; set; }
+            public BabtParameter MinProjectileMassG { get; set; }
+            public BabtParameter MaxProjectileMassG { get; set; }
+            public BabtParameter MinProjectileDiameterMm { get; set; }
+            public BabtParameter MaxProjectileDiameterMm { get; set; }
+            public BabtParameter MinNormalVelocityMps { get; set; }
+            public BabtParameter MaxNormalVelocityMps { get; set; }
+            public BabtParameter ProjectileContactStiffnessNPerM { get; set; }
+            public BabtParameter ProjectileContactDampingNsPerM { get; set; }
+            public BabtParameter TimeStepS { get; set; }
+            public BabtParameter SimulationDurationS { get; set; }
+            public BabtParameter MaximumIntegrationSteps { get; set; }
+            public BabtParameter MinimumStepsPerPeriod { get; set; }
+            public BabtParameter MaximumRelativeEnergyError { get; set; }
+            public BabtParameter SettledVelocityToleranceMps { get; set; }
+            public BabtParameter SettledForceToleranceN { get; set; }
+            public string Source { get; set; }
+        }
+
+        internal class BabtBodyProfile
+        {
+            public string[] ConstructionKeys { get; set; }
+            public string[] PadKeys { get; set; }
+            public BabtParameter EffectiveMassKg { get; set; }
+            public BabtParameter ContactStiffnessNPerM { get; set; }
+            public BabtParameter ContactDampingNsPerM { get; set; }
+            public BabtParameter FoundationStiffnessNPerM { get; set; }
+            public BabtParameter FoundationDampingNsPerM { get; set; }
+            public BabtParameter InitialGapMm { get; set; }
+            public BabtParameter EffectiveContactAreaM2 { get; set; }
+            public string MassModel { get; set; }
+            public BabtParameter TissueDensityKgM3 { get; set; }
+            public string Source { get; set; }
+        }
+
+        internal class BabtNumericsProfile
+        {
+            public BabtParameter TimeStepS { get; set; }
+            public BabtParameter SimulationDurationS { get; set; }
+            public BabtParameter MaximumIntegrationSteps { get; set; }
+            public BabtParameter MinimumStepsPerPeriod { get; set; }
+            public BabtParameter MaximumRelativeEnergyError { get; set; }
+            public BabtParameter SettledVelocityToleranceMps { get; set; }
+            public BabtParameter SettledForceToleranceN { get; set; }
+            public string Source { get; set; }
         }
 
         /// <summary>The /plate/armor-data payload.</summary>
@@ -211,6 +335,11 @@ namespace PLATE.Client.Ballistics
         {
             public Dictionary<string, PlateGeometry> Plates { get; set; }
             public Dictionary<string, MaterialPhysics> Materials { get; set; }
+            public int BabtSchemaVersion { get; set; }
+            public Dictionary<string, BabtConstructionEnvelope> BabtConstructions { get; set; }
+            public Dictionary<string, BabtImpactProfile> BabtImpactProfiles { get; set; }
+            public Dictionary<string, BabtBodyProfile> BabtBodyProfiles { get; set; }
+            public BabtNumericsProfile BabtNumerics { get; set; }
         }
 
         private static Dictionary<string, Entry> _data;
@@ -379,13 +508,209 @@ namespace PLATE.Client.Ballistics
                     barrier.BackingTensileMPa = bm.FibreTensileMPa;
                     barrier.BackingStrain = bm.FailureStrain;
                     // a stitched fabric screen is mostly air; a pressed laminate is not
-                    barrier.BackingPacked = backingKey == "Aramid"
-                        ? BallisticLimit.SewnPacked
-                        : 1;
+                    barrier.BackingPacked = plate.BP > 0
+                        ? plate.BP
+                        : backingKey == "Aramid" ? BallisticLimit.SewnPacked : 1;
                 }
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Resolve an optional complete experimental override when one is authored;
+        /// otherwise build the intact construction from the same plate/material data
+        /// used by penetration. Protection class is never used as elastic input.
+        /// </summary>
+        public static bool TryResolveBabtConstruction(string armorTemplateId,
+            out string constructionKey, out string padKey,
+            out BabtModel.Construction construction, out string diagnostic)
+        {
+            EnsureGeometry();
+            if (!SupportsBabtSchema(_geometry))
+            {
+                constructionKey = null;
+                padKey = null;
+                construction = null;
+                diagnostic = "BABT construction schema is absent or unsupported (expected version 1).";
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(armorTemplateId))
+            {
+                constructionKey = null;
+                padKey = null;
+                construction = null;
+                diagnostic = "An armour template id is required for BABT construction resolution.";
+                return false;
+            }
+
+            BabtConstructionEnvelope envelope = null;
+            _geometry.BabtConstructions?.TryGetValue(armorTemplateId, out envelope);
+            constructionKey = envelope?.ProfileKey ?? armorTemplateId;
+            padKey = envelope?.Profile?.PadKey ?? "";
+            if (envelope?.Profile != null)
+            {
+                return BabtConstructionResolver.TryResolve(envelope,
+                    out construction, out diagnostic);
+            }
+            if (_geometry?.Plates == null ||
+                !_geometry.Plates.TryGetValue(armorTemplateId, out _))
+            {
+                construction = null;
+                diagnostic = "No resolved penetration construction exists for this armour template.";
+                return false;
+            }
+            var damage = new BabtConstructionResolver.ResolvedImpactDamage
+            {
+                FaceCoherentFraction = 1,
+                BackingCoherentFraction = 1,
+                Provenance = "pre-impact coherent construction",
+            };
+            if (!TryResolveBabtCoupling(armorTemplateId, damage,
+                    out var coupling, out diagnostic))
+            {
+                construction = null;
+                return false;
+            }
+            construction = coupling.PostImpactConstruction;
+            return true;
+        }
+
+        public static bool TryResolveBabtCoupling(string armorTemplateId,
+            BabtConstructionResolver.ResolvedImpactDamage damage,
+            out BabtTransferModel.Coupling coupling, out string diagnostic)
+        {
+            return TryResolveBabtCoupling(armorTemplateId, null, damage,
+                out coupling, out diagnostic);
+        }
+
+        /// <summary>
+        /// Resolve the blocker and exact support-only armour components as one shared
+        /// mechanical assembly. Intrinsic B/BM backing remains inside its owner and is
+        /// never added again as a separate component.
+        /// </summary>
+        public static bool TryResolveBabtCoupling(string armorTemplateId,
+            IList<BabtConstructionResolver.SupportingComponent> supportingComponents,
+            BabtConstructionResolver.ResolvedImpactDamage damage,
+            out BabtTransferModel.Coupling coupling, out string diagnostic)
+        {
+            coupling = null;
+            EnsureGeometry();
+            if (!SupportsBabtSchema(_geometry))
+            {
+                diagnostic = "BABT construction schema is absent or unsupported (expected version 1).";
+                return false;
+            }
+            if (string.IsNullOrWhiteSpace(armorTemplateId) || _geometry?.Plates == null ||
+                !_geometry.Plates.TryGetValue(armorTemplateId, out var blocker) || blocker == null)
+            {
+                diagnostic = "No resolved penetration construction exists for the blocking armour template.";
+                return false;
+            }
+
+            var supports = new List<BabtConstructionResolver.ResolvedSupportingComponent>();
+            if (supportingComponents != null)
+            {
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                    { armorTemplateId };
+                for (var i = 0; i < supportingComponents.Count; i++)
+                {
+                    var component = supportingComponents[i];
+                    var id = component?.ArmorTemplateId;
+                    if (string.IsNullOrWhiteSpace(id) || !seen.Add(id))
+                    {
+                        diagnostic = "BABT support component ids must be non-empty and unique; duplicate-template component identity cannot be represented by this payload.";
+                        return false;
+                    }
+                    if (!_geometry.Plates.TryGetValue(id, out var support) || support == null)
+                    {
+                        diagnostic = $"Supporting armour template '{id}' has no resolved construction.";
+                        return false;
+                    }
+                    if (component.Damage == null)
+                    {
+                        diagnostic = $"Supporting armour template '{id}' has no resolved damage state.";
+                        return false;
+                    }
+                    supports.Add(new BabtConstructionResolver.ResolvedSupportingComponent
+                    {
+                        Geometry = support,
+                        Damage = component.Damage,
+                    });
+                }
+            }
+
+            return BabtConstructionResolver.TryResolveCoupling(blocker, supports,
+                _geometry.Materials, damage, out coupling, out diagnostic);
+        }
+
+        public static bool TryResolveBabtImpact(string constructionKey, string ammoTemplateId,
+            double projectileMassKg, double projectileDiameterM, double normalVelocityMps,
+            double contactAreaM2, bool perforates, out BabtModel.Impact impact,
+            out string diagnostic)
+        {
+            EnsureGeometry();
+            if (!SupportsBabtSchema(_geometry))
+            {
+                impact = null;
+                diagnostic = "BABT impact schema is absent or unsupported (expected version 1).";
+                return false;
+            }
+            return BabtConstructionResolver.TryResolveImpact(
+                _geometry?.BabtImpactProfiles, constructionKey, ammoTemplateId,
+                projectileMassKg, projectileDiameterM, normalVelocityMps,
+                contactAreaM2, perforates, out impact, out diagnostic);
+        }
+
+        public static bool TryResolveBabtNumerics(out BabtModel.Numerics numerics,
+            out string diagnostic)
+        {
+            EnsureGeometry();
+            if (!SupportsBabtSchema(_geometry))
+            {
+                numerics = null;
+                diagnostic = "BABT numerical schema is absent or unsupported (expected version 1).";
+                return false;
+            }
+            return BabtConstructionResolver.TryResolveNumerics(
+                _geometry?.BabtNumerics, out numerics, out diagnostic);
+        }
+
+        public static bool TryResolveBabtBody(string region, string constructionKey,
+            string padKey, out BabtModel.BodyProfile body, out string diagnostic)
+        {
+            EnsureGeometry();
+            if (!SupportsBabtSchema(_geometry))
+            {
+                body = null;
+                diagnostic = "BABT body schema is absent or unsupported (expected version 1).";
+                return false;
+            }
+            return BabtConstructionResolver.TryResolveBody(
+                _geometry?.BabtBodyProfiles, region, constructionKey, padKey,
+                out body, out diagnostic);
+        }
+
+        public static bool TryResolveBabtBody(string region, double effectiveAreaM2,
+            double participatingDepthM, out BabtModel.BodyProfile body,
+            out string diagnostic)
+        {
+            EnsureGeometry();
+            if (!SupportsBabtSchema(_geometry))
+            {
+                body = null;
+                diagnostic = "BABT body schema is absent or unsupported (expected version 1).";
+                return false;
+            }
+            return BabtConstructionResolver.TryResolveBody(
+                _geometry?.BabtBodyProfiles, region, effectiveAreaM2,
+                participatingDepthM, out body, out diagnostic);
+        }
+
+        internal static bool SupportsBabtSchema(ArmorGeometry geometry)
+        {
+            return geometry != null && geometry.BabtSchemaVersion == 1;
         }
 
         /// <summary>
@@ -419,7 +744,9 @@ namespace PLATE.Client.Ballistics
                     RequestHandler.GetJson("/plate/armor-data"));
                 var status = "[PLATE] Armour geometry loaded from server: " +
                              $"{_geometry?.Plates?.Count ?? 0} items with a thickness, " +
-                             $"{_geometry?.Materials?.Count ?? 0} materials";
+                             $"{_geometry?.Materials?.Count ?? 0} materials, " +
+                             $"BABT schema v{_geometry?.BabtSchemaVersion ?? 0} with " +
+                             $"{_geometry?.BabtConstructions?.Count ?? 0} explicit constructions";
                 Plugin.Log.LogInfo(status);
                 Overlay.HitFeed.LogEvent(status);
             }

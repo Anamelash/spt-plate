@@ -25,11 +25,22 @@ namespace PLATE.Client.Patches
     /// </summary>
     internal static class BallisticsPatches
     {
+        private const double MillimetresPerMetre = 1000.0;
+        private const double GramsPerKilogram = 1000.0;
+        private const double CircleAreaDenominator = 4.0;
+        private const float NormalMagnitudeEpsilon = 1e-8f;
+        private const int MaxPendingBabtDeliveries = 32;
+
         public static void Apply(Harmony harmony)
         {
             PatchSafe(harmony, PatchTargets.DamageInfo_CtorFromShot, nameof(DamageInfoCtorPostfix));
             PatchSafe(harmony, PatchTargets.Armor_ApplyDamage, nameof(ArmorMitigationPostfix),
                 prefixName: nameof(ArmorMitigationPrefix));
+            PatchSafe(harmony, PatchTargets.Player_ProceedDamageThroughArmor,
+                nameof(ProceedDamageThroughArmorPostfix));
+            PatchSafe(harmony, PatchTargets.Player_ApplyDamageInfo,
+                nameof(ApplyDamageInfoPostfix), prefixName: nameof(ApplyDamageInfoPrefix));
+            PatchApplyShotScopeSafe(harmony);
             PatchSafe(harmony, PatchTargets.Bullet_Overpenetrate, nameof(OverpenChildPostfix));
             PatchSafe(harmony, PatchTargets.Bullet_Fragment, nameof(FragmentBudgetPostfix));
 
@@ -92,6 +103,55 @@ namespace PLATE.Client.Patches
 
         private static ShotContext _shotCtx;
 
+        private sealed class PendingBabtDelivery
+        {
+            public BabtHitContext.Token Token;
+            public int Frame;
+            public PendingBabtInjury Injury;
+        }
+
+        private sealed class ApplyShotBabtState
+        {
+            public Overlay.HitMarkerDamage MarkerDamage;
+            public PendingBabtDelivery BoundDelivery;
+            public PendingBabtDelivery PreviousDelivery;
+        }
+
+        private sealed class PendingBabtInjury
+        {
+            public bool Applies;
+            public bool HasLoad;
+            public bool ReplacesProjectileWound;
+            public float DamageHp;
+            public double BodyWorkJ;
+            public double ContactAreaM2;
+            public double BluntCriterion;
+            public double Severity;
+            public string ShotIdentity;
+            public string Outcome;
+            public string Snapshot;
+            public string Provenance;
+        }
+
+        private struct ActiveBabtOverlayContext
+        {
+            public bool Active;
+            public int Frame;
+            public object Victim;
+            public BabtHitContext.DeliveryFingerprint Fingerprint;
+            public float WoundDamageHp;
+            public float BabtDamageHp;
+        }
+
+        [ThreadStatic]
+        private static ActiveBabtOverlayContext _activeBabtOverlay;
+
+        [ThreadStatic]
+        private static List<PendingBabtDelivery> _pendingBabtDeliveries;
+
+        [ThreadStatic]
+        private static PendingBabtDelivery _activeApplyShotBabtDelivery;
+
         /// <summary>Bullet energy of the current frame (for the fracture roll in BloodPatches), -1 if none.</summary>
         internal static float ShotEnergyThisFrame =>
             _shotCtx.Frame == Time.frameCount ? _shotCtx.EnergyJ : -1f;
@@ -126,7 +186,7 @@ namespace PLATE.Client.Patches
             }
             catch (Exception ex)
             {
-                PatchStats.MarkFailed(target, postfixName, ex.Message);
+                PatchStats.MarkFailed(target, postfixName, ex.ToString());
                 Plugin.Log.LogError($"[PLATE] Ballistics: failed to patch {target.Name}: {ex.Message}");
             }
         }
@@ -245,6 +305,8 @@ namespace PLATE.Client.Patches
                     Frame = Time.frameCount,
                     Bone = bpc.transform,
                 };
+
+                QueueBabtDeliverySafely(shot, bpc, __instance);
 
                 // everything this hit writes to the journal from here on belongs to
                 // whoever fired it — the second journal file is built out of this
@@ -1417,7 +1479,10 @@ namespace PLATE.Client.Patches
             // thickness — and reconstructing it afterwards from a v50 is guesswork, so
             // the hit line says what angle it was decided at and whether the floor,
             // rather than the geometry, is what set it
-            var rawCos = Mathf.Abs(Vector3.Dot(dir, shot.HitNormal.normalized));
+            var hasSurfaceNormal = shot.HitNormal.sqrMagnitude > NormalMagnitudeEpsilon;
+            var rawCos = hasSurfaceNormal
+                ? Mathf.Abs(Vector3.Dot(dir, shot.HitNormal.normalized))
+                : 0f;
             var cos = Mathf.Max(rawCos, (float)cfg.AngleMinCos);
             var uLimit = (float)(cfg.ClassULimit(armor.ArmorClass) * prof.ULimitMult) / cos;
 
@@ -1467,9 +1532,13 @@ namespace PLATE.Client.Patches
             // fell back to its class threshold without saying so
             var haveGeometry = AmmoDataCache.TryBarrier(armor.Item.TemplateId.ToString(),
                 out var barrier);
+            var pristineBarrier = barrier;
+            var backingWear = 1f;
             float ratio;
             float eCost;
             float v50 = 0f;
+            float plugMassG = 0f;
+            var coreFate = BallisticLimit.CoreFate.Rigid;
             if (haveGeometry)
             {
                 // wear thins the plate rather than lowering a number — per LAYER: the
@@ -1480,11 +1549,13 @@ namespace PLATE.Client.Patches
                 {
                     var backProf = cfg.Profile(
                         AmmoDataCache.BackingMaterialOf(armor.Item.TemplateId.ToString()));
-                    barrier.BackingMm *= ArmorWear.WornFraction(hitsNearby, 1f - duraShare,
+                    backingWear = ArmorWear.WornFraction(hitsNearby, 1f - duraShare,
                         (float)backProf.SpotDamageQ, (float)backProf.WearExponentK, wearRoll);
+                    barrier.BackingMm *= backingWear;
                 }
 
                 v50 = (float)BallisticLimit.V50(barrier, limitCore, cos, v, tuning);
+                coreFate = BallisticLimit.FateOf(barrier, limitCore, v, tuning);
                 ratio = v50 > 0f ? v / v50 : 999f;
             }
             else
@@ -1502,6 +1573,7 @@ namespace PLATE.Client.Patches
             {
                 // Recht-Ipson: what is left after the plate, plug and all
                 var plug = (float)BallisticLimit.PlugMassG(barrier, limitCore, cos, tuning);
+                plugMassG = plug;
                 // the same mass the limit was computed against — a tile and a fibre pack
                 // meet the whole bullet, a metal plate meets the core
                 var vr = (float)BallisticLimit.ResidualVelocity(v, v50,
@@ -1533,6 +1605,11 @@ namespace PLATE.Client.Patches
 
             if (!pierce || eOut < 1f)
             {
+                AppendBabtResolvedContactSafely(armor, shot, mass, dia, v, x,
+                    0f, 0f, 0f, 0f, hitArea, hasSurfaceNormal, rawCos, cos,
+                    dir, localPos, bpc, hitsNearby, duraShare, wearRoll, wornFace,
+                    backingWear, haveGeometry, pristineBarrier, barrier, v50, coreFate,
+                    0f, e, 0f, penetrated: false);
                 shot.BlockedBy = armor.Item.Id; // block (or lodged in the soft pack) -> BABT
 
                 // what the stop cost the plate: nothing at all for a metal dent under
@@ -1578,6 +1655,12 @@ namespace PLATE.Client.Patches
             var vOut = exit.V;
             var xOut = exit.X;
 
+            AppendBabtResolvedContactSafely(armor, shot, mass, dia, v, x,
+                mOut, dOut, vOut, xOut, hitArea, hasSurfaceNormal, rawCos, cos,
+                dir, localPos, bpc, hitsNearby, duraShare, wearRoll, wornFace,
+                backingWear, haveGeometry, pristineBarrier, barrier, v50, coreFate,
+                plugMassG, eCost, exit.JacketEnergyJ, penetrated: true);
+
             shot.BulletMassGram = mOut;
             shot.BulletDiameterMilimeters = dOut;
             shot._currentVelocity = dir * vOut;
@@ -1612,6 +1695,193 @@ namespace PLATE.Client.Patches
                     ? $", core {mass:0.0}->{mOut:0.0} g / {dia:0.0}->{dOut:0.0} mm"
                     : ""));
             return false; // vanilla does not roll
+        }
+
+        private static void PatchApplyShotScopeSafe(Harmony harmony)
+        {
+            var target = PatchTargets.Player_ApplyShot;
+            if (target == null)
+            {
+                PatchStats.MarkFailed(null, nameof(ApplyShotBabtFinalizer),
+                    "target not resolved");
+                Plugin.Log.LogError("[PLATE] Ballistics: Player.ApplyShot not resolved, " +
+                                    "transferred BABT disabled");
+                return;
+            }
+
+            try
+            {
+                harmony.Patch(target,
+                    prefix: new HarmonyMethod(typeof(BallisticsPatches),
+                        nameof(ApplyShotBabtPrefix)),
+                    finalizer: new HarmonyMethod(typeof(BallisticsPatches),
+                        nameof(ApplyShotBabtFinalizer)));
+                PatchStats.Track(harmony, target, nameof(ApplyShotBabtFinalizer));
+            }
+            catch (Exception ex)
+            {
+                PatchStats.MarkFailed(target, nameof(ApplyShotBabtFinalizer), ex.ToString());
+                Plugin.Log.LogError($"[PLATE] Ballistics: failed to patch ApplyShot scope: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Records one completed physical armor decision without allowing BABT capture
+        /// to change penetration, projectile mutation or durability. Inputs are the
+        /// state entering this exact ArmorComponent; outputs are the actual primary
+        /// state which the next component receives.
+        /// </summary>
+        private static void AppendBabtResolvedContactSafely(ArmorComponent armor, Shot shot,
+            float massInG, float diameterInMm, float speedInMps, float expansivenessIn,
+            float massOutG, float diameterOutMm, float speedOutMps, float expansivenessOut,
+            float nominalImpactAreaMm2, bool hasSurfaceNormal, float rawNormalCosine,
+            float effectiveNormalCosine, Vector3 projectileDirection,
+            Vector3 localPosition, BodyPartCollider hitBodyCollider,
+            int hitsNearby, float durabilityFraction, float wearRoll, float faceWear,
+            float backingWear, bool hasBarrier, BallisticLimit.Barrier pristineBarrier,
+            BallisticLimit.Barrier wornBarrier, float ballisticLimitVelocityMps,
+            BallisticLimit.CoreFate coreFate, float estimatedPlugMassG,
+            float existingBarrierWorkJ, float embeddedProjectileEnergyJ, bool penetrated)
+        {
+            try
+            {
+                var mode = PlateClientConfig.BabtMode?.Value ?? BabtRuntimeMode.Extended;
+                if (!PlateClientConfig.BabtEnabled.Value || mode == BabtRuntimeMode.Simple ||
+                    armor?.Item == null || shot == null)
+                {
+                    return;
+                }
+
+                var readiness = hasSurfaceNormal
+                    ? BabtModel.Readiness.Provisional
+                    : BabtModel.Readiness.Unsupported;
+                var incoming = new BabtTransferModel.ProjectileState
+                {
+                    MassKg = massInG / GramsPerKilogram,
+                    SpeedMps = speedInMps,
+                    NormalVelocityMps = speedInMps * rawNormalCosine,
+                    Provenance = "Shot state immediately before this ArmorComponent decision",
+                    Readiness = readiness,
+                };
+                var outgoing = new BabtTransferModel.ProjectileState
+                {
+                    MassKg = penetrated ? massOutG / GramsPerKilogram : 0.0,
+                    SpeedMps = penetrated ? speedOutMps : 0.0,
+                    NormalVelocityMps = penetrated ? speedOutMps * rawNormalCosine : 0.0,
+                    Provenance = penetrated
+                        ? "ArmorExit primary state passed to the next ArmorComponent"
+                        : "Primary projectile stopped in this ArmorComponent",
+                    Readiness = readiness,
+                };
+
+                var secondaries = new BabtTransferModel.OutgoingBody[0];
+                if (penetrated && hasBarrier && estimatedPlugMassG > 0f)
+                {
+                    // Recht-Ipson solved a metal plug travelling with the primary. The
+                    // runtime has no independent fragment direction, so the shared
+                    // forward velocity is an explicit engineering estimate.
+                    secondaries = new[]
+                    {
+                        new BabtTransferModel.OutgoingBody
+                        {
+                            Name = string.Equals(wornBarrier.Class, BallisticLimit.Brittle,
+                                StringComparison.Ordinal)
+                                ? "estimated co-moving brittle rubble"
+                                : "estimated co-moving plug",
+                            MassKg = estimatedPlugMassG / GramsPerKilogram,
+                            SpeedMps = speedOutMps,
+                            NormalVelocityMps = speedOutMps * rawNormalCosine,
+                            Provenance = "BallisticLimit.PlugMassG at ArmorExit primary velocity; " +
+                                         "direction assumed collinear",
+                            Readiness = BabtModel.Readiness.Provisional,
+                        },
+                    };
+                }
+
+                var outcome = penetrated
+                    ? BabtTransferModel.Outcome.Pierce
+                    : BabtTransferModel.Outcome.Stop;
+                var impact = new BabtTransferModel.ResolvedImpact
+                {
+                    LayerId = armor.Item.Id + ":" + armor.Item.TemplateId,
+                    Outcome = outcome,
+                    Incoming = incoming,
+                    OutgoingPrimary = outgoing,
+                    OutgoingSecondaries = secondaries,
+                    ExistingBarrierWorkJ = Math.Max(0.0, existingBarrierWorkJ),
+                    EmbeddedProjectileEnergyJ = Math.Max(0.0, embeddedProjectileEnergyJ),
+                    FaceWearFraction = Mathf.Clamp01(faceWear),
+                    BackingWearFraction = Mathf.Clamp01(backingWear),
+                    Provenance = "PLATE PhysicalArmorDecision resolved pre/post state; " +
+                                 "nominal impact area is a ballistic contact estimate, not a measured footprint",
+                    Readiness = readiness,
+                };
+
+                var incomingEnergy = 0.5 * incoming.MassKg * incoming.SpeedMps *
+                                     incoming.SpeedMps;
+                var outgoingPrimaryEnergy = 0.5 * outgoing.MassKg * outgoing.SpeedMps *
+                                            outgoing.SpeedMps;
+                var outgoingSecondaryEnergy = 0.0;
+                for (var i = 0; i < secondaries.Length; i++)
+                {
+                    outgoingSecondaryEnergy += 0.5 * secondaries[i].MassKg *
+                                               secondaries[i].SpeedMps *
+                                               secondaries[i].SpeedMps;
+                }
+
+                BabtHitContext.AppendResolved(shot, new BabtHitContext.ArmorContactResult
+                {
+                    Armor = armor,
+                    ArmorItemId = armor.Item.Id.ToString(),
+                    ArmorTemplateId = armor.Item.TemplateId.ToString(),
+                    AmmoTemplateId = shot.Ammo?.TemplateId,
+                    Material = armor.Template.ArmorMaterial.ToString(),
+                    ArmorClass = armor.ArmorClass,
+                    BluntThroughput = armor.BluntThroughput,
+                    ShotIdentity = Overlay.HitFeed.ShotId(shot),
+                    IncomingDiameterM = diameterInMm / MillimetresPerMetre,
+                    IncomingExpansiveness = expansivenessIn,
+                    IncomingDirectionX = projectileDirection.x,
+                    IncomingDirectionY = projectileDirection.y,
+                    IncomingDirectionZ = projectileDirection.z,
+                    OutgoingDiameterM = diameterOutMm / MillimetresPerMetre,
+                    OutgoingExpansiveness = expansivenessOut,
+                    OutgoingDirectionX = penetrated ? projectileDirection.x : 0.0,
+                    OutgoingDirectionY = penetrated ? projectileDirection.y : 0.0,
+                    OutgoingDirectionZ = penetrated ? projectileDirection.z : 0.0,
+                    NominalImpactAreaM2 = nominalImpactAreaMm2 /
+                                          (MillimetresPerMetre * MillimetresPerMetre),
+                    ProjectileEnergyLossJ = Math.Max(0.0,
+                        incomingEnergy - outgoingPrimaryEnergy),
+                    ExplicitOutgoingSecondaryEnergyJ = outgoingSecondaryEnergy,
+                    RawNormalCosine = rawNormalCosine,
+                    EffectiveNormalCosine = effectiveNormalCosine,
+                    HasSurfaceNormal = hasSurfaceNormal,
+                    LocalX = localPosition.x,
+                    LocalY = localPosition.y,
+                    LocalZ = localPosition.z,
+                    LocalCoordinateSpace = hitBodyCollider != null
+                        ? "BodyPartCollider local coordinates; plate frame unavailable"
+                        : "world hit coordinates; BodyPartCollider transform unavailable",
+                    HitBodyCollider = hitBodyCollider,
+                    HitsNearby = hitsNearby,
+                    DurabilityFraction = durabilityFraction,
+                    WearRoll = wearRoll,
+                    HasBarrier = hasBarrier,
+                    PristineBarrier = pristineBarrier,
+                    WornBarrier = wornBarrier,
+                    BallisticLimitVelocityMps = ballisticLimitVelocityMps,
+                    CoreFate = coreFate,
+                    EstimatedPlugMassKg = estimatedPlugMassG / GramsPerKilogram,
+                    Impact = impact,
+                    Provenance = "projectile state, surface normal, local hit and wear from the live Shot; " +
+                                 "Barrier and V50 from the existing armor reference path",
+                });
+            }
+            catch
+            {
+                // Mechanical capture must never alter the established armor decision.
+            }
         }
 
         /// <summary>
@@ -1749,8 +2019,18 @@ namespace PLATE.Client.Patches
 
                 if (damageInfo.BlockedBy.HasValue)
                 {
-                    // no penetration: behind-armor blunt trauma per Sturdivan instead of vanilla blunt
-                    ApplyBabt(__instance, ref damageInfo);
+                    // Only the component which actually stopped the projectile owns the
+                    // blunt response. Transfer mode waits until the complete armor
+                    // traversal has been evaluated; legacy/diagnostic keep the previous
+                    // stopped-round injury here.
+                    if (BabtHitContext.IsBlockingArmor(__instance.Item.Id.ToString(),
+                            damageInfo.BlockedBy.Value.ToString()))
+                    {
+                        if (PlateClientConfig.BabtMode?.Value != BabtRuntimeMode.Extended)
+                        {
+                            ApplyBabt(__instance, ref damageInfo);
+                        }
+                    }
                     return;
                 }
 
@@ -1829,8 +2109,1132 @@ namespace PLATE.Client.Patches
                 durabilityBefore - loss * mult, 0f, armor.Repairable.MaxDurability);
         }
 
-        // --- Behind-armor blunt trauma (Sturdivan's Blunt Criterion) ---
+        // --- Behind-armor mechanical transfer and injury delivery ---
 
+        /// <summary>
+        /// All ArmorComponent.ApplyDamage calls and their restore postfixes have
+        /// completed. Resolve the ordered construction now, but defer the health write
+        /// until ApplyDamageInfo so ApplyShot's absorbed-damage accounting remains based
+        /// on the projectile wound alone.
+        /// </summary>
+        private static void ProceedDamageThroughArmorPostfix(Player __instance,
+            ref DamageInfo damageInfo, EBodyPartColliderType colliderType,
+            EArmorPlateCollider armorPlateCollider, bool damageInfoIsLocal,
+            List<ArmorComponent> __result)
+        {
+            PatchStats.Hit(nameof(ProceedDamageThroughArmorPostfix));
+            var mode = PlateClientConfig.BabtMode?.Value ?? BabtRuntimeMode.Extended;
+            if (Off || !PlateClientConfig.BabtEnabled.Value || mode == BabtRuntimeMode.Simple)
+            {
+                return;
+            }
+
+            try
+            {
+                if (!damageInfoIsLocal || !damageInfo.IsForwardHit ||
+                    !TryPrepareBabtDelivery(ref damageInfo, out var pending,
+                        out var contacts))
+                {
+                    if (mode == BabtRuntimeMode.Extended && damageInfo.BlockedBy.HasValue)
+                    {
+                        SafeBabtLog(__instance,
+                            "BABT Transfer kept the established armor damage because no exact " +
+                            "shot-scoped contact ledger reached the aggregate boundary");
+                    }
+                    return;
+                }
+
+                if (!TryEvaluateBabt(__instance, colliderType, armorPlateCollider,
+                        contacts, out var injury, out var diagnostic))
+                {
+                    if (TryEvaluateBabtEstimateFallback(colliderType, contacts,
+                            out var estimatedInjury, out var estimateDiagnostic))
+                    {
+                        estimatedInjury.Provenance = diagnostic + "; " +
+                                                     estimatedInjury.Provenance;
+                        pending.Injury = estimatedInjury;
+                        SafeBabtLog(__instance,
+                            $"BABT mechanical {mode} unsupported: {OneLine(diagnostic)}; " +
+                            $"{estimateDiagnostic}; {estimatedInjury.Snapshot}; " +
+                            "estimate queued for the single health delivery");
+                        SafeBabtLog(__instance, BabtContactAudit(contacts));
+                        return;
+                    }
+
+                    pending.Injury = new PendingBabtInjury();
+                    SafeBabtLog(__instance,
+                        $"BABT mechanical {mode} unsupported: {OneLine(diagnostic)}; " +
+                        $"estimate fallback unavailable: {OneLine(estimateDiagnostic)}; " +
+                        (damageInfo.BlockedBy.HasValue
+                            ? "legacy stopped-round injury retained"
+                            : "residual-projectile wound retained without additive BABT"));
+                    SafeBabtLog(__instance, BabtContactAudit(contacts));
+                    if (mode == BabtRuntimeMode.Extended && damageInfo.BlockedBy.HasValue &&
+                        TryCreateExactLegacyStoppedFallback(contacts,
+                            out var legacyInjury, out var legacyDiagnostic))
+                    {
+                        pending.Injury = legacyInjury;
+                        SafeBabtLog(__instance, legacyDiagnostic +
+                            "; queued for the single health delivery");
+                    }
+                    return;
+                }
+
+                pending.Injury = injury;
+                SafeBabtLog(__instance,
+                    $"BABT mechanical {mode} shot={injury.ShotIdentity} {injury.Outcome} " +
+                    $"contacts={contacts.Length} Wbody={injury.BodyWorkJ:0.###}J " +
+                    $"A={injury.ContactAreaM2:0.######}m2 bc={injury.BluntCriterion:0.###} " +
+                    $"babt={injury.DamageHp:0.###}HP; {injury.Snapshot}; " +
+                    $"source={OneLine(injury.Provenance)}" +
+                    "; queued for the single health delivery");
+                SafeBabtLog(__instance, BabtContactAudit(contacts));
+            }
+            catch (Exception ex)
+            {
+                SafeBabtLog(__instance,
+                    $"BABT mechanical {mode} failed: {OneLine(ex.Message)}; established injury retained");
+                if (mode == BabtRuntimeMode.Extended && damageInfo.BlockedBy.HasValue)
+                {
+                    SafeBabtLog(__instance,
+                        "BABT Transfer kept the established armor damage after evaluation failure");
+                }
+            }
+        }
+
+        private static bool TryEvaluateBabt(Player victim,
+            EBodyPartColliderType colliderType, EArmorPlateCollider armorPlateCollider,
+            BabtHitContext.ArmorContactResult[] contacts,
+            out PendingBabtInjury injury, out string diagnostic)
+        {
+            injury = null;
+            if (!TryResolveBabtAssembly(victim, colliderType, armorPlateCollider,
+                    contacts, out var rootTemplateId, out var rootDamage,
+                    out var supports, out diagnostic))
+            {
+                return false;
+            }
+
+            if (!AmmoDataCache.TryResolveBabtCoupling(rootTemplateId, supports,
+                    rootDamage, out var coupling, out var couplingDiagnostic))
+            {
+                diagnostic = "construction/coupling: " + couplingDiagnostic;
+                return false;
+            }
+
+            var impacts = new BabtTransferModel.ResolvedImpact[contacts.Length];
+            for (var i = 0; i < contacts.Length; i++)
+            {
+                if (!contacts[i].HasSurfaceNormal || !contacts[i].HasBarrier)
+                {
+                    diagnostic = $"contact {i} lacks a surface normal or resolved Barrier";
+                    return false;
+                }
+                impacts[i] = contacts[i].Impact;
+            }
+
+            var transfer = BabtTransferModel.EvaluateAggregate(impacts, coupling);
+            if (!transfer.IsValid || transfer.Status != BabtTransferModel.EvaluationStatus.Complete ||
+                transfer.Readiness < BabtModel.Readiness.Provisional)
+            {
+                diagnostic = $"transfer {transfer.Status}: {transfer.Reason}";
+                return false;
+            }
+
+            var region = BabtBodyRegion(colliderType);
+            if (region != "Thorax" && region != "Abdomen")
+            {
+                diagnostic = $"no regional transferred-BABT body profile is applied to {region}";
+                return false;
+            }
+
+            var construction = coupling.PostImpactConstruction;
+            var contactArea = construction.WidthM * construction.HeightM;
+            var participatingDepthM = PlateClientConfig.BabtWallCm.Value / 100.0;
+            if (!AmmoDataCache.TryResolveBabtBody(region, contactArea,
+                    participatingDepthM, out var body, out var bodyDiagnostic))
+            {
+                diagnostic = "body/contact: " + bodyDiagnostic;
+                return false;
+            }
+            if (!AmmoDataCache.TryResolveBabtNumerics(out var numerics,
+                    out var numericsDiagnostic))
+            {
+                diagnostic = "numerics: " + numericsDiagnostic;
+                return false;
+            }
+
+            var response = BabtModel.EvaluateTransferred(construction, transfer, body,
+                numerics);
+            if (!response.IsValid || !response.BodyWorkConverged ||
+                response.Status != BabtModel.EvaluationStatus.Complete ||
+                response.Readiness < BabtModel.Readiness.Provisional)
+            {
+                diagnostic = $"mechanical response {response.Status}: {response.Reason}";
+                return false;
+            }
+
+            var closed = BabtTransferModel.Close(transfer, response);
+            if (!closed.IsValid)
+            {
+                diagnostic = "closed ledger: " + closed.Reason;
+                return false;
+            }
+
+            var wound = AmmoDataCache.Wound;
+            if (!(wound is { Enabled: true }) || wound.EnergyCapPerHp <= 0)
+            {
+                diagnostic = "the existing contact-bruise EnergyCapPerHp scale is unavailable";
+                return false;
+            }
+            var mapped = BabtInjuryModel.Evaluate(response.BodyNetWorkJ,
+                response.EffectiveContactAreaM2,
+                PlateClientConfig.BabtBodyMassKg.Value,
+                PlateClientConfig.BabtWallCm.Value,
+                wound.EnergyCapPerHp,
+                PlateClientConfig.BabtBc1.Value,
+                PlateClientConfig.BabtBc2.Value);
+            if (!mapped.IsValid || mapped.DamageHp > float.MaxValue)
+            {
+                diagnostic = "injury mapping: " + mapped.Diagnostic;
+                return false;
+            }
+
+            var finalOutcome = impacts[impacts.Length - 1].Outcome;
+            injury = new PendingBabtInjury
+            {
+                Applies = true,
+                HasLoad = mapped.HasLoad,
+                ReplacesProjectileWound = finalOutcome == BabtTransferModel.Outcome.Stop,
+                DamageHp = (float)mapped.DamageHp,
+                BodyWorkJ = mapped.BodyWorkJ,
+                ContactAreaM2 = response.EffectiveContactAreaM2,
+                BluntCriterion = mapped.BluntCriterion,
+                Severity = mapped.Severity,
+                ShotIdentity = contacts[0].ShotIdentity,
+                Outcome = finalOutcome == BabtTransferModel.Outcome.Stop ? "stop" : "pierce",
+                Snapshot = BabtSnapshot(contacts, transfer, response, closed),
+                Provenance = couplingDiagnostic + "; " + bodyDiagnostic + "; " +
+                             numericsDiagnostic + "; " + mapped.Diagnostic + "; " +
+                             response.ProvenanceSummary,
+            };
+            diagnostic = "complete transferred mechanical response and injury mapping";
+            return true;
+        }
+
+        private static bool TryCreateExactLegacyStoppedFallback(
+            BabtHitContext.ArmorContactResult[] contacts,
+            out PendingBabtInjury injury, out string diagnostic)
+        {
+            injury = null;
+            if (contacts == null || contacts.Length == 0)
+            {
+                diagnostic = "legacy stopped fallback has no exact contact";
+                return false;
+            }
+
+            var contact = contacts[contacts.Length - 1];
+            if (contact.Impact == null || contact.Impact.Outcome !=
+                BabtTransferModel.Outcome.Stop)
+            {
+                diagnostic = "legacy behavior has no additive injury for a piercing outcome";
+                return false;
+            }
+
+            var incoming = contact.Impact.Incoming;
+            var incomingEnergy = 0.5 * incoming.MassKg * incoming.SpeedMps *
+                                 incoming.SpeedMps;
+            var transferred = incomingEnergy * contact.BluntThroughput *
+                              PlateClientConfig.BabtEnergyScale.Value;
+            var armor = contact.Armor as ArmorComponent;
+            var spreadCm = armor != null && PlateClientConfig.Materials.TryGetValue(
+                armor.Template.ArmorMaterial, out var material)
+                ? material.SpreadCm.Value
+                : 4f;
+            var diameterCm = Math.Max(contact.IncomingDiameterM * 100.0, spreadCm);
+            var denominator = Math.Pow(PlateClientConfig.BabtBodyMassKg.Value, 1.0 / 3.0) *
+                              PlateClientConfig.BabtWallCm.Value * diameterCm;
+            if (!(transferred > 0) || !(denominator > 0))
+            {
+                diagnostic = "legacy stopped fallback has no positive exact load";
+                return false;
+            }
+
+            var bc = Math.Log(Math.Max(transferred, 1.0) / denominator);
+            var bc1 = PlateClientConfig.BabtBc1.Value;
+            var bc2 = PlateClientConfig.BabtBc2.Value;
+            double damage;
+            if (bc < bc1)
+            {
+                damage = PlateClientConfig.BabtPlateauDamage.Value;
+            }
+            else
+            {
+                var t = Math.Max(0.0, Math.Min(1.0,
+                    (bc - bc1) / Math.Max(bc2 - bc1, 0.01)));
+                damage = PlateClientConfig.BabtPlateauDamage.Value +
+                         (PlateClientConfig.BabtMaxDamage.Value -
+                          PlateClientConfig.BabtPlateauDamage.Value) * t;
+            }
+            if (damage < 0 || damage > float.MaxValue || double.IsNaN(damage) ||
+                double.IsInfinity(damage))
+            {
+                diagnostic = "legacy stopped fallback produced an invalid damage value";
+                return false;
+            }
+
+            injury = new PendingBabtInjury
+            {
+                Applies = true,
+                HasLoad = true,
+                ReplacesProjectileWound = true,
+                DamageHp = (float)damage,
+                BodyWorkJ = transferred,
+                ContactAreaM2 = Math.PI * diameterCm * diameterCm / 40000.0,
+                BluntCriterion = bc,
+                Severity = Math.Max(0.0, Math.Min(1.0,
+                    (bc - bc1) / Math.Max(bc2 - bc1, 0.01))),
+                ShotIdentity = contact.ShotIdentity,
+                Outcome = "stop/exact legacy fallback",
+                Snapshot = $"Ein={incomingEnergy:0.###}J assumedLegacyTransfer=" +
+                           $"{transferred:0.###}J Dspread={diameterCm:0.###}cm " +
+                           $"bt={contact.BluntThroughput:0.###}",
+                Provenance = "exact shot/contact energy and armor identity; previous " +
+                             "BluntThroughput/Sturdivan plateau-cap gameplay model retained " +
+                             "because transferred mechanics and continuous contact mapping were unsupported",
+            };
+            diagnostic = "BABT Transfer used the exact shot-scoped legacy stopped-round fallback";
+            return true;
+        }
+
+        private static bool TryEvaluateBabtEstimateFallback(
+            EBodyPartColliderType colliderType,
+            BabtHitContext.ArmorContactResult[] contacts,
+            out PendingBabtInjury injury, out string diagnostic)
+        {
+            injury = null;
+            var region = BabtBodyRegion(colliderType);
+            if (region != "Thorax" && region != "Abdomen")
+            {
+                diagnostic = $"TRANSFER_ESTIMATE_FALLBACK is limited to torso profiles; {region} retains legacy behavior";
+                return false;
+            }
+            if (contacts == null || contacts.Length == 0)
+            {
+                diagnostic = "resolved armor contacts are missing";
+                return false;
+            }
+
+            var inputs = new BabtTransferEstimate.ContactInput[contacts.Length];
+            var unresolvedReserve = 0.0;
+            for (var i = 0; i < contacts.Length; i++)
+            {
+                var contact = contacts[i];
+                var armor = contact.Armor as ArmorComponent;
+                if (armor == null || contact.Impact == null)
+                {
+                    diagnostic = $"contact {i} lacks its exact ArmorComponent or resolved energy state";
+                    return false;
+                }
+
+                var secondaryEnergy = 0.0;
+                for (var s = 0; s < contact.Impact.OutgoingSecondaries.Length; s++)
+                {
+                    var secondary = contact.Impact.OutgoingSecondaries[s];
+                    var energy = 0.5 * secondary.MassKg * secondary.SpeedMps *
+                                 secondary.SpeedMps;
+                    if (secondary.Disposition ==
+                        BabtTransferModel.AggregateDisposition.Unknown)
+                    {
+                        secondaryEnergy += energy;
+                        unresolvedReserve += energy;
+                    }
+                    else if (secondary.Disposition ==
+                             BabtTransferModel.AggregateDisposition.LeavesAggregateSystem)
+                    {
+                        secondaryEnergy += energy;
+                    }
+                }
+
+                var spreadCm = PlateClientConfig.Materials.TryGetValue(
+                    armor.Template.ArmorMaterial, out var material)
+                    ? material.SpreadCm.Value
+                    : 4f;
+                inputs[i] = new BabtTransferEstimate.ContactInput
+                {
+                    IncomingEnergyJ = 0.5 * contact.Impact.Incoming.MassKg *
+                                      contact.Impact.Incoming.SpeedMps *
+                                      contact.Impact.Incoming.SpeedMps,
+                    OutgoingPrimaryEnergyJ = 0.5 *
+                                             contact.Impact.OutgoingPrimary.MassKg *
+                                             contact.Impact.OutgoingPrimary.SpeedMps *
+                                             contact.Impact.OutgoingPrimary.SpeedMps,
+                    ReservedOrLeavingSecondaryEnergyJ = secondaryEnergy,
+                    BluntThroughput = contact.BluntThroughput,
+                    ProjectileDiameterM = Math.Max(contact.IncomingDiameterM,
+                        contact.OutgoingDiameterM),
+                    SpreadDiameterM = Math.Max(0.0, spreadCm / 100.0),
+                };
+            }
+
+            var estimate = BabtTransferEstimate.Evaluate(inputs,
+                PlateClientConfig.BabtEnergyScale.Value);
+            if (!estimate.IsValid)
+            {
+                diagnostic = estimate.Diagnostic;
+                return false;
+            }
+
+            var wound = AmmoDataCache.Wound;
+            if (!(wound is { Enabled: true }) || wound.EnergyCapPerHp <= 0)
+            {
+                diagnostic = "the existing contact-bruise EnergyCapPerHp scale is unavailable";
+                return false;
+            }
+            var mapped = BabtInjuryModel.Evaluate(estimate.BodyWorkEstimateJ,
+                estimate.EffectiveContactAreaM2,
+                PlateClientConfig.BabtBodyMassKg.Value,
+                PlateClientConfig.BabtWallCm.Value,
+                wound.EnergyCapPerHp,
+                PlateClientConfig.BabtBc1.Value,
+                PlateClientConfig.BabtBc2.Value);
+            if (!mapped.IsValid || mapped.DamageHp > float.MaxValue)
+            {
+                diagnostic = "fallback injury mapping: " + mapped.Diagnostic;
+                return false;
+            }
+
+            var finalOutcome = contacts[contacts.Length - 1].Impact.Outcome;
+            injury = new PendingBabtInjury
+            {
+                Applies = true,
+                HasLoad = mapped.HasLoad,
+                ReplacesProjectileWound = finalOutcome == BabtTransferModel.Outcome.Stop,
+                DamageHp = (float)mapped.DamageHp,
+                BodyWorkJ = mapped.BodyWorkJ,
+                ContactAreaM2 = estimate.EffectiveContactAreaM2,
+                BluntCriterion = mapped.BluntCriterion,
+                Severity = mapped.Severity,
+                ShotIdentity = contacts[0].ShotIdentity,
+                Outcome = finalOutcome == BabtTransferModel.Outcome.Stop
+                    ? "stop/TRANSFER_ESTIMATE_FALLBACK"
+                    : "pierce/TRANSFER_ESTIMATE_FALLBACK",
+                Snapshot = $"dKEavailable={estimate.AvailableEnergyLossJ:0.###}J " +
+                           $"UnresolvedOutgoingReserve={unresolvedReserve:0.###}J " +
+                           $"assumedBodyWork={estimate.BodyWorkEstimateJ:0.###}J " +
+                           $"Dspread={estimate.EffectiveDiameterM * 100.0:0.###}cm",
+                Provenance = estimate.Diagnostic + "; " + mapped.Diagnostic +
+                             "; unresolved armor/projectile reservoirs are not claimed as body work",
+            };
+            diagnostic = $"TRANSFER_ESTIMATE_FALLBACK bodyWork={mapped.BodyWorkJ:0.###}J, " +
+                         $"damage={mapped.DamageHp:0.###}HP, " +
+                         $"UnresolvedOutgoingReserve={unresolvedReserve:0.###}J";
+            return true;
+        }
+
+        private static string BabtSnapshot(BabtHitContext.ArmorContactResult[] contacts,
+            BabtTransferModel.Transfer transfer, BabtModel.Response response,
+            BabtTransferModel.ClosedBudget closed)
+        {
+            var first = contacts[0];
+            var last = contacts[contacts.Length - 1];
+            var incomingProjectileEnergy = 0.5 * first.Impact.Incoming.MassKg *
+                                           first.Impact.Incoming.SpeedMps *
+                                           first.Impact.Incoming.SpeedMps;
+            var outgoingProjectileEnergy = 0.5 *
+                                            last.Impact.OutgoingPrimary.MassKg *
+                                            last.Impact.OutgoingPrimary.SpeedMps *
+                                            last.Impact.OutgoingPrimary.SpeedMps;
+            return $"m={first.Impact.Incoming.MassKg * GramsPerKilogram:0.###}->" +
+                   $"{last.Impact.OutgoingPrimary.MassKg * GramsPerKilogram:0.###}g " +
+                   $"d={first.IncomingDiameterM * MillimetresPerMetre:0.###}->" +
+                   $"{last.OutgoingDiameterM * MillimetresPerMetre:0.###}mm " +
+                   $"v={first.Impact.Incoming.SpeedMps:0.###}->" +
+                   $"{last.Impact.OutgoingPrimary.SpeedMps:0.###}m/s " +
+                   $"X={first.IncomingExpansiveness:0.###}->" +
+                   $"{last.OutgoingExpansiveness:0.###} " +
+                   $"Ein={transfer.IncomingEnergyJ:0.###}J " +
+                   $"EprimaryOut={transfer.OutgoingPrimaryEnergyJ:0.###}J " +
+                   $"dKEprojectile={incomingProjectileEnergy - outgoingProjectileEnergy:0.###}J " +
+                   $"EsecondaryLeaving={transfer.OutgoingSecondaryEnergyJ:0.###}J " +
+                   $"Edeposited={transfer.DepositedEnergyJ:0.###}J " +
+                   $"seed={transfer.MechanicalSeedEnergyJ:0.###}J " +
+                   $"auditWork={transfer.ExistingBarrierWorkJ:0.###}J " +
+                   $"embeddedProjectile={transfer.EmbeddedProjectileEnergyJ:0.###}J " +
+                   $"rearDyn/resid/maxFlex={response.RearDynamicDeflectionMm:0.###}/" +
+                   $"{response.RearResidualDeflectionMm:0.###}/" +
+                   $"{response.MaximumAbsoluteFlexuralDeflectionMm:0.###}mm " +
+                   $"rigid={response.RigidTranslationMaxMm:0.###}mm " +
+                   $"contact/bodyComp={response.ContactCompressionMaxMm:0.###}/" +
+                   $"{response.BodyCompressionMaxMm:0.###}mm " +
+                   $"Fpeak={response.PeakBodyForceN:0.###}N " +
+                   $"Jbody={response.BodyImpulseNs:0.###}Ns " +
+                   $"WbodyNet={response.BodyNetWorkJ:0.###}J " +
+                   $"EbodyRetained={response.BodyRetainedMechanicalEnergyJ:0.###}J " +
+                   $"dissIF/foundation/struct/plastic/brittle=" +
+                   $"{response.InterfaceDissipationJ:0.###}/" +
+                   $"{response.BodyFoundationDissipationJ:0.###}/" +
+                   $"{response.StructuralDissipationJ:0.###}/" +
+                   $"{response.PlasticDissipationJ:0.###}/" +
+                   $"{response.BrittleFractureDissipationJ:0.###}J " +
+                   $"brittleDropouts={response.ResolvedBrittleDropoutCount} " +
+                   $"p={transfer.IncomingNormalMomentumNs:0.###}->" +
+                   $"{transfer.OutgoingPrimaryNormalMomentumNs + transfer.OutgoingSecondaryNormalMomentumNs:0.###}Ns " +
+                   $"ledgerErr={closed.EnergyBalanceErrorJ:0.######}J " +
+                   $"area={first.NominalImpactAreaM2:0.########}m2 cos={first.RawNormalCosine:0.###}/" +
+                   $"{first.EffectiveNormalCosine:0.###} local=({first.LocalX:0.###}," +
+                   $"{first.LocalY:0.###},{first.LocalZ:0.###}) hits={first.HitsNearby} " +
+                   $"wear={first.Impact.FaceWearFraction:0.###}/" +
+                   $"{first.Impact.BackingWearFraction:0.###} V50={first.BallisticLimitVelocityMps:0.###} " +
+                   $"barrier={first.WornBarrier.Class}/{first.WornBarrier.FailureMode} " +
+                   $"T={first.PristineBarrier.ThicknessMm:0.###}->" +
+                   $"{first.WornBarrier.ThicknessMm:0.###}mm backing=" +
+                   $"{first.PristineBarrier.BackingMm:0.###}->" +
+                   $"{first.WornBarrier.BackingMm:0.###}mm core={first.CoreFate}";
+        }
+
+        private static string BabtContactAudit(
+            BabtHitContext.ArmorContactResult[] contacts)
+        {
+            if (contacts == null || contacts.Length == 0)
+            {
+                return "BABT contact ledger unavailable";
+            }
+
+            var entries = new string[contacts.Length];
+            for (var i = 0; i < contacts.Length; i++)
+            {
+                var contact = contacts[i];
+                var impact = contact.Impact;
+                var secondaryEnergy = 0.0;
+                var secondaryDisposition = "none";
+                if (impact.OutgoingSecondaries.Length > 0)
+                {
+                    var dispositions = new string[impact.OutgoingSecondaries.Length];
+                    for (var s = 0; s < impact.OutgoingSecondaries.Length; s++)
+                    {
+                        var secondary = impact.OutgoingSecondaries[s];
+                        secondaryEnergy += 0.5 * secondary.MassKg * secondary.SpeedMps *
+                                           secondary.SpeedMps;
+                        dispositions[s] = secondary.Name + ":" + secondary.Disposition;
+                    }
+                    secondaryDisposition = string.Join(",", dispositions);
+                }
+
+                var barrier = contact.HasBarrier
+                    ? $"{contact.WornBarrier.Class}/{contact.WornBarrier.FailureMode} " +
+                      $"T={contact.PristineBarrier.ThicknessMm:0.###}->" +
+                      $"{contact.WornBarrier.ThicknessMm:0.###}mm B=" +
+                      $"{contact.PristineBarrier.BackingMm:0.###}->" +
+                      $"{contact.WornBarrier.BackingMm:0.###}mm"
+                    : "unresolved";
+                entries[i] = $"#{contact.DecisionOrdinal} item={contact.ArmorItemId} " +
+                             $"tpl={contact.ArmorTemplateId} {contact.Material} " +
+                             $"cl={contact.ArmorClass} bt={contact.BluntThroughput:0.###} " +
+                             $"{impact.Outcome} " +
+                             $"m={impact.Incoming.MassKg * GramsPerKilogram:0.###}->" +
+                             $"{impact.OutgoingPrimary.MassKg * GramsPerKilogram:0.###}g " +
+                             $"d={contact.IncomingDiameterM * MillimetresPerMetre:0.###}->" +
+                             $"{contact.OutgoingDiameterM * MillimetresPerMetre:0.###}mm " +
+                             $"v={impact.Incoming.SpeedMps:0.###}->" +
+                             $"{impact.OutgoingPrimary.SpeedMps:0.###}m/s " +
+                             $"X={contact.IncomingExpansiveness:0.###}->" +
+                             $"{contact.OutgoingExpansiveness:0.###} " +
+                             $"dKEprojectile={contact.ProjectileEnergyLossJ:0.###}J " +
+                             $"Esecondary={secondaryEnergy:0.###}J({secondaryDisposition}) " +
+                             $"workAudit={impact.ExistingBarrierWorkJ:0.###}J " +
+                             $"embedded={impact.EmbeddedProjectileEnergyJ:0.###}J " +
+                             $"areaNominal={contact.NominalImpactAreaM2:0.########}m2 " +
+                             $"cosLayer={contact.RawNormalCosine:0.###}/" +
+                             $"{contact.EffectiveNormalCosine:0.###} " +
+                             $"normalVcommon={impact.Incoming.NormalVelocityMps:0.###}->" +
+                             $"{impact.OutgoingPrimary.NormalVelocityMps:0.###}m/s " +
+                             $"local=({contact.LocalX:0.###},{contact.LocalY:0.###}," +
+                             $"{contact.LocalZ:0.###})[{contact.LocalCoordinateSpace}] " +
+                             $"nearby={contact.HitsNearby} durability={contact.DurabilityFraction:0.###} " +
+                             $"wearDraw={contact.WearRoll:0.###} retainedT=" +
+                             $"{impact.FaceWearFraction:0.###}/{impact.BackingWearFraction:0.###} " +
+                             $"V50={contact.BallisticLimitVelocityMps:0.###} " +
+                             $"core={contact.CoreFate} barrier={barrier}";
+            }
+            return "BABT resolved contact ledger: " + string.Join(" | ", entries);
+        }
+
+        private static void SafeBabtLog(Player victim, string line)
+        {
+            try
+            {
+                Overlay.HitFeed.PushHit(victim, line);
+            }
+            catch
+            {
+                // A journal failure cannot interrupt armor or health delivery.
+            }
+        }
+
+        private static string OneLine(string value)
+        {
+            return string.IsNullOrWhiteSpace(value)
+                ? "none"
+                : value.Replace('\r', ' ').Replace('\n', ' ');
+        }
+
+        private static void ApplyDamageInfoPrefix(Player __instance,
+            ref DamageInfo damageInfo, EBodyPart bodyPartType,
+            EBodyPartColliderType colliderType)
+        {
+            PatchStats.Hit(nameof(ApplyDamageInfoPrefix));
+            _activeBabtOverlay = default(ActiveBabtOverlayContext);
+            var injuryWritten = false;
+            try
+            {
+                if (!TryConsumeBabtDelivery(ref damageInfo, __instance, out var pending) ||
+                    pending.Injury == null || !pending.Injury.Applies)
+                {
+                    return;
+                }
+
+                var injury = pending.Injury;
+                var woundDamage = injury.ReplacesProjectileWound ? 0f : damageInfo.Damage;
+                damageInfo.Damage = injury.ReplacesProjectileWound
+                    ? injury.DamageHp
+                    : damageInfo.Damage + injury.DamageHp;
+                injuryWritten = true;
+                _activeBabtOverlay = new ActiveBabtOverlayContext
+                {
+                    Active = true,
+                    Frame = Time.frameCount,
+                    Victim = __instance,
+                    Fingerprint = BabtFingerprint(damageInfo,
+                        damageInfo.HittedBallisticCollider as BodyPartCollider, __instance),
+                    WoundDamageHp = woundDamage,
+                    BabtDamageHp = injury.DamageHp,
+                };
+
+                if (injury.HasLoad)
+                {
+                    var attacker = damageInfo.Player?.iPlayer as Player;
+                    if (WoundBleeding.Region(colliderType) == BleedRegion.Torso)
+                    {
+                        Blood.WindedSystem.OnTorsoImpact(__instance, attacker,
+                            (float)injury.BodyWorkJ, damageInfo.HitPoint);
+                    }
+                    ApplyBabtEffects(__instance, colliderType,
+                        (float)injury.BluntCriterion,
+                        PlateClientConfig.BabtBc1.Value,
+                        PlateClientConfig.BabtBc2.Value,
+                        deduplicateLegacyVolley: false);
+                }
+
+                SafeBabtLog(__instance,
+                    $"BABT health shot={injury.ShotIdentity} {injury.Outcome}: " +
+                    $"wound {woundDamage:0.###}HP + babt {injury.DamageHp:0.###}HP = " +
+                    $"{damageInfo.Damage:0.###}HP; Wbody={injury.BodyWorkJ:0.###}J " +
+                    $"bc={injury.BluntCriterion:0.###}; source={OneLine(injury.Provenance)}");
+            }
+            catch (Exception ex)
+            {
+                SafeBabtLog(__instance,
+                    "BABT health delivery failed " +
+                    (injuryWritten
+                        ? "after writing the computed total; secondary effects may be incomplete: "
+                        : "before changing the established projectile wound: ") +
+                    OneLine(ex.Message));
+            }
+        }
+
+        private static void ApplyDamageInfoPostfix()
+        {
+            PatchStats.Hit(nameof(ApplyDamageInfoPostfix));
+            _activeBabtOverlay = default(ActiveBabtOverlayContext);
+        }
+
+        internal static bool TryGetActiveBabtBreakdown(Player victim,
+            DamageInfo damageInfo, out float woundDamageHp, out float babtDamageHp)
+        {
+            woundDamageHp = 0f;
+            babtDamageHp = 0f;
+            if (!_activeBabtOverlay.Active || _activeBabtOverlay.Frame != Time.frameCount ||
+                !ReferenceEquals(_activeBabtOverlay.Victim, victim))
+            {
+                return false;
+            }
+            var bpc = damageInfo.HittedBallisticCollider as BodyPartCollider;
+            if (!BabtHitContext.SameDelivery(_activeBabtOverlay.Fingerprint,
+                    BabtFingerprint(damageInfo, bpc, victim)))
+            {
+                return false;
+            }
+            woundDamageHp = _activeBabtOverlay.WoundDamageHp;
+            babtDamageHp = _activeBabtOverlay.BabtDamageHp;
+            return true;
+        }
+
+        private static void ApplyShotBabtPrefix(Player __instance,
+            DamageInfo damageInfo, out ApplyShotBabtState __state)
+        {
+            __state = new ApplyShotBabtState
+            {
+                MarkerDamage = Overlay.HitMarkerDamage.Begin(__instance,
+                    damageInfo.HittedBallisticCollider),
+                PreviousDelivery = _activeApplyShotBabtDelivery,
+            };
+            _activeApplyShotBabtDelivery = null;
+            try
+            {
+                if (_pendingBabtDeliveries == null || !damageInfo.IsForwardHit)
+                {
+                    return;
+                }
+
+                ExpireBabtDeliveries();
+                var bpc = damageInfo.HittedBallisticCollider as BodyPartCollider;
+                var fingerprint = BabtFingerprint(damageInfo, bpc, __instance);
+                for (var i = _pendingBabtDeliveries.Count - 1; i >= 0; i--)
+                {
+                    var candidate = _pendingBabtDeliveries[i];
+                    if (!BabtHitContext.Matches(candidate.Token, fingerprint))
+                    {
+                        continue;
+                    }
+                    __state.BoundDelivery = candidate;
+                    _activeApplyShotBabtDelivery = candidate;
+                    return;
+                }
+            }
+            catch
+            {
+                // A diagnostic scope must never interrupt Player.ApplyShot.
+            }
+        }
+
+        private static Exception ApplyShotBabtFinalizer(Exception __exception,
+            ApplyShotBabtState __state)
+        {
+            __state?.MarkerDamage?.End();
+            try
+            {
+                if (__state?.BoundDelivery != null && _pendingBabtDeliveries != null)
+                {
+                    _pendingBabtDeliveries.Remove(__state.BoundDelivery);
+                }
+                _activeApplyShotBabtDelivery = __state?.PreviousDelivery;
+                _activeBabtOverlay = default(ActiveBabtOverlayContext);
+            }
+            catch
+            {
+                // Cleanup cannot replace the game's original exception.
+            }
+            return __exception;
+        }
+
+        /// <summary>
+        /// DamageInfo has no Shot reference. The constructor is the last point which
+        /// still has both the final projectile state and the exact pooled Shot identity.
+        /// The token remains generation-bound until the single health delivery.
+        /// </summary>
+        private static void QueueBabtDeliverySafely(Shot shot, BodyPartCollider bpc,
+            DamageInfo damageInfo)
+        {
+            try
+            {
+                QueueBabtDelivery(shot, bpc, damageInfo);
+            }
+            catch
+            {
+                // Correlation must never interrupt wound construction.
+            }
+        }
+
+        private static void QueueBabtDelivery(Shot shot, BodyPartCollider bpc,
+            DamageInfo damageInfo)
+        {
+            var mode = PlateClientConfig.BabtMode?.Value ?? BabtRuntimeMode.Extended;
+            if (!PlateClientConfig.BabtEnabled.Value || mode == BabtRuntimeMode.Simple ||
+                !damageInfo.IsForwardHit)
+            {
+                return;
+            }
+
+            var token = BabtHitContext.Activate(shot, BabtFingerprint(damageInfo, bpc));
+            if (token == null)
+            {
+                return;
+            }
+
+            if (_pendingBabtDeliveries == null)
+            {
+                _pendingBabtDeliveries = new List<PendingBabtDelivery>(4);
+            }
+
+            ExpireBabtDeliveries();
+            if (_pendingBabtDeliveries.Count >= MaxPendingBabtDeliveries)
+            {
+                _pendingBabtDeliveries.RemoveAt(0);
+            }
+            _pendingBabtDeliveries.Add(new PendingBabtDelivery
+            {
+                Token = token,
+                Frame = Time.frameCount,
+            });
+        }
+
+        private static bool TryPrepareBabtDelivery(ref DamageInfo damageInfo,
+            out PendingBabtDelivery pending,
+            out BabtHitContext.ArmorContactResult[] contacts)
+        {
+            pending = null;
+            contacts = null;
+            var candidate = _activeApplyShotBabtDelivery;
+            if (candidate == null || !damageInfo.IsForwardHit)
+            {
+                return false;
+            }
+
+            ExpireBabtDeliveries();
+            var bpc = damageInfo.HittedBallisticCollider as BodyPartCollider;
+            var fingerprint = BabtFingerprint(damageInfo, bpc);
+            if (!BabtHitContext.TryPrepare(candidate.Token, fingerprint, out contacts))
+            {
+                return false;
+            }
+            pending = candidate;
+            return true;
+        }
+
+        private static bool TryConsumeBabtDelivery(ref DamageInfo damageInfo,
+            Player victim, out PendingBabtDelivery pending)
+        {
+            pending = null;
+            var candidate = _activeApplyShotBabtDelivery;
+            if (candidate == null || !damageInfo.IsForwardHit)
+            {
+                return false;
+            }
+
+            ExpireBabtDeliveries();
+            var bpc = damageInfo.HittedBallisticCollider as BodyPartCollider;
+            var fingerprint = BabtFingerprint(damageInfo, bpc, victim);
+            if (!BabtHitContext.TryConsume(candidate.Token, fingerprint))
+            {
+                return false;
+            }
+            _pendingBabtDeliveries.Remove(candidate);
+            _activeApplyShotBabtDelivery = null;
+            pending = candidate;
+            return true;
+        }
+
+        private static void ExpireBabtDeliveries()
+        {
+            if (_pendingBabtDeliveries == null)
+            {
+                return;
+            }
+
+            // A frame is only a short synchronous lifetime bound. Token generation and
+            // the full fingerprint, not the frame, establish physical identity.
+            var frame = Time.frameCount;
+            _pendingBabtDeliveries.RemoveAll(p => p.Frame != frame);
+        }
+
+        private static BabtHitContext.DeliveryFingerprint BabtFingerprint(
+            DamageInfo damageInfo, BodyPartCollider bpc, Player victim = null)
+        {
+            return new BabtHitContext.DeliveryFingerprint
+            {
+                Victim = victim ?? bpc?.Player,
+                Collider = damageInfo.HittedBallisticCollider,
+                FireIndex = damageInfo.FireIndex,
+                ColliderType = (int)(bpc != null
+                    ? bpc.BodyPartColliderType
+                    : damageInfo.BodyPartColliderType),
+                IsForwardHit = damageInfo.IsForwardHit,
+                NormalX = damageInfo.HitNormal.x,
+                NormalY = damageInfo.HitNormal.y,
+                NormalZ = damageInfo.HitNormal.z,
+                HitX = damageInfo.HitPoint.x,
+                HitY = damageInfo.HitPoint.y,
+                HitZ = damageInfo.HitPoint.z,
+                SourceId = Convert.ToString(damageInfo.SourceId),
+            };
+        }
+
+        private static BabtConstructionResolver.ResolvedImpactDamage BabtDamageOf(
+            BabtHitContext.ArmorContactResult contact)
+        {
+            var impact = contact.Impact;
+            var retainedMass = Math.Max(0.0,
+                impact.Incoming.MassKg - impact.OutgoingPrimary.MassKg);
+            var ejectedArmorMass = 0.0;
+            var outgoingInventoryComplete = contact.HasSurfaceNormal && contact.HasBarrier;
+            for (var i = 0; i < impact.OutgoingSecondaries.Length; i++)
+            {
+                var secondary = impact.OutgoingSecondaries[i];
+                if (secondary.Disposition ==
+                    BabtTransferModel.AggregateDisposition.LeavesAggregateSystem)
+                {
+                    ejectedArmorMass += secondary.MassKg;
+                }
+                else if (secondary.Disposition ==
+                         BabtTransferModel.AggregateDisposition.Unknown)
+                {
+                    outgoingInventoryComplete = false;
+                }
+            }
+
+            var perforated = impact.Outcome == BabtTransferModel.Outcome.Pierce;
+            return new BabtConstructionResolver.ResolvedImpactDamage
+            {
+                Perforated = perforated,
+                HoleAreaM2 = perforated ? contact.NominalImpactAreaM2 : 0.0,
+                // Width/height live in the construction resolver. Let that one
+                // source derive 1-A_hole/(W H) rather than duplicating geometry here.
+                CoherentFractionsKnown = false,
+                LocalStateResolved = true,
+                FaceRetainedThicknessFraction = impact.FaceWearFraction,
+                BackingRetainedThicknessFraction = impact.BackingWearFraction,
+                BrittleFaceFailed = perforated && contact.HasBarrier &&
+                    string.Equals(contact.WornBarrier.Class, BallisticLimit.Brittle,
+                        StringComparison.Ordinal),
+                OutgoingInventoryComplete = outgoingInventoryComplete,
+                KnownOutgoingEjectedMassKg = ejectedArmorMass,
+                RetainedProjectileMassKg = retainedMass,
+                Provenance = contact.Provenance + "; post-impact coherence derived from " +
+                             (perforated ? "the resolved hole area" : "a non-perforating event") +
+                             "; retained-thickness fractions are the already sampled local face/backing wear; " +
+                             "projectile retention is m_in-m_out; only armor ejecta proven to leave the " +
+                             "aggregate is removed from participating mass",
+            };
+        }
+
+        /// <summary>
+        /// Replays EFT's armor ordering read-only to prove the decision ledger and to
+        /// retain skipped broken/support components in their physical order. Components
+        /// which EFT does not ask to decide penetration are mechanical support only and
+        /// never receive a second projectile debit.
+        /// </summary>
+        private static bool TryResolveBabtAssembly(Player victim,
+            EBodyPartColliderType colliderType, EArmorPlateCollider plateCollider,
+            BabtHitContext.ArmorContactResult[] contacts,
+            out string rootTemplateId,
+            out BabtConstructionResolver.ResolvedImpactDamage rootDamage,
+            out List<BabtConstructionResolver.SupportingComponent> supports,
+            out string diagnostic)
+        {
+            rootTemplateId = null;
+            rootDamage = null;
+            supports = null;
+            if (victim == null || contacts == null || contacts.Length == 0)
+            {
+                diagnostic = "victim or resolved armor-contact chain is missing";
+                return false;
+            }
+
+            var worn = new List<ArmorComponent>();
+            victim.Inventory.GetPutOnArmorsNonAlloc(worn);
+            var matching = new List<ArmorComponent>();
+            for (var i = 0; i < worn.Count; i++)
+            {
+                var component = worn[i];
+                if (component != null && component.ShotMatches(colliderType, plateCollider))
+                {
+                    matching.Add(component);
+                }
+            }
+
+            var rootIndex = -1;
+            for (var i = 0; i < matching.Count; i++)
+            {
+                if (ReferenceEquals(matching[i], contacts[0].Armor))
+                {
+                    rootIndex = i;
+                    break;
+                }
+            }
+            if (rootIndex < 0)
+            {
+                diagnostic = "the first resolved ArmorComponent is no longer in the matching worn assembly";
+                return false;
+            }
+            if (rootIndex > 0)
+            {
+                diagnostic = "a skipped matching component precedes the first resolved armor contact; mechanical ordering is ambiguous";
+                return false;
+            }
+
+            rootTemplateId = contacts[0].ArmorTemplateId;
+            rootDamage = BabtDamageOf(contacts[0]);
+            supports = new List<BabtConstructionResolver.SupportingComponent>(
+                Math.Max(0, matching.Count - 1));
+
+            var stopped = contacts[contacts.Length - 1].Impact.Outcome ==
+                          BabtTransferModel.Outcome.Stop;
+            var nextContact = 1;
+            for (var i = rootIndex + 1; i < matching.Count; i++)
+            {
+                var component = matching[i];
+                if (nextContact < contacts.Length &&
+                    ReferenceEquals(component, contacts[nextContact].Armor))
+                {
+                    supports.Add(new BabtConstructionResolver.SupportingComponent
+                    {
+                        ArmorTemplateId = contacts[nextContact].ArmorTemplateId,
+                        Damage = BabtDamageOf(contacts[nextContact]),
+                    });
+                    nextContact++;
+                    continue;
+                }
+
+                if (component.Repairable.Durability > 0f &&
+                    (nextContact < contacts.Length || !stopped))
+                {
+                    diagnostic = "a live matching armor component was skipped by the resolved decision chain";
+                    return false;
+                }
+
+                // SetShotStatus skips destroyed components and all decisions following
+                // BlockedBy. Reuse the blocker's already-sampled wear roll at the same
+                // body-collider coordinate for this exact support. Zero durability is
+                // f=0 stiffness, while pristine physical mass remains in the assembly.
+                if (!TryEstimateSupportingWear(component,
+                        contacts[contacts.Length - 1], out var supportFaceWear,
+                        out var supportBackingWear, out var supportWearProvenance))
+                {
+                    diagnostic = "supporting armor local state: " + supportWearProvenance;
+                    return false;
+                }
+                supports.Add(new BabtConstructionResolver.SupportingComponent
+                {
+                    ArmorTemplateId = component.Item.TemplateId.ToString(),
+                    Damage = new BabtConstructionResolver.ResolvedImpactDamage
+                    {
+                        CoherentFractionsKnown = false,
+                        LocalStateResolved = true,
+                        FaceRetainedThicknessFraction = supportFaceWear,
+                        BackingRetainedThicknessFraction = supportBackingWear,
+                        OutgoingInventoryComplete = true,
+                        Provenance = supportWearProvenance + "; support-only component; no projectile debit",
+                    },
+                });
+            }
+
+            if (nextContact != contacts.Length)
+            {
+                diagnostic = "the worn assembly does not contain the complete resolved contact chain in order";
+                return false;
+            }
+
+            diagnostic = "resolved contact chain matches the ordered worn assembly";
+            return true;
+        }
+
+        private static bool TryEstimateSupportingWear(ArmorComponent armor,
+            BabtHitContext.ArmorContactResult referenceContact,
+            out double faceWear, out double backingWear, out string provenance)
+        {
+            faceWear = 0;
+            backingWear = 0;
+            var bpc = referenceContact?.HitBodyCollider as BodyPartCollider;
+            var cfg = AmmoDataCache.Armor;
+            if (armor?.Repairable == null || bpc == null || cfg == null)
+            {
+                provenance = "exact hit coordinate, support repair state or armor wear policy is unavailable";
+                return false;
+            }
+
+            var templateDurability = armor.Repairable.TemplateDurability;
+            if (!(templateDurability > 0f))
+            {
+                provenance = "support template durability is not positive";
+                return false;
+            }
+
+            var durabilityFraction = Mathf.Clamp01(
+                armor.Repairable.Durability / templateDurability);
+            if (durabilityFraction <= 0f)
+            {
+                faceWear = 0;
+                backingWear = 0;
+                provenance = "exact matching destroyed support at the blocker collider-local point; " +
+                             "retained thickness is zero while pristine rubble/material mass remains in the assembly";
+                return true;
+            }
+            var material = armor.Template.ArmorMaterial.ToString();
+            var profile = cfg.Profile(material);
+            var localPosition = new Vector3((float)referenceContact.LocalX,
+                (float)referenceContact.LocalY, (float)referenceContact.LocalZ);
+            var nearby = HitsNearby(armor, bpc, localPosition, profile);
+            var sharedWearRoll = Mathf.Clamp01((float)referenceContact.WearRoll);
+            faceWear = ArmorWear.WornFraction(nearby, 1f - durabilityFraction,
+                (float)profile.SpotDamageQ, (float)profile.WearExponentK,
+                sharedWearRoll);
+            backingWear = 1.0;
+
+            if (AmmoDataCache.TryBarrier(armor.Item.TemplateId.ToString(),
+                    out var supportBarrier) && supportBarrier.BackingMm > 0)
+            {
+                var backingMaterial = AmmoDataCache.BackingMaterialOf(
+                    armor.Item.TemplateId.ToString());
+                var backingProfile = cfg.Profile(backingMaterial);
+                backingWear = ArmorWear.WornFraction(nearby,
+                    1f - durabilityFraction,
+                    (float)backingProfile.SpotDamageQ,
+                    (float)backingProfile.WearExponentK,
+                    sharedWearRoll);
+            }
+
+            provenance = $"exact matching support at the blocker collider-local point; " +
+                         $"wear={faceWear:0.###}/{backingWear:0.###}, nearby={nearby}, " +
+                         $"durability={durabilityFraction:0.###}; reused blocker wear draw " +
+                         $"{sharedWearRoll:0.###} as a correlated deterministic estimate";
+            return true;
+        }
+
+        internal static string BabtBodyRegion(EBodyPartColliderType collider)
+        {
+            switch (collider)
+            {
+                case EBodyPartColliderType.HeadCommon:
+                case EBodyPartColliderType.ParietalHead:
+                case EBodyPartColliderType.BackHead:
+                case EBodyPartColliderType.Ears:
+                case EBodyPartColliderType.Eyes:
+                case EBodyPartColliderType.Jaw:
+                    return "Head";
+
+                case EBodyPartColliderType.RibcageUp:
+                case EBodyPartColliderType.RibcageLow:
+                case EBodyPartColliderType.RightSideChestUp:
+                case EBodyPartColliderType.LeftSideChestUp:
+                case EBodyPartColliderType.RightSideChestDown:
+                case EBodyPartColliderType.LeftSideChestDown:
+                case EBodyPartColliderType.SpineTop:
+                    return "Thorax";
+
+                case EBodyPartColliderType.Pelvis:
+                case EBodyPartColliderType.PelvisBack:
+                case EBodyPartColliderType.SpineDown:
+                    return "Abdomen";
+
+                case EBodyPartColliderType.NeckFront:
+                case EBodyPartColliderType.NeckBack:
+                    return "Neck";
+
+                case EBodyPartColliderType.LeftUpperArm:
+                case EBodyPartColliderType.LeftForearm:
+                case EBodyPartColliderType.RightUpperArm:
+                case EBodyPartColliderType.RightForearm:
+                case EBodyPartColliderType.LeftThigh:
+                case EBodyPartColliderType.LeftCalf:
+                case EBodyPartColliderType.RightThigh:
+                case EBodyPartColliderType.RightCalf:
+                    return "Limb";
+
+                default:
+                    return "Unknown";
+            }
+        }
         private static void ApplyBabt(ArmorComponent armor, ref DamageInfo damageInfo)
         {
             if (!PlateClientConfig.BabtEnabled.Value)
@@ -1920,7 +3324,7 @@ namespace PLATE.Client.Patches
         }
 
         private static void ApplyBabtEffects(Player victim, EBodyPartColliderType collider,
-            float bc, float bc1, float bc2)
+            float bc, float bc1, float bc2, bool deduplicateLegacyVolley = true)
         {
             var ahc = victim?.ActiveHealthController;
             if (ahc == null)
@@ -1930,13 +3334,17 @@ namespace PLATE.Client.Patches
 
             // per-volley dedup: 8 blocked pellets in one frame = a single effects bundle
             // (the "bruise" damage still applies per pellet — that is the total contusion)
-            if (Time.frameCount == _babtFxFrame && ReferenceEquals(victim, _babtFxVictim))
+            if (deduplicateLegacyVolley && Time.frameCount == _babtFxFrame &&
+                ReferenceEquals(victim, _babtFxVictim))
             {
                 return;
             }
 
-            _babtFxFrame = Time.frameCount;
-            _babtFxVictim = victim;
+            if (deduplicateLegacyVolley)
+            {
+                _babtFxFrame = Time.frameCount;
+                _babtFxVictim = victim;
+            }
 
             // always: pain + a short concussion ("something slammed into the plate")
             Blood.EffectUtil.Add(ahc, PatchTargets.PainEffect, EBodyPart.Chest, 12f, 1f);
