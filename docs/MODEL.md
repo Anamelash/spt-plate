@@ -2166,7 +2166,7 @@ The book can also carry a published **propellant charge**, `ChargeG` — seven c
 for now (7N6, M855, M193, 57-N-231, M80, 57-N-323S, 57-N-181S). Nothing in this mod
 reads it. It goes out with the per-cartridge data as `Mc`, beside `Ml`, the card's mass
 before a mass override — what actually leaves the muzzle, sabot included — for a recoil
-model that needs the whole of what the shot throws out (E.F.E.); the wound has no use
+model that needs the whole of what the shot throws out; the wound has no use
 for either.
 
 For cartridges the book does not name — modded ammunition, mostly — `X` is inferred

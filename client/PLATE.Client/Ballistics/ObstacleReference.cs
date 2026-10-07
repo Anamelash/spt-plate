@@ -1445,8 +1445,8 @@ namespace PLATE.Client.Ballistics
     // shipped scene put 95% of MetalThin instances on level 4 — the level separates
     // nothing, so it cannot carry a ladder.
     //
-    // The overrides are the campaign's yield (see .claude/docs/OBSTACLE-PROP-SURVEY.md;
-    // every keyword was validated against all 18k collider names). ORDER MATTERS —
+    // The overrides are the yield of a survey of every shipped scene (each
+    // keyword was validated against all 18k collider names). ORDER MATTERS —
     // first match wins — and 'gunsafe' must precede 'container' because it contains it
     // as a substring (scontainer_gunsafe_tall).
     // DoorLeaf skins: 1 mm sheet cannot carry itself as a slab, so a door of it is
@@ -2090,8 +2090,8 @@ namespace PLATE.Client.Ballistics
   //     solid by name; MetalThin at 1.0 mm with gunsafe/chainfence/container rules;
   //     new Sand, Upholstery, ContainerSteel, GunSafe, Machinery, GlassBlock,
   //     ArmoredGlass; sandbags, curbs, masonry, firewood, glass blocks and BSG's
-  //     None-typos all routed to what they are. Full evidence:
-  //     .claude/docs/OBSTACLE-PROP-SURVEY.md.
+  //     None-typos all routed to what they are, each keyword checked against the
+  //     names of every collider in the shipped scenes.
   // 6 — Wood has its own ricochet class (15 deg — one Soft class shared with soil
   //     was why tables mirrored P90 fire), and bare Fabric_MedPen/_HiPen colliders
   //     read the designer's density flag as padding.

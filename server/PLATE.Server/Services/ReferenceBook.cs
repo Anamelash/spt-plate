@@ -998,7 +998,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // figures only (7N6 1.45 g, 57-N-231 1.6 g, 57-N-323S 3.1 g, 57-N-181S 0.25 g
           // from the Russian ammunition literature; M855 ~25 gr, M193 ~28.5 gr, M80 ~46 gr
           // of ball powder); every other round falls back to its muzzle energy over the
-          // specific energy of a charge, which the reader (E.F.E.) does itself.
+          // specific energy of a charge, which the reader does itself.
           "Bullets": {
             // --- 5.45x39. Core masses: ru.wikipedia, sourced to the GRAU indices;
             // core diameters and hardness: Adept Armor threat survey, except the PS,

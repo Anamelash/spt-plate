@@ -18,9 +18,9 @@ the result.
 The mod is limited to ballistics, armor and trauma. It does not alter AI,
 spawns, quests, progression, loot or graphics.
 
-**Current release:** P.L.A.T.E. 1.5.0
+**Current release:** P.L.A.T.E. 1.5.1
 
-**Supported game:** SPT 4.1.x, including 4.1.3 / EFT 0.16.9.40087
+**Supported game:** SPT 4.1.x, including 4.1.5 / EFT 0.16.9.40087
 
 [Download the latest release](https://github.com/Anamelash/spt-plate/releases/latest) ·
 [Discord — questions, feedback and ideas](https://discord.gg/w2DpURxtrf) ·
@@ -42,7 +42,7 @@ spawns, quests, progression, loot or graphics.
 Prebuilt packages are available from
 **[GitHub Releases](https://github.com/Anamelash/spt-plate/releases)**. Use the
 [latest release](https://github.com/Anamelash/spt-plate/releases/latest) with
-SPT 4.1.x, including 4.1.3. For SPT 4.0.13, install
+SPT 4.1.x, including 4.1.5. For SPT 4.0.13, install
 [P.L.A.T.E. 0.11.0](https://github.com/Anamelash/spt-plate/releases/tag/v0.11.0).
 That backport has the features of 1.3.2. The cover and obstacle model added in
 1.4.0 has not yet been backported.
@@ -250,8 +250,8 @@ For a complete player-facing comparison, see
 
 | Component | Required version |
 |---|---|
-| P.L.A.T.E. | 1.5.0 |
-| SPT | 4.1.x, including 4.1.3 |
+| P.L.A.T.E. | 1.5.1 |
+| SPT | 4.1.x, including 4.1.5 |
 | EFT client | 0.16.9.40087 |
 | .NET SDK | 10, only when building from source |
 
@@ -266,7 +266,7 @@ P.L.A.T.E. releases follow the SPT compatibility split below:
 |---|---|
 | 0.x, the backport line | SPT 4.0.13 (`~4.0.0`) |
 | 1.0.0 to 1.3.0 | SPT 4.1.0 to 4.1.2 |
-| 1.3.1 and newer | SPT 4.1.x (`~4.1.0`), including 4.1.3 |
+| 1.3.1 and newer | SPT 4.1.x (`~4.1.0`), including 4.1.5 |
 
 On SPT 4.1.3, use P.L.A.T.E. 1.3.1 or newer. Earlier builds register their
 items too late for that server version and cannot start it.

@@ -255,10 +255,10 @@ the projectile has to defeat it with specific energy:
   plates in.
 - **A lighter backpack does not make thinner plates.** A plate the mod has no
   product or class figures for takes its thickness from its own mass. Mods that ease
-  carrying rescale the weight of every item, and a halved weight used to read as half
-  the steel or ceramic. The mod now reads how far the install has rescaled weights off
-  one vanilla item whose weight is known (the Makarov pistol) and takes the plate's
-  card weight back to its real mass first.
+  carrying rescale the weight of every item, and a halved weight read at face value
+  would be half the steel or ceramic. The mod reads how far the install has rescaled
+  weights off one vanilla item whose weight is known (the Makarov pistol) and takes the
+  plate's card weight back to its real mass first.
 - **Armor hits still hurt.** The Simple BABT path uses the established Sturdivan
   Blunt Criterion approximation for a projectile the armor stopped:
   assumed energy through the panel produces pain, internal bleeding and winded
@@ -684,15 +684,31 @@ the material's own figures wherever it names things differently — it will not
 break, but an object nobody has looked at is priced as the average of its kind
 rather than as itself.
 
-Physical recoil lives in a mod of its own, **E.F.E.** (Escape From Ergonomics), which
-works with or without PLATE. Installed together, it reads two figures per cartridge
-from this server's `/plate/ammo-data`: the mass that actually leaves the muzzle (a
-sabot round with its sabot) and the published powder charge, which
-`ammo-reference.jsonc` now carries for seven cartridges as `ChargeG`. PLATE itself does
-not use either, and the two mods patch nothing in common. The book moves to version 23
-for it and is rewritten once, with your previous copy kept beside it as `.v22.bak`.
+The server's `/plate/ammo-data` route also publishes two figures per cartridge for
+other mods to read: the mass that actually leaves the muzzle (a sabot round with its
+sabot) and the published powder charge, which `ammo-reference.jsonc` carries for seven
+cartridges as `ChargeG`. PLATE itself does not use either.
 
 ## Release history
+
+### 1.5.1
+
+A maintenance release. Ballistics, armor and trauma behave as in 1.5.0, with one
+fix for installs that rescale item weights.
+
+- **A lighter backpack no longer makes thinner plates.** Plates the book has no
+  product or class figures for take their thickness from their own mass, and that
+  mass was read straight off the item card. Mods that ease carrying rescale every
+  card, so a weight multiplier of 0.5 gave every such plate half its steel or
+  ceramic. The server now measures the rescale against the vanilla Makarov pistol
+  and takes the plate back to its real mass before deriving thickness. Installs
+  without a weight mod see no change.
+- **The ammunition reference book moves to version 23.** It adds the published
+  powder charge (`ChargeG`) for 7N6, M855, M193, 57-N-231, M80, 57-N-323S and
+  57-N-181S, and `/plate/ammo-data` now also sends each cartridge's launch mass and
+  charge for other mods to read. PLATE itself does not use them. Your
+  `ammo-reference.jsonc` is rewritten once on the first server start, and the
+  previous copy is kept beside it as `.v22.bak`.
 
 ### 1.5.0
 
