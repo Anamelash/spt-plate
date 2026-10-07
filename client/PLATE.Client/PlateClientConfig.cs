@@ -253,8 +253,15 @@ namespace PLATE.Client
         /// </summary>
         public static ConfigFile Source => _cfg;
 
-        /// <summary>Bump on every change to an existing setting's default.</summary>
-        private const int CurrentConfigVersion = 11;
+        /// <summary>
+        /// Bump on every change to an existing setting's default.
+        ///
+        /// 12 to 22 were the migrations of a recoil module that was developed here and
+        /// moved to a mod of its own before it was ever released. The number stays: a
+        /// config that already reached 22 must not run 2 to 11 again, and the next
+        /// migration here is 23.
+        /// </summary>
+        private const int CurrentConfigVersion = 22;
 
         /// <summary>Shown on a key that only exists to be read once by a migration.</summary>
         private const string RetiredNote =
