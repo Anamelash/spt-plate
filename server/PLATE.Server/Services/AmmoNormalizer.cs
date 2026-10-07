@@ -77,6 +77,16 @@ public class AmmoNormalizer(
         /// </summary>
         public double LengthMm;
 
+        /// <summary>
+        /// What leaves the muzzle for recoil, g: the card's mass before a book override
+        /// swapped it for the penetrator alone (a sabot still pushes its sabot). 0 = no
+        /// override happened, the mass the rest of the pipeline uses is the one.
+        /// </summary>
+        public double LaunchMassG;
+
+        /// <summary>Published propellant mass, g; 0 = not published.</summary>
+        public double ChargeG;
+
         public readonly List<string> Notes = new();
     }
 
@@ -167,6 +177,9 @@ public class AmmoNormalizer(
                     r.CoreHardnessHv = bf.CoreHardnessHv;
                 }
 
+                // propellant, for recoil; 0 = not published
+                r.ChargeG = bf.ChargeG;
+
                 // A measured length beats the mass-over-calibre inference, which reads a
                 // steel-cored bullet short because it assumes lead. Nothing here is
                 // rewritten on the item — the game has no field for it — it travels to
@@ -182,6 +195,7 @@ public class AmmoNormalizer(
                 // on the mass
                 if (bf.MassG > 0)
                 {
+                    r.LaunchMassG = r.P.BulletMassGram ?? 0;
                     r.Notes.Add($"mass {r.P.BulletMassGram:0.##} -> {bf.MassG:0.##} g (book)");
                     r.P.BulletMassGram = bf.MassG;
                 }
@@ -639,6 +653,13 @@ public class AmmoNormalizer(
                 // measured bullet length, mm; 0 (or absent, for an older server) means
                 // the client infers it exactly as the server just did
                 L = Math.Round(r.LengthMm, 2),
+
+                // for recoil: what the muzzle launches (the card mass, not a book's
+                // penetrator-only override) and the published charge, 0 = unknown. Nothing
+                // in this mod reads them: they are a public contract for E.F.E., which takes
+                // them over this route when both mods are installed
+                Ml = Math.Round(r.LaunchMassG > 0 ? r.LaunchMassG : r.MassG, 3),
+                Mc = Math.Round(r.ChargeG, 3),
             });
         data["__wound"] = new
         {

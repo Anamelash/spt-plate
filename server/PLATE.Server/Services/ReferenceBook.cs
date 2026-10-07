@@ -93,6 +93,15 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
         /// </summary>
         public double LengthMm { get; set; }
 
+        /// <summary>
+        /// Propellant mass, g, where one is published. Recoil needs it: the gas leaves the
+        /// muzzle at about one and a half times the bullet's speed and carries a quarter to
+        /// two fifths of the shot's momentum. 0 = not published; a reader then works it
+        /// out from the muzzle energy. Nothing in this mod reads it: it goes out as `Mc` in
+        /// /plate/ammo-data, for E.F.E.'s recoil.
+        /// </summary>
+        public double ChargeG { get; set; }
+
         public string Source { get; set; } = "";
     }
 
@@ -984,12 +993,18 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           // Only rounds with a length somebody actually published carry the field; the
           // rest stay inferred, on purpose, because a made-up length is worse than an
           // openly approximate one.
+          // ChargeG is the propellant mass in grams, for recoil: the gas leaves the muzzle
+          // too, and its momentum is a quarter to two fifths of the shot's. Published
+          // figures only (7N6 1.45 g, 57-N-231 1.6 g, 57-N-323S 3.1 g, 57-N-181S 0.25 g
+          // from the Russian ammunition literature; M855 ~25 gr, M193 ~28.5 gr, M80 ~46 gr
+          // of ball powder); every other round falls back to its muzzle energy over the
+          // specific energy of a charge, which the reader (E.F.E.) does itself.
           "Bullets": {
             // --- 5.45x39. Core masses: ru.wikipedia, sourced to the GRAU indices;
             // core diameters and hardness: Adept Armor threat survey, except the PS,
             // which is the one round in the calibre where the survey and the Russian
             // sources describe different cartridges - see its own Source line ---
-            "patron_545x39_PS":   { "Prototype": "7N6M PS",       "X": 0.25, "CoreAreaFrac": 0.51, "CoreMassFrac": 0.42, "CoreHardnessHv": 697, "LengthMm": 24.8,
+            "patron_545x39_PS":   { "Prototype": "7N6M PS",       "X": 0.25, "ChargeG": 1.45, "CoreAreaFrac": 0.51, "CoreMassFrac": 0.42, "CoreHardnessHv": 697, "LengthMm": 24.8,
                                     "Source": "core 1.43 g of Steel 65G in a 3.4 g bullet, 4.0 mm, 60 HRC. Bullet length 24.8 mm, the figure the Russian ammunition literature gives for the 7N6 bullet and the one the channel geometry has been quoting as its known miss - the mass-over-calibre inference reads it 20.4, because the core is steel and not lead. The 1987 modernisation changed the core steel and its heat treatment without changing the bullet, the marking or the index, so 7N6 names both this and the untreated Steel 10 original it replaced - which has not been produced since. The survey that reads this core at 40-45 HRC gives no year for its sample, and 40-45 HRC is what the literature gives for that original" },
             "patron_545x39_PP":   { "Prototype": "7N10 PP",       "X": 0.15, "CoreAreaFrac": 0.532, "CoreMassFrac": 0.478, "CoreHardnessHv": 697,
                                     "Source": "core 1.72-1.80 g of Steel 70/75 in a 3.62-3.74 g bullet, 4.1 mm, 60 HRC" },
@@ -1011,7 +1026,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
                                     "Source": "heavy subsonic on a blunt VK8 core; too slow to do anything with it" },
 
             // --- 5.56x45 ---
-            "patron_556x45_M855":     { "Prototype": "M855 / SS109", "X": 0.25, "CoreAreaFrac": 1.0, "CoreMassFrac": 0.162, "CoreHardnessHv": 410, "LengthMm": 23.0,
+            "patron_556x45_M855":     { "Prototype": "M855 / SS109", "X": 0.25, "ChargeG": 1.62, "CoreAreaFrac": 1.0, "CoreMassFrac": 0.162, "CoreHardnessHv": 410, "LengthMm": 23.0,
                                         "Source": "10 gr steel tip over a 32 gr lead rear in a 62 gr bullet, 4.6 mm, 40-45 HRC - the tip is not hard enough to hold its shape, so the area fraction stays 1. It still arrives on the far side as 0.65 g of steel. Bullet length 23.0 mm (0.906 in), the SS109 drawing; the inference lands on the same number, which is what a mostly-lead bullet is supposed to do" },
             "patron_556x45_M855A1":   { "Prototype": "M855A1 EPR",   "X": 0.10, "CoreAreaFrac": 0.569, "CoreMassFrac": 0.306, "CoreHardnessHv": 670,
                                         "Source": "19 gr exposed hardened steel over a copper slug, 4.3 mm, 58-60 HRC - the same 62 gr as the M855 and a different weapon against steel" },
@@ -1022,7 +1037,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "patron_556x45_ssa_ap":   { "Prototype": "SSA AP",       "X": 0.05,
                                         "Source": "same mass and velocity as the M995 in the game; nobody publishes a construction for it" },
             "patron_556x45_M856":     { "Prototype": "M856 tracer",  "X": 0.25 },
-            "patron_556x45_55_FMJ":   { "Prototype": "M193",         "X": 0.30 },
+            "patron_556x45_55_FMJ":   { "Prototype": "M193",         "X": 0.30, "ChargeG": 1.85 },
             "patron_556x45_55_HP":    { "Prototype": "55 gr HP",     "X": 0.90 },
             "patron_556x45_mk_318_mod_0": { "Prototype": "Mk318 SOST", "X": 0.60,
                                         "Source": "open-tip barrier round: a lead front over a solid copper rear, meant to upset without coming apart" },
@@ -1030,7 +1045,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "patron_556x45_varmageddon":  { "Prototype": "Varmageddon", "X": 0.95 },
 
             // --- 7.62x39 ---
-            "patron_762x39_PS":     { "Prototype": "57-N-231 PS",  "X": 0.25, "CoreAreaFrac": 0.50, "CoreMassFrac": 0.468, "CoreHardnessHv": 697, "LengthMm": 26.8,
+            "patron_762x39_PS":     { "Prototype": "57-N-231 PS",  "X": 0.25, "ChargeG": 1.60, "CoreAreaFrac": 0.50, "CoreMassFrac": 0.468, "CoreHardnessHv": 697, "LengthMm": 26.8,
                                       "Source": "core 55-60 gr of 65G/70/75 spring steel in a 7.9 g bullet, 5.6 mm, heat-treated. Bullet length 26.8 mm, the figure the Russian ammunition literature gives for the 57-N-231 bullet, against 23.5 inferred - the steel core again. The 1989 modernisation changed the core steel and its heat treatment without changing the index - the same story as the 5.45 PS, and the penetration moved with it: a helmet at 1000 m rather than 900, a fragmentation vest at 700 rather than 600, and a rifle-rated vest at 100 m, which the mild core could not do at any range. The geometry is the survey's and is not in dispute; its 35-45 HRC is, and is what the literature gives for the pre-1989 steel 10 it evidently sampled" },
             "patron_762x39_BP":     { "Prototype": "7N23 BP",      "X": 0.07, "CoreAreaFrac": 0.399, "CoreMassFrac": 0.492, "CoreHardnessHv": 697,
                                       "Source": "60 gr hardened core, 5.0 mm, 60 HRC, in the same 123 gr bullet as the PS" },
@@ -1044,7 +1059,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "patron_762x39_US":     { "Prototype": "57-N-231U US", "X": 0.25 },
 
             // --- 7.62x51 ---
-            "patron_762x51_M80":    { "Prototype": "M80 ball",     "X": 0.25, "LengthMm": 28.9,
+            "patron_762x51_M80":    { "Prototype": "M80 ball",     "X": 0.25, "ChargeG": 2.95, "LengthMm": 28.9,
                                       "Source": "147 gr of lead alloy in a jacket; one piece of metal. Bullet length 28.9 mm (1.138 in), the M80 drawing; the inference gives 28.8, which is the calibration anchor the geometry was checked against in the first place" },
             "patron_762x51_m80a1":  { "Prototype": "M80A1 EPR",    "X": 0.12, "CoreAreaFrac": 0.491, "CoreMassFrac": 0.347, "CoreHardnessHv": 550,
                                       "Source": "45 gr hardened steel tip over a copper slug, 5.5 mm, 50-55 HRC, in a 130 gr bullet" },
@@ -1058,7 +1073,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "patron_762x51_ultra_nosler": { "Prototype": "Nosler Ballistic Tip", "X": 0.90 },
 
             // --- 7.62x54R ---
-            "patron_762x54R_LPS_Gzh": { "Prototype": "57-N-323S LPS", "X": 0.25,
+            "patron_762x54R_LPS_Gzh": { "Prototype": "57-N-323S LPS", "X": 0.25, "ChargeG": 3.10,
                                         "Source": "mild steel core; a lead substitute, no hard element" },
             "patron_762x54R_7N1":     { "Prototype": "7N1 sniper",    "X": 0.30,
                                         "Source": "steel nose and lead base with an air cavity at the tip - an open tip that is not there to expand" },
@@ -1119,7 +1134,7 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
             "patron_9x39_fmj":  { "Prototype": "9x39 FMJ", "X": 0.30 },
 
             // --- 9x18 PM ---
-            "patron_9x18pm_PST_gzh":  { "Prototype": "57-N-181S PST", "X": 0.30 },
+            "patron_9x18pm_PST_gzh":  { "Prototype": "57-N-181S PST", "X": 0.30, "ChargeG": 0.25 },
             "patron_9x18pm_PBM":      { "Prototype": "PBM 7N25",      "X": 0.15,
                                         "Source": "hardened steel core in a light bullet driven fast; core figures not published" },
             "patron_9x18pm_PMM":      { "Prototype": "PMM 57-N-181SM","X": 0.25 },
@@ -2481,7 +2496,8 @@ public class ReferenceBook(ISptLogger<ReferenceBook> logger)
           //    instead of copying six incomplete product profiles. Material mechanics
           //    and provisional thorax/abdomen impedance reductions gained explicit
           //    Estimated provenance; penetration thicknesses and strengths are unchanged
-          "Version": 22
+          // 23: ChargeG, the propellant mass of the rounds that publish one, for recoil
+          "Version": 23
         }
         """;
 }

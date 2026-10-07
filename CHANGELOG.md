@@ -684,6 +684,14 @@ the material's own figures wherever it names things differently — it will not
 break, but an object nobody has looked at is priced as the average of its kind
 rather than as itself.
 
+Physical recoil lives in a mod of its own, **E.F.E.** (Escape From Ergonomics), which
+works with or without PLATE. Installed together, it reads two figures per cartridge
+from this server's `/plate/ammo-data`: the mass that actually leaves the muzzle (a
+sabot round with its sabot) and the published powder charge, which
+`ammo-reference.jsonc` now carries for seven cartridges as `ChargeG`. PLATE itself does
+not use either, and the two mods patch nothing in common. The book moves to version 23
+for it and is rewritten once, with your previous copy kept beside it as `.v22.bak`.
+
 ## Release history
 
 ### 1.5.0

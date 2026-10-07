@@ -2162,6 +2162,13 @@ penetrator reaches describes something that never arrives — and it shows up as
 energy the case cannot deliver. The mass that belongs there follows from the two
 figures that do hold: the calibre's own service energy and the stated velocity.
 
+The book can also carry a published **propellant charge**, `ChargeG` — seven cartridges
+for now (7N6, M855, M193, 57-N-231, M80, 57-N-323S, 57-N-181S). Nothing in this mod
+reads it. It goes out with the per-cartridge data as `Mc`, beside `Ml`, the card's mass
+before a mass override — what actually leaves the muzzle, sabot included — for a recoil
+model that needs the whole of what the shot throws out (E.F.E.); the wound has no use
+for either.
+
 For cartridges the book does not name — modded ammunition, mostly — `X` is inferred
 as a percentile blend within the caliber cohort (specific damage positive, specific
 penetration negative; the vanilla fragmentation chance used to be a third component

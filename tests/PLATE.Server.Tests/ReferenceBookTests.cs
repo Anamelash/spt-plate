@@ -937,6 +937,44 @@ public class ReferenceBookTests
         }
     }
 
+    /// <summary>
+    /// The published charges E.F.E.'s recoil reads through /plate/ammo-data. E.F.E. keeps the
+    /// same figures as its fallback without this server, and its own tests pin them to the
+    /// same numbers.
+    /// </summary>
+    [Theory]
+    [InlineData("patron_545x39_PS", 1.45)]
+    [InlineData("patron_556x45_M855", 1.62)]
+    [InlineData("patron_556x45_55_FMJ", 1.85)]
+    [InlineData("patron_762x39_PS", 1.60)]
+    [InlineData("patron_762x51_M80", 2.95)]
+    [InlineData("patron_762x54R_LPS_Gzh", 3.10)]
+    [InlineData("patron_9x18pm_PST_gzh", 0.25)]
+    public void The_published_charges_are_in_the_book(string key, double chargeG)
+    {
+        Assert.True(Shipped().Bullets.TryGetValue(key, out var b), $"{key} is not in the book");
+        Assert.Equal(chargeG, b!.ChargeG, 3);
+    }
+
+    /// <summary>A charge is a fraction of a gram to a few grams; anything else is a typo.</summary>
+    [Fact]
+    public void Every_published_charge_is_a_charge()
+    {
+        var count = 0;
+        foreach (var (name, b) in Shipped().Bullets)
+        {
+            if (b.ChargeG <= 0)
+            {
+                continue;
+            }
+
+            count++;
+            Assert.InRange(b.ChargeG, 0.1, 20.0);
+        }
+
+        Assert.Equal(7, count);
+    }
+
     [Fact]
     public void Integral_barrel_weapons_have_plausible_lengths()
     {
