@@ -712,6 +712,23 @@ a helmet — so the reference book marks it a plate and its rating stands.
 
 ### The class threshold, for armor with no construction on file
 
+Before that, a plate the book names neither as a product nor by class still gets a
+construction from its own mass when it has one: the hard element is
+
+```
+t = m · f_hard / (ρ · A)
+```
+
+with `f_hard` and `ρ` the material's hard mass fraction and density from the book and
+`A` the face of a standard plate size picked by the inventory footprint (152 × 152 mm,
+203 × 152, 254 × 254, 254 × 318 — the grid is the only size the game carries). The card
+weight is taken back to a mass first. Mods that ease carrying rescale every card in the
+database, and a weight multiplier of 0.5 would thin every such plate by half; the
+Makarov pistol's card (0.333 kg in the base game, without its magazine) stands as an
+anchor, `s = card now / 0.333`, and `m = card / s` (`MassAnchor`). A missing or
+weightless anchor says nothing and `s = 1`. This is the one place the model reads a
+card weight.
+
 An item the reference book cannot resolve — an invented plate, a mod's own — still
 falls back to a specific energy against its class (`ClassULimit` is the table
 above, indexed by the class itself, 0..6):

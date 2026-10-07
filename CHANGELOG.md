@@ -253,6 +253,12 @@ the projectile has to defeat it with specific energy:
   full-power rifle stops, 5–10 intermediate, 10–20 pistol — the same windows
   ESAPI's three-shots-per-threat protocol and destructive tests put real
   plates in.
+- **A lighter backpack does not make thinner plates.** A plate the mod has no
+  product or class figures for takes its thickness from its own mass. Mods that ease
+  carrying rescale the weight of every item, and a halved weight used to read as half
+  the steel or ceramic. The mod now reads how far the install has rescaled weights off
+  one vanilla item whose weight is known (the Makarov pistol) and takes the plate's
+  card weight back to its real mass first.
 - **Armor hits still hurt.** The Simple BABT path uses the established Sturdivan
   Blunt Criterion approximation for a projectile the armor stopped:
   assumed energy through the panel produces pain, internal bleeding and winded

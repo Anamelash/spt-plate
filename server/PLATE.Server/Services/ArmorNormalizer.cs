@@ -195,6 +195,11 @@ public class ArmorNormalizer(
             return;
         }
 
+        // what a card weight is worth here: another mod may have rescaled every card
+        var massScale = items.TryGetValue(MassAnchor.GearTpl, out var anchor)
+            ? MassAnchor.Scale(anchor.Properties?.Weight ?? 0, MassAnchor.GearKg)
+            : 1;
+
         var known = new Dictionary<string, Row>();
         var unknown = new Dictionary<string, Row>();
 
@@ -301,7 +306,7 @@ public class ArmorNormalizer(
                 ? ClassReference(reference, itemName, material, cls)
                 : null;
             var derived = spec == null && byClass == null
-                ? DeriveThickness(itemName, p, material, reference)
+                ? DeriveThickness(itemName, p, material, reference, massScale)
                 : 0;
 
             var target = spec != null || byClass != null || derived > 0 ? known : unknown;
@@ -355,7 +360,7 @@ public class ArmorNormalizer(
                 {
                     row.From = Origin.Mass;
                     row.ThicknessMm = derived;
-                    row.Source = $"{p.Weight ?? 0:N2} kg over a {p.Width}x{p.Height} face";
+                    row.Source = $"{MassAnchor.Real(p.Weight ?? 0, massScale):N2} kg over a {p.Width}x{p.Height} face";
                     _thickness[item.Id] = derived;
                 }
 
@@ -653,10 +658,12 @@ public class ArmorNormalizer(
     /// <summary>
     /// Thickness of the hard element from the plate's own mass: t = m·hardFraction /
     /// (ρ·A). Returns 0 when the item has no mass of its own — soft armour built into a
-    /// vest weighs nothing here, its mass lives on the vest.
+    /// vest weighs nothing here, its mass lives on the vest. The card weight is taken back
+    /// to a mass first (<see cref="MassAnchor"/>): a weight multiplier from another mod
+    /// would otherwise thin every plate that has no product behind it.
     /// </summary>
     private static double DeriveThickness(string itemName, TemplateItemProperties p,
-        string material, ReferenceBook.AmmoReference reference)
+        string material, ReferenceBook.AmmoReference reference, double massScale)
     {
         // plates only. The face-area convention is about plates, and a balaclava run
         // through it came out as 17 mm of polyethylene: its mass is fabric spread over
@@ -666,7 +673,7 @@ public class ArmorNormalizer(
             return 0;
         }
 
-        var kg = p.Weight ?? 0;
+        var kg = MassAnchor.Real(p.Weight ?? 0, massScale);
         if (kg <= 0 || !reference.ArmorMaterials.TryGetValue(material, out var m) ||
             m.DensityGCm3 <= 0)
         {
