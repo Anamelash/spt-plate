@@ -2,6 +2,8 @@
 
 # P.L.A.T.E. — мод на реалистичную баллистику, броню, урон и медицину для SPT
 
+![P.L.A.T.E. – мод на баллистику, броню и ранения для SPT (Escape From Tarkov)](assets/branding/PLATE-github-640x320.png)
+
 **P.L.A.T.E. (Penetration, Lethality, Armor & Trauma Engine)** — мод на
 баллистику, броню и ранения для **SPT (Single Player Tarkov)**. Урон, пробитие,
 переломы, кровотечения и кровопотеря в нём связаны в одну физическую модель.

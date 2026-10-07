@@ -2,6 +2,8 @@
 
 # P.L.A.T.E. — Realistic Combat, Ballistics, Armor and Trauma Mod for SPT
 
+![P.L.A.T.E. – ballistics, armor and trauma mod for SPT (Escape From Tarkov)](assets/branding/PLATE-github-640x320.png)
+
 **P.L.A.T.E. (Penetration, Lethality, Armor & Trauma Engine)** is a gameplay
 overhaul for **SPT (Single Player Tarkov)**. It replaces the vanilla damage,
 armor penetration, wound, fracture, bleeding and blood-loss systems with a
