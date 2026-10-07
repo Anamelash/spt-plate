@@ -40,23 +40,7 @@ public class BarrelNormalizer(
     /// <summary>One-line result for the startup summary; null if the module did not run.</summary>
     public string? Summary { get; private set; }
 
-    /// <summary>
-    /// Length in millimetres. The lookbehind is what keeps the caliber out of it: a
-    /// pack that writes "AR-15 5.56x45mm 11.5 inch barrel" offers "45mm" to anything
-    /// reading left to right, and a 45 mm AR-15 barrel is not a thing. The unit ends at
-    /// a letter rather than at a word boundary, because the base game writes
-    /// "barrel_ar15_260mm_556x45" and an underscore is a word character.
-    /// </summary>
-    private static readonly Regex Millimetres =
-        new(@"(?<![\dxх×.,])(\d{2,4}(?:[.,]\d+)?)\s*(?:mm|мм)(?![a-zA-Zа-яА-Я])",
-            RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-    /// <summary>Length in inches, as every American pack spells it.</summary>
-    private static readonly Regex Inches =
-        new(@"(?<![\dxх×.,])(\d{1,2}(?:[.,]\d+)?)\s*(?:inches|inch|in\b|""|″)",
-            RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-    private const double MmPerInch = 25.4;
+    // The length parser lives in BarrelLength, of which E.F.E. keeps a copy to read the same names for recoil.
 
     private sealed class Change
     {
@@ -655,29 +639,7 @@ public class BarrelNormalizer(
     /// rather than 165.1; a name with no unit at all answers with nothing, which leaves
     /// the item alone rather than guessing that "12.5 Carbine" means 12.5 of something.
     /// </summary>
-    public static double ParseLength(IEnumerable<string> texts)
-    {
-        foreach (var text in texts)
-        {
-            var mm = Millimetres.Match(text);
-            if (mm.Success && TryNumber(mm.Groups[1].Value, out var millimetres))
-            {
-                return millimetres;
-            }
-
-            var inch = Inches.Match(text);
-            if (inch.Success && TryNumber(inch.Groups[1].Value, out var inches))
-            {
-                return Math.Round(inches * MmPerInch, 1);
-            }
-        }
-
-        return 0;
-    }
-
-    /// <summary>A number as either half of the world writes it.</summary>
-    private static bool TryNumber(string text, out double value) =>
-        double.TryParse(text.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+    public static double ParseLength(IEnumerable<string> texts) => BarrelLength.Parse(texts);
 
     /// <summary>
     /// The item names as the player sees them. Read once: the locale table is lazy and
