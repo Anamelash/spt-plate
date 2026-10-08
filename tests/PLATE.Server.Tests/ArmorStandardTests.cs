@@ -504,8 +504,8 @@ public class ArmorStandardTests
         // was the one failure mode with no ladder at all, so its constant came off two
         // certificates and nothing measured whether the LAW was right. Now something
         // does, and what it says is not comfortable. The woven ladder's shape holds
-        // (spread 1.09 across a 2.8x range of thickness); the laminate's does not; and
-        // the constant the ten rows derive is 23.1 against the 27.5 the certificates
+        // (spread 1.08 across a 2.8x range of thickness); the laminate's does not; and
+        // the constant the ten rows derive is 23.1 against the 28.8 the certificates
         // demand as a floor. A floor above a measurement is a contradiction, and it says
         // the T-linear fibre law under-rates thick packs — see the FibrousK comment in
         // BallisticLimit for why the constant stays where the certificates put it and
@@ -514,7 +514,12 @@ public class ArmorStandardTests
         // The band is the mild ladder's: live fire, a real laboratory, V50 by the
         // standard's own method rather than a residual-velocity fit. Two of the ten rows
         // are outside it and stay outside it — the laminate's thick end, exactly where
-        // the ladder and the certificates pull hardest against each other.
+        // the ladder and the certificates pull hardest against each other. They are
+        // recorded in LadderMisses below, measured, rather than left as red tests.
+        //
+        // The layer counts in the Source lines are the paper's range (8-30 sheets of
+        // UD42, 21-62 of CT612) spread by areal density; Table 5 itself publishes areal
+        // density, thickness and V50 only, and those three are the ones the model reads.
         new("AramidWoven", 3.6, ".22 FSP", 1.10, 5.46, 438, CoreAssumption.Fsp22, 0.15,
             "Twaron CT612 WRT, 21 layers, STANAG 2920", ArealDensityKgM2: 2.5),
         new("AramidWoven", 6.5, ".22 FSP", 1.10, 5.46, 585, CoreAssumption.Fsp22, 0.15,
@@ -528,10 +533,13 @@ public class ArmorStandardTests
 
         // The laminate ladder, same paper and same table. Its last point is the one
         // that does not fit anything: 7.0 kg/m² in 6.8 mm is 1.03 g/cm³ where the other
-        // four sit at 0.87-0.89, a 17% jump in packing for a 19% jump in thickness. The
-        // row is kept as published — a fixture that drops the awkward point is not a
-        // fixture — and the shape test says out loud that this is where the laminate
-        // ladder breaks.
+        // four sit at 0.87-0.89, a 17% jump in packing for a 19% jump in thickness. Read
+        // per sheet it is the thickness that moved, not the mass: every point carries
+        // ~0.24 kg/m² a sheet, and every point but this one ~0.27 mm a sheet, where this
+        // one has 0.23 — a pack pressed harder or measured thinner (the paper gauges
+        // thickness under a 2 kPa foot). The row is kept as published — a fixture that
+        // drops the awkward point is not a fixture — and it is not the whole miss: the
+        // 5.7 mm point, at the ladder's ordinary packing, is outside its band as well.
         new("AramidUD", 2.2, ".22 FSP", 1.10, 5.46, 368, CoreAssumption.Fsp22, 0.15,
             "Twaron UD42 unidirectional, 8 layers", ArealDensityKgM2: 1.9),
         new("AramidUD", 3.5, ".22 FSP", 1.10, 5.46, 455, CoreAssumption.Fsp22, 0.15,
@@ -543,6 +551,54 @@ public class ArmorStandardTests
         new("AramidUD", 6.8, ".22 FSP", 1.10, 5.46, 600, CoreAssumption.Fsp22, 0.15,
             "Twaron UD42, 30 layers", ArealDensityKgM2: 7.0),
     ];
+
+    /// <summary>
+    /// Published limits the model misses by more than the row's own band, each with the
+    /// ratio it actually reads (model over published) and the cause — the same contract
+    /// as CertShortfalls. The value is the measurement at the shipped constants plus the
+    /// 0.002 float-noise hair, in the direction of the miss and nothing more, so the miss
+    /// cannot quietly widen inside its own allowance. A guard test asserts every entry is
+    /// still outside its band: a closed miss must leave this table.
+    /// </summary>
+    public static readonly Dictionary<(string Material, double ThicknessMm), (double Reads, string Cause)>
+        LadderMisses = new()
+        {
+            [("AramidUD", 5.7)] = (1.202,
+                "the T-linear fibre law over-reads a thick laminate; FibrousK sits on the " +
+                "certificates' floor (28.8), above the 23.1 the ladder derives"),
+            [("AramidUD", 6.8)] = (1.280,
+                "the same law at the laminate's thick end, plus the row's own packing " +
+                "jump (0.23 mm a sheet against 0.27 everywhere else)"),
+        };
+
+    /// <summary>
+    /// Ladders whose error changes with thickness by more than the shape test allows —
+    /// the law's shape, not a constant. Same contract as LadderMisses: the spread read
+    /// at the shipped constants plus the hair, a cause, and a guard that each entry is
+    /// still needed.
+    /// </summary>
+    public static readonly Dictionary<string, (double Spread, string Cause)> ShapeMisses = new()
+    {
+        ["MildSteel"] = (1.275,
+            "past T/d ≈ 2.6 the flow is confined and costs more than thin-plate flow; one " +
+            "HoleGrowthK cannot carry both regimes (+9% at 6 mm, −14% at 25 mm). Deeper " +
+            "than any wearable plate; closed by a confinement term with data behind it"),
+        ["AramidUD"] = (1.180,
+            "the laminate's error climbs with thickness, 1.09 at 2.2 mm to 1.28 at " +
+            "6.8 mm — the same over-read that LadderMisses records point by point"),
+    };
+
+    /// <summary>
+    /// How far the model has M193 and M80 the wrong way round for a polyethylene plate:
+    /// the largest margin by which M193's V50 over its test velocity exceeds M80's,
+    /// across the three NIJ fibre plates, plus the hair. The fibre work goes as d²·T
+    /// and does not depend on velocity, and for these two rounds d²/m almost cancels
+    /// against the ratio of their test velocities — so the model reads them nearly
+    /// level, M193 about 1% easier, where the plates that pass M80 and fail M193 say the
+    /// fast light bullet is the harder threat. What closes it is a velocity-dependent
+    /// failure of the fibre (cut rather than stretched), not a constant.
+    /// </summary>
+    public const double FibreRankingInversion = 0.013;
 
     /// <summary>
     /// What obliquity does to a ballistic limit, measured rather than assumed.

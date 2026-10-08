@@ -457,8 +457,8 @@ yield stress over its volume.
 for `K_h` hold at 5.6–6.4 from 4.7 to 16 mm and rise to 8.4–9.0 at 20–25 mm:
 past `T/d ≈ 2.6` the flow is *confined* — deep cavity expansion costs more than
 thin-plate flow — and one constant cannot carry both regimes. That is the mild
-shape test's remaining red, deeper than any wearable plate, closable by a
-confinement term with data behind it.
+shape test's recorded miss (a spread of 1.27 against the 1.15 a law is allowed),
+deeper than any wearable plate, closable by a confinement term with data behind it.
 
 Measured against the two ladders, model over published:
 
@@ -523,28 +523,39 @@ by volume and the pressed laminate at 0.61.
 
 What the ladder says:
 
-- The woven ladder's **shape holds**: the model tracks it to a spread of 1.09
+- The woven ladder's **shape holds**: the model tracks it to a spread of 1.08
   across 3.6–10 mm, which is the first evidence that `π·d²/4·T` is the right form
   for a pack at all.
-- The laminate ladder's shape **does not**: its error climbs from 1.06 at 2.2 mm to
-  1.25 at 6.8 mm. Part of that may be packing rather than thickness — its last
-  point is 17% denser than the rest of its own ladder — and a laminate ladder at
-  constant packing would separate the two.
-- The constant it derives is **23.1 against the 27.5 the certificates demand**.
+- The laminate ladder's shape **does not**: its error climbs from 1.09 at 2.2 mm to
+  1.28 at 6.8 mm. Part of that may be packing rather than thickness — its last
+  point is 17% denser than the rest of its own ladder, and per sheet it is the
+  thickness that moved (0.23 mm against 0.27 everywhere else, the mass per sheet
+  unchanged) — and a laminate ladder at constant packing would separate the two.
+  Not all of it, though: the 5.7 mm point sits at the ladder's ordinary packing
+  and misses as well.
+- The constant it derives is **23.1 against the 28.8 the certificates demand**.
   That direction is the finding. A certificate is one-sided — the plate stopped the
-  round, so the limit is *at least* the test velocity — so 27.5 is a floor, and a
+  round, so the limit is *at least* the test velocity — so 28.8 is a floor, and a
   floor sitting above a two-sided measurement means the model is short of work
   somewhere. Moving `FibrousK` onto the ladder was tried: it puts a dozen certified
   plates below their own test velocity, which is not a recalibration but a model
   claiming real armour does not work.
 
 So the constant stays where the certificates put it, the ladder rows carry the miss
-in the open (two of the ten are red), and what closes it is a thickness law that
-fits both — thin fragments and 21–33 mm bullet-rated plates — not a number chosen
-between them. The other half of the same evidence is that fibre still reads the
-small fast bullet and the big slow one in the wrong order (M193 against M80), which
-is about the `d²` area law rather than the thickness law, and which this ladder
-cannot settle because it is one projectile.
+in the open, and what closes it is a thickness law that fits both — thin fragments
+and 21–33 mm bullet-rated plates — not a number chosen between them. Two of the ten
+rows, the laminate at 5.7 and 6.8 mm, read 1.20 and 1.28 of the published limit
+against a band of 0.15; the tests record those readings and hold the model to them,
+so the miss can be closed but cannot quietly grow.
+
+The other half of the same evidence is that fibre still reads the small fast bullet
+and the big slow one in the wrong order (M193 against M80), about 1% the wrong way
+on every polyethylene plate. The work goes as `d²·T` with no velocity in it, and for
+these two rounds `d²/m` nearly cancels against the ratio of their test velocities,
+so the model reads them almost level where the plates that pass M80 and fail M193
+say the fast light bullet is the harder threat. That is about the area law and the
+missing velocity dependence of fibre failure rather than the thickness law, and
+this ladder cannot settle it because it is one projectile.
 
 **Obliquity, measured.** The `1/cos θ` path length is not a small assumption: for a
 plate that fails by plugging it says `v_bl` rises *exactly* as `sec θ`, that the
@@ -2555,6 +2566,24 @@ third, separate knob.
   aside instead of loading them — so this is an assumption inherited from the
   plate case rather than a result. What would close it: one soft package shot at
   0°, 30° and 45° with the same fragment.
+- **A fibre law that saturates with thickness.** Fibre work is linear in thickness,
+  which the woven aramid ladder bears out and the laminate one does not: past about
+  5 mm the laminate's measured limit grows more slowly than the law, and the model
+  reads it 20–28% high there. The constant cannot follow it down without putting
+  certified plates under their own test velocity, so it stays on the certificates
+  and the miss is recorded (see "The fibre mode"). What would close it: a thickness
+  law that fits both the fragment ladders and the bullet-rated plates.
+- **Fibre that is cut rather than stretched.** Above some impact velocity a fibre
+  fails in shear before the pack can take up the strain, which is why polyethylene
+  that holds M80 can lose to M193 at 990 m/s. The fibre work here has no velocity in
+  it, so the model reads those two rounds almost level, M193 about 1% easier. What
+  would close it: a V50 series for one polyethylene plate against bullets of one
+  calibre over a range of velocities.
+- **Confined flow in thick soft steel.** A ductile plate that flows rather than plugs
+  is priced by one hole-growth constant, and past a thickness of about 2.6 calibres
+  the flow is confined and costs more: mild steel at 20–25 mm reads 11–14% under its
+  published limits. No wearable plate flows, and none is that thick. What would close
+  it: a confinement term with data behind it.
 - **Ceramic telling a lead core from a hardened one.** The phenomenon is real —
   alumina shatters a lead bullet and loses to a 60 HRC core — but at 1500 HV a
   ceramic outranks every core in the game, so the hardness ratio pinned to its

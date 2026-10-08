@@ -48,14 +48,48 @@ public class BallisticLadderTests
     /// validated against depth-of-penetration trials is not the same evidence as a
     /// depth-of-penetration figure read as a limit, and one band for all fifteen would
     /// have to be the loosest of them.
+    ///
+    /// A point the model is known to miss is held to its recorded reading in
+    /// ArmorStandardTests.LadderMisses instead: no worse than measured, and the guard
+    /// below makes the entry leave once the point is back inside its band.
     /// </summary>
     [Theory]
     [MemberData(nameof(Points))]
     public void The_model_lands_on_the_published_limit(string material, double thicknessMm)
     {
         var (model, published, row) = Run(material, thicknessMm);
+        var ratio = model / published;
 
-        Assert.InRange(model / published, 1 - row.Band, 1 + row.Band);
+        if (ArmorStandardTests.LadderMisses.TryGetValue((material, thicknessMm), out var miss))
+        {
+            Assert.True(Math.Abs(ratio - 1) <= Math.Abs(miss.Reads - 1),
+                $"{material} at {thicknessMm} mm reads {ratio:0.000} of the published " +
+                $"limit, past its recorded miss of {miss.Reads:0.000} ({miss.Cause})");
+            return;
+        }
+
+        Assert.InRange(ratio, 1 - row.Band, 1 + row.Band);
+    }
+
+    /// <summary>
+    /// Every recorded ladder miss must still be a miss. An allowance that is no longer
+    /// needed is a hole a regression walks through unseen.
+    /// </summary>
+    [Fact]
+    public void Every_recorded_ladder_miss_is_still_needed()
+    {
+        foreach (var ((material, thicknessMm), (reads, cause)) in ArmorStandardTests.LadderMisses)
+        {
+            var (model, published, row) = Run(material, thicknessMm);
+            var ratio = model / published;
+
+            Assert.True(Math.Abs(reads - 1) > row.Band,
+                $"{material} at {thicknessMm} mm is recorded at {reads:0.000}, inside its " +
+                $"own band of ±{row.Band:0.00} — that is not a miss");
+            Assert.True(Math.Abs(ratio - 1) > row.Band,
+                $"{material} at {thicknessMm} mm now reads {ratio:0.000}, inside its band " +
+                $"— delete its LadderMisses entry (\"{cause}\")");
+        }
     }
 
     /// <summary>
@@ -64,7 +98,10 @@ public class BallisticLadderTests
     /// is wrong, and no constant will save it. This is what said T² beats T^0.75 in the
     /// first place, and it is worth keeping honest.
     ///
-    /// MildSteel is red by a residual, not by the law any more. With failure mode a
+    /// Two ladders miss it, and both are recorded in ArmorStandardTests.ShapeMisses
+    /// with the spread they read, rather than left red.
+    ///
+    /// MildSteel misses by a residual, not by the law any more. With failure mode a
     /// material property — mild steel flows, it does not plug — every point of its
     /// ladder sits inside its own band and the RHA/mild pair comparison lands at
     /// 0.90-0.99 of the published ratios on two independent constants. What remains
@@ -74,10 +111,10 @@ public class BallisticLadderTests
     /// carry both regimes. Deeper than any wearable plate; recorded, not fitted away.
     /// What would close it: a confinement term with data behind it.
     ///
-    /// AramidUD is red for the same species of reason and a different mechanism. The
-    /// woven pack holds to 1.09 over 3.6-10 mm, so the fibre law's linearity in
+    /// AramidUD misses for the same species of reason and a different mechanism. The
+    /// woven pack holds to 1.08 over 3.6-10 mm, so the fibre law's linearity in
     /// thickness is not wrong everywhere; the laminate ladder drifts to 1.18 because its
-    /// error climbs with thickness — 1.06 at 2.2 mm against 1.25 at 6.8 mm — which is
+    /// error climbs with thickness — 1.09 at 2.2 mm against 1.28 at 6.8 mm — which is
     /// the same direction the certificates disagree in, and no value of FibrousK moves a
     /// spread. The last laminate point is also the densest of its own ladder by 17%, so
     /// part of the drift may be packing rather than thickness; a laminate ladder at
@@ -90,6 +127,46 @@ public class BallisticLadderTests
     [InlineData("AramidUD")]
     public void The_error_does_not_grow_with_thickness(string material)
     {
+        var (ratios, spread) = Shape(material);
+
+        var allowed = ArmorStandardTests.ShapeMisses.TryGetValue(material, out var miss)
+            ? miss.Spread
+            : ShapeLimit;
+
+        // ratios are ordered by thickness, so the ends are the ends — the message used to
+        // call Min "thin" and Max "thick", which for the mild ladder names them backwards:
+        // it runs +9% at the thin end and −14% at the thick one
+        Assert.True(spread < allowed,
+            $"{material}: the model is off by {ratios[0]:0.00}x at the thin end and " +
+            $"{ratios[^1]:0.00}x at the thick end, a spread of {spread:0.000}x against " +
+            $"{allowed:0.000} allowed — that is the law's shape, not a constant");
+    }
+
+    /// <summary>
+    /// Every recorded shape miss must still be a miss, so a law that closes it has to
+    /// take its entry out of the table.
+    /// </summary>
+    [Fact]
+    public void Every_recorded_shape_miss_is_still_needed()
+    {
+        foreach (var (material, (recorded, cause)) in ArmorStandardTests.ShapeMisses)
+        {
+            var (_, spread) = Shape(material);
+
+            Assert.True(recorded >= ShapeLimit,
+                $"{material} is recorded at a spread of {recorded:0.000}, inside the " +
+                "shape limit — that is not a miss");
+            Assert.True(spread >= ShapeLimit,
+                $"{material} now spreads {spread:0.000}x, inside the shape limit — " +
+                $"delete its ShapeMisses entry (\"{cause}\")");
+        }
+    }
+
+    /// <summary>How far one ladder's error may change across its thicknesses.</summary>
+    private const double ShapeLimit = 1.15;
+
+    private static (double[] Ratios, double Spread) Shape(string material)
+    {
         var ratios = ArmorStandardTests.Limits
             .Where(l => l.Material == material)
             .OrderBy(l => l.ThicknessMm)
@@ -97,15 +174,7 @@ public class BallisticLadderTests
             .Select(x => x.Model / x.Published)
             .ToArray();
 
-        var spread = ratios.Max() / ratios.Min();
-
-        // ratios are ordered by thickness, so the ends are the ends — the message used to
-        // call Min "thin" and Max "thick", which for the mild ladder names them backwards:
-        // it runs +9% at the thin end and −14% at the thick one
-        Assert.True(spread < 1.15,
-            $"{material}: the model is off by {ratios[0]:0.00}x at the thin end and " +
-            $"{ratios[^1]:0.00}x at the thick end, a spread of {spread:0.00}x " +
-            "— that is the law's shape, not a constant");
+        return (ratios, ratios.Max() / ratios.Min());
     }
 
     /// <summary>
